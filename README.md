@@ -26,7 +26,7 @@ npm run dev
 | `JWT_SECRET` | Yes (prod) | Random secret for signing session tokens |
 | `RESEND_API_KEY` | No | Resend API key — OTPs print to console without it |
 | `EMAIL_FROM` | No | Sender address (needs verified Resend domain) |
-| `SEED_TO_EMAILS` | No | Initial TO email(s), comma-separated |
+| `SEED_TO_EMAILS` | Yes (prod) | Primary TO email(s), comma-separated |
 | `EXTRA_TO_EMAILS` | No | Additional TO email(s), comma-separated |
 | `STARTGG_TOKEN` | No | start.gg API bearer token |
 | `DISCORD_BOT_TOKEN` | No | Discord bot token for pre-tournament setup |
@@ -40,4 +40,4 @@ npm run preview       # preview production build
 npm run check         # type-check
 ```
 
-Without `RESEND_API_KEY`, OTP codes are logged to the terminal — use `danilochiarlone@hotmail.com` (or whatever `SEED_TO_EMAILS` is set to) and check the console for the code.
+Without `RESEND_API_KEY`, OTP codes are logged to the terminal — enter whatever email you set in `SEED_TO_EMAILS` and check the console for the code.

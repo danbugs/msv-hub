@@ -16,7 +16,11 @@ function getSecret(): Uint8Array {
 	return cachedSecret;
 }
 
-const SEED_TOS = (env.SEED_TO_EMAILS ?? 'danilochiarlone@hotmail.com').split(',').map(e => e.trim().toLowerCase());
+function getSeedTOs(): string[] {
+	const raw = env.SEED_TO_EMAILS ?? '';
+	if (!raw && !dev) throw new Error('SEED_TO_EMAILS must be set in production');
+	return raw.split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+}
 
 // In-memory OTP store — works for Vercel Node.js functions (instances are reused)
 // but won't survive cold starts. Acceptable for low-traffic TO-only auth.
@@ -27,8 +31,9 @@ export function isAuthorizedEmail(email: string): boolean {
 }
 
 export function getAllTOEmails(): string[] {
+	const seed = getSeedTOs();
 	const extra = (env.EXTRA_TO_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-	return [...new Set([...SEED_TOS, ...extra])];
+	return [...new Set([...seed, ...extra])];
 }
 
 export function generateOTP(): string {
