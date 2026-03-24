@@ -90,8 +90,10 @@ export function calculateRecommendedRounds(numPlayers: number, numSetups?: numbe
 	if (numSetups >= matchesPerRound) return idealRounds;
 	if (numSetups < Math.floor(matchesPerRound / 2)) return null; // unrunnable
 
+	// Only reduce rounds when shortage is significant (>20% of matches)
 	const shortage = matchesPerRound - numSetups;
-	if (shortage <= 3) return Math.max(3, idealRounds - 1);
+	if (shortage <= Math.floor(matchesPerRound * 0.2)) return idealRounds;
+	if (shortage <= Math.floor(matchesPerRound * 0.5)) return Math.max(3, idealRounds - 1);
 	return Math.max(3, idealRounds - 2);
 }
 
@@ -129,9 +131,12 @@ export function calculateSwissPairings(
 
 	function getPairingQuality(p1: PlayerEntry, p2: PlayerEntry): number {
 		const seedDiff = Math.abs(p1[1].seed - p2[1].seed);
-		if (isPowerOf2) return seedDiff;
-		if (seedDiff <= 1 && p1[1].wins + p1[1].losses <= 2) return 1000;
-		return seedDiff * 0.5;
+		// Heavy penalty for matching players with different win-loss differentials
+		const recordDiff = Math.abs((p1[1].wins - p1[1].losses) - (p2[1].wins - p2[1].losses));
+		const recordPenalty = recordDiff * 200;
+		if (isPowerOf2) return seedDiff + recordPenalty;
+		if (seedDiff <= 1 && p1[1].wins + p1[1].losses <= 2) return 1000 + recordPenalty;
+		return seedDiff * 0.5 + recordPenalty;
 	}
 
 	// Group players by record
@@ -773,50 +778,57 @@ export function generateBracket(
 	}
 
 	// ── Losers bracket ──
-	// For N players bracket, losers bracket has (winnersRounds - 1) * 2 rounds
+	// Structure:
+	//   L1        : W1 losers fight each other (2 W1 losers per L1 match)
+	//   Even lR   : L(prev) survivors (top) + W(lR/2+1) drop-ins (bottom)
+	//   Odd lR ≥3 : L(prev) survivors play each other (count halves)
 	const losersRounds = (winnersRounds - 1) * 2;
 	let losersPrevMatches: BracketMatch[] = [];
 
 	for (let lRound = 1; lRound <= losersRounds; lRound++) {
-		const isDropInRound = lRound % 2 === 1; // odd rounds receive drops from winners
-		const numMatches = isDropInRound
-			? (losersPrevMatches.length || firstRoundMatches.length / 2)
-			: losersPrevMatches.length / 2;
+		let numMatches: number;
+		if (lRound === 1) {
+			numMatches = firstRoundMatches.length / 2;
+		} else if (lRound % 2 === 0) {
+			numMatches = losersPrevMatches.length; // 1:1 with survivors, drop-ins fill other slot
+		} else {
+			numMatches = Math.floor(losersPrevMatches.length / 2); // pair up survivors
+		}
 
 		const roundMatches: BracketMatch[] = [];
 		for (let i = 0; i < numMatches; i++) {
-			const match: BracketMatch = {
+			roundMatches.push({
 				id: `${name}-L${lRound}-${matchCounter++}`,
 				round: -lRound,
 				matchIndex: i
-			};
-			roundMatches.push(match);
+			});
 		}
 
-		// Wire up losers progression
-		if (losersPrevMatches.length > 0 && !isDropInRound) {
-			for (let i = 0; i < losersPrevMatches.length / 2; i++) {
+		if (lRound === 1) {
+			// Wire pairs of W1 losers into each L1 match (top + bottom slot)
+			for (let i = 0; i < numMatches; i++) {
+				const w1a = firstRoundMatches[i * 2];
+				const w1b = firstRoundMatches[i * 2 + 1];
+				if (w1a) { w1a.loserNextMatchId = roundMatches[i].id; w1a.loserNextSlot = 'top'; }
+				if (w1b) { w1b.loserNextMatchId = roundMatches[i].id; w1b.loserNextSlot = 'bottom'; }
+			}
+		} else if (lRound % 2 === 0) {
+			// Even: L(prev) survivors → top; W(lR/2+1) losers → bottom
+			const dropWinnersRound = lRound / 2 + 1;
+			const winnersDropMatches = matches.filter((m) => m.round === dropWinnersRound);
+			for (let i = 0; i < numMatches; i++) {
+				const prev = losersPrevMatches[i];
+				if (prev) { prev.winnerNextMatchId = roundMatches[i].id; prev.winnerNextSlot = 'top'; }
+				const wd = winnersDropMatches[i];
+				if (wd) { wd.loserNextMatchId = roundMatches[i].id; wd.loserNextSlot = 'bottom'; }
+			}
+		} else {
+			// Odd ≥ 3: pair up L(prev) survivors
+			for (let i = 0; i < numMatches; i++) {
 				const prev1 = losersPrevMatches[i * 2];
 				const prev2 = losersPrevMatches[i * 2 + 1];
-				if (prev1) { prev1.winnerNextMatchId = roundMatches[i]?.id; prev1.winnerNextSlot = 'top'; }
-				if (prev2) { prev2.winnerNextMatchId = roundMatches[i]?.id; prev2.winnerNextSlot = 'bottom'; }
-			}
-		} else if (losersPrevMatches.length > 0) {
-			for (let i = 0; i < losersPrevMatches.length; i++) {
-				if (losersPrevMatches[i] && roundMatches[i]) {
-					losersPrevMatches[i].winnerNextMatchId = roundMatches[i].id;
-					losersPrevMatches[i].winnerNextSlot = 'top';
-				}
-			}
-		}
-
-		// Wire drop-ins from winners bracket to losers
-		if (isDropInRound) {
-			const winnersRound = Math.ceil(lRound / 2);
-			const winnersMatches = matches.filter((m) => m.round === winnersRound);
-			for (let i = 0; i < winnersMatches.length && i < roundMatches.length; i++) {
-				winnersMatches[i].loserNextMatchId = roundMatches[i].id;
-				winnersMatches[i].loserNextSlot = isDropInRound ? 'bottom' : 'top';
+				if (prev1) { prev1.winnerNextMatchId = roundMatches[i].id; prev1.winnerNextSlot = 'top'; }
+				if (prev2) { prev2.winnerNextMatchId = roundMatches[i].id; prev2.winnerNextSlot = 'bottom'; }
 			}
 		}
 

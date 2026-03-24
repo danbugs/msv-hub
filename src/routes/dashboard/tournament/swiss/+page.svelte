@@ -109,6 +109,44 @@
 		return tournament.rounds.filter((r) => r.status === 'completed').length >= tournament.settings.numRounds;
 	}
 
+	/** Returns each player's W-L record going INTO the given round (based on rounds before it). */
+	function getRecordBefore(playerId: string, roundNumber: number): string {
+		let wins = 0, losses = 0;
+		for (const r of tournament?.rounds ?? []) {
+			if (r.number >= roundNumber) continue;
+			if (r.byePlayerId === playerId) { wins++; continue; }
+			for (const m of r.matches) {
+				if (!m.winnerId) continue;
+				if (m.topPlayerId === playerId || m.bottomPlayerId === playerId) {
+					if (m.winnerId === playerId) wins++; else losses++;
+				}
+			}
+		}
+		return `${wins}-${losses}`;
+	}
+
+	/** Group matches in a round by the shared W-L record of the players going in. */
+	function groupMatchesByRecord(round: SwissRound): { label: string; matches: SwissMatch[] }[] {
+		const groups = new Map<string, SwissMatch[]>();
+		for (const m of round.matches) {
+			const topRec = getRecordBefore(m.topPlayerId, round.number);
+			const botRec = getRecordBefore(m.bottomPlayerId, round.number);
+			// Label by best record (or cross-group if different)
+			const label = topRec === botRec ? topRec : `${topRec} × ${botRec}`;
+			const g = groups.get(label) ?? [];
+			g.push(m);
+			groups.set(label, g);
+		}
+		// Sort groups: higher wins first
+		return [...groups.entries()]
+			.sort((a, b) => {
+				const [aw] = a[0].split('-').map(Number);
+				const [bw] = b[0].split('-').map(Number);
+				return bw - aw;
+			})
+			.map(([label, matches]) => ({ label, matches }));
+	}
+
 	function selectWinner(matchId: string, winnerId: string, isCurrent: boolean, isFixing: boolean) {
 		if (!isCurrent && !isFixing) return;
 		// If clicking the already-pending winner, deselect
@@ -144,9 +182,6 @@
 				{tournament.phase === 'swiss' ? `Swiss — Round ${tournament.currentRound}/${tournament.settings.numRounds}` : tournament.phase}
 			</span>
 			<span class="text-xs text-gray-500">{tournament.entrants.length} players · {tournament.settings.numStations} stations</span>
-			{#if tournament.phase === 'brackets'}
-				<a href="/dashboard/tournament/brackets" class="text-sm text-violet-400 hover:text-violet-300">Go to Brackets &rarr;</a>
-			{/if}
 			<a href="/live/{tournament.slug}" target="_blank" class="ml-auto text-xs text-gray-500 hover:text-violet-400">
 				Live: /live/{tournament.slug} ↗
 			</a>
@@ -181,98 +216,108 @@
 						{/if}
 					</div>
 
-					<div class="space-y-1">
-						{#each round.matches as match}
-							{@const top = getEntrant(match.topPlayerId)}
-							{@const bot = getEntrant(match.bottomPlayerId)}
-							{@const isFixing = fixingMatchId === match.id}
-							{@const isPending = pendingWinner?.matchId === match.id}
-							{@const canInteract = isCurrent || isFixing}
-
-							<div class="rounded-lg bg-gray-900 {match.isStream ? 'border border-violet-700' : 'border border-transparent'}">
-								<!-- Match row -->
-								<div class="flex items-center gap-2 px-3 py-2">
-									<!-- Station label -->
-									<span class="w-16 shrink-0 text-right text-xs font-mono {match.isStream ? 'text-violet-400' : 'text-gray-500'}">
-										{match.isStream ? 'STREAM' : `Stn ${match.station}`}
-									</span>
-
-									<!-- Top player -->
-									<button
-										class="flex-1 min-w-0 truncate text-left rounded px-2 py-1 text-sm transition-colors
-											{match.winnerId === match.topPlayerId ? 'bg-green-900/30 text-green-300 font-medium' :
-											 match.winnerId ? 'text-gray-500' :
-											 isPending && pendingWinner?.winnerId === match.topPlayerId ? 'bg-violet-900/40 text-violet-200' :
-											 'text-white hover:bg-gray-800'}
-											{!canInteract ? 'pointer-events-none' : ''}"
-										disabled={!canInteract}
-										onclick={() => selectWinner(match.id, match.topPlayerId, isCurrent, isFixing)}>
-										<span class="text-xs text-gray-500 mr-1">#{top?.initialSeed}</span>
-										{top?.gamerTag ?? '?'}
-										{#if match.winnerId === match.topPlayerId && match.topScore !== undefined}
-											<span class="ml-1 text-xs text-gray-400">{match.topScore}-{match.bottomScore}</span>
-										{/if}
-									</button>
-
-									<span class="text-gray-600 text-xs shrink-0">vs</span>
-
-									<!-- Bottom player -->
-									<button
-										class="flex-1 min-w-0 truncate text-left rounded px-2 py-1 text-sm transition-colors
-											{match.winnerId === match.bottomPlayerId ? 'bg-green-900/30 text-green-300 font-medium' :
-											 match.winnerId ? 'text-gray-500' :
-											 isPending && pendingWinner?.winnerId === match.bottomPlayerId ? 'bg-violet-900/40 text-violet-200' :
-											 'text-white hover:bg-gray-800'}
-											{!canInteract ? 'pointer-events-none' : ''}"
-										disabled={!canInteract}
-										onclick={() => selectWinner(match.id, match.bottomPlayerId, isCurrent, isFixing)}>
-										<span class="text-xs text-gray-500 mr-1">#{bot?.initialSeed}</span>
-										{bot?.gamerTag ?? '?'}
-										{#if match.winnerId === match.bottomPlayerId && match.bottomScore !== undefined}
-											<span class="ml-1 text-xs text-gray-400">{match.topScore}-{match.bottomScore}</span>
-										{/if}
-									</button>
-
-									<!-- Actions -->
-									<div class="flex items-center gap-1 shrink-0">
-										{#if isCurrent && !match.isStream}
-											<button onclick={() => setStreamMatch(match.id)}
-												class="text-xs px-2 py-1 rounded text-gray-600 hover:text-violet-400 hover:bg-violet-900/20 transition-colors"
-												title="Set as stream match">
-												📺
-											</button>
-										{/if}
-										{#if round.status === 'completed' && match.winnerId}
-											<button onclick={() => { fixingMatchId = isFixing ? null : match.id; pendingWinner = null; }}
-												class="text-xs px-2 py-1 rounded {isFixing ? 'bg-yellow-900/30 text-yellow-300' : 'text-gray-500 hover:text-yellow-400'}">
-												{isFixing ? 'Cancel' : 'Fix'}
-											</button>
-										{/if}
-									</div>
-								</div>
-
-								<!-- Score picker (shown when a winner is selected but no score yet) -->
-								{#if isPending}
-									<div class="flex items-center gap-2 px-3 pb-2">
-										<span class="text-xs text-gray-400 ml-16">Score:</span>
-										<button
-											onclick={() => reportMatch(match.id, pendingWinner!.winnerId, '2-0', round.number)}
-											class="rounded bg-green-700 px-3 py-1 text-xs font-medium text-white hover:bg-green-600">
-											2 – 0
-										</button>
-										<button
-											onclick={() => reportMatch(match.id, pendingWinner!.winnerId, '2-1', round.number)}
-											class="rounded bg-green-700 px-3 py-1 text-xs font-medium text-white hover:bg-green-600">
-											2 – 1
-										</button>
-										<button onclick={() => pendingWinner = null}
-											class="text-xs text-gray-500 hover:text-gray-300 px-2">Cancel</button>
-									</div>
-								{/if}
+					<div class="space-y-3">
+					{#each groupMatchesByRecord(round) as group}
+						<div>
+							<div class="flex items-center gap-2 mb-1">
+								<span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{group.label}</span>
+								<div class="flex-1 border-t border-gray-800"></div>
 							</div>
-						{/each}
-					</div>
+							<div class="space-y-1">
+								{#each group.matches as match}
+								{@const top = getEntrant(match.topPlayerId)}
+								{@const bot = getEntrant(match.bottomPlayerId)}
+								{@const isFixing = fixingMatchId === match.id}
+								{@const isPending = pendingWinner?.matchId === match.id}
+								{@const canInteract = isCurrent || isFixing}
+
+								<div class="rounded-lg bg-gray-900 {match.isStream ? 'border border-violet-700' : 'border border-transparent'}">
+									<!-- Match row -->
+									<div class="flex items-center gap-2 px-3 py-2">
+										<!-- Station label -->
+										<span class="w-16 shrink-0 text-right text-xs font-mono {match.isStream ? 'text-violet-400' : 'text-gray-500'}">
+											{match.isStream ? 'STREAM' : `Stn ${match.station}`}
+										</span>
+
+										<!-- Top player -->
+										<button
+											class="flex-1 min-w-0 truncate text-left rounded px-2 py-1 text-sm transition-colors
+												{match.winnerId === match.topPlayerId ? 'bg-green-900/30 text-green-300 font-medium' :
+												 match.winnerId ? 'text-gray-500' :
+												 isPending && pendingWinner?.winnerId === match.topPlayerId ? 'bg-violet-900/40 text-violet-200' :
+												 'text-white hover:bg-gray-800'}
+												{!canInteract ? 'pointer-events-none' : ''}"
+											disabled={!canInteract}
+											onclick={() => selectWinner(match.id, match.topPlayerId, isCurrent, isFixing)}>
+											<span class="text-xs text-gray-500 mr-1">#{top?.initialSeed}</span>
+											{top?.gamerTag ?? '?'}
+											{#if match.winnerId === match.topPlayerId && match.topScore !== undefined}
+												<span class="ml-1 text-xs text-gray-400">{match.topScore}-{match.bottomScore}</span>
+											{/if}
+										</button>
+
+										<span class="text-gray-600 text-xs shrink-0">vs</span>
+
+										<!-- Bottom player -->
+										<button
+											class="flex-1 min-w-0 truncate text-left rounded px-2 py-1 text-sm transition-colors
+												{match.winnerId === match.bottomPlayerId ? 'bg-green-900/30 text-green-300 font-medium' :
+												 match.winnerId ? 'text-gray-500' :
+												 isPending && pendingWinner?.winnerId === match.bottomPlayerId ? 'bg-violet-900/40 text-violet-200' :
+												 'text-white hover:bg-gray-800'}
+												{!canInteract ? 'pointer-events-none' : ''}"
+											disabled={!canInteract}
+											onclick={() => selectWinner(match.id, match.bottomPlayerId, isCurrent, isFixing)}>
+											<span class="text-xs text-gray-500 mr-1">#{bot?.initialSeed}</span>
+											{bot?.gamerTag ?? '?'}
+											{#if match.winnerId === match.bottomPlayerId && match.bottomScore !== undefined}
+												<span class="ml-1 text-xs text-gray-400">{match.topScore}-{match.bottomScore}</span>
+											{/if}
+										</button>
+
+										<!-- Actions -->
+										<div class="flex items-center gap-1 shrink-0">
+											{#if isCurrent && !match.isStream}
+												<button onclick={() => setStreamMatch(match.id)}
+													class="text-xs px-2 py-1 rounded text-gray-600 hover:text-violet-400 hover:bg-violet-900/20 transition-colors"
+													title="Set as stream match">
+													📺
+												</button>
+											{/if}
+											{#if round.status === 'completed' && match.winnerId}
+												<button onclick={() => { fixingMatchId = isFixing ? null : match.id; pendingWinner = null; }}
+													class="text-xs px-2 py-1 rounded {isFixing ? 'bg-yellow-900/30 text-yellow-300' : 'text-gray-500 hover:text-yellow-400'}">
+													{isFixing ? 'Cancel' : 'Fix'}
+												</button>
+											{/if}
+										</div>
+									</div>
+
+									<!-- Score picker (shown when a winner is selected but no score yet) -->
+									{#if isPending}
+										<div class="flex items-center gap-2 px-3 pb-2">
+											<span class="text-xs text-gray-400 ml-16">Score:</span>
+											<button
+												onclick={() => reportMatch(match.id, pendingWinner!.winnerId, '2-0', round.number)}
+												class="rounded bg-green-700 px-3 py-1 text-xs font-medium text-white hover:bg-green-600">
+												2 – 0
+											</button>
+											<button
+												onclick={() => reportMatch(match.id, pendingWinner!.winnerId, '2-1', round.number)}
+												class="rounded bg-green-700 px-3 py-1 text-xs font-medium text-white hover:bg-green-600">
+												2 – 1
+											</button>
+											<button onclick={() => pendingWinner = null}
+												class="text-xs text-gray-500 hover:text-gray-300 px-2">Cancel</button>
+										</div>
+									{/if}
+								</div>
+								{/each}
+							</div>
+						</div>
+					{/each}
 				</div>
+			</div>
 			{/each}
 
 			<!-- Standings -->

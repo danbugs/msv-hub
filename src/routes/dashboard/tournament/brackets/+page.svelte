@@ -41,9 +41,9 @@
 
 	// ── Layout constants ──────────────────────────────────────────────────
 	const CARD_W = 192;
-	const CARD_H = 68;
+	const CARD_H = 100;
 	const H_GAP = 40;   // horizontal gap between card columns
-	const BASE_SLOT_H = 88; // slot height for first round (CARD_H + min vertical gap)
+	const BASE_SLOT_H = 120; // slot height for first round (CARD_H + min vertical gap)
 
 	onMount(loadTournament);
 
@@ -429,7 +429,7 @@
 				{@const top = getEntrant(reportingMatch.topPlayerId)}
 				{@const bot = getEntrant(reportingMatch.bottomPlayerId)}
 				{@const isTop8 = bracket ? isTop8Match(reportingMatch, bracket) : false}
-				{@const isBo5 = isTop8 && activeBracket === 'main'}
+				{@const isBo5 = isTop8}
 				{@const showChars = isTop8}
 
 				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
