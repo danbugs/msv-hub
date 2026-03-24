@@ -10,7 +10,7 @@ export async function sendOTPEmail(to: string, code: string): Promise<boolean> {
 
 	const resend = new Resend(apiKey);
 	const { error } = await resend.emails.send({
-		from: env.EMAIL_FROM ?? 'MSV Hub <noreply@resend.dev>',
+		from: env.EMAIL_FROM ?? 'MSV Hub <onboarding@resend.dev>',
 		to,
 		subject: 'MSV Hub — Your Login Code',
 		html: `
