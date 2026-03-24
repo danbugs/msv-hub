@@ -6,18 +6,8 @@
 	let loading = $state(false);
 	let error = $state('');
 
-	// Setup form
 	let showSetup = $state(false);
-	let setupName = $state('');
-	let setupSlug = $state('');
-	let setupStations = $state('15');
-	let setupStreamStation = $state('1');
-	let setupEntrants = $state('');
-
-	// Misreport fix
 	let fixingMatchId = $state<string | null>(null);
-
-	const inputClass = 'mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500';
 
 	onMount(loadTournament);
 
@@ -28,42 +18,6 @@
 			tournament = data;
 			if (!data) showSetup = true;
 		}
-	}
-
-	async function createTournament() {
-		loading = true;
-		error = '';
-
-		// Parse entrants: one per line, format "seed: tag" or just "tag"
-		const lines = setupEntrants.trim().split('\n').filter(Boolean);
-		const entrants = lines.map((line, i) => {
-			const parts = line.split(':');
-			if (parts.length >= 2) {
-				return { initialSeed: parseInt(parts[0].trim()), gamerTag: parts.slice(1).join(':').trim() };
-			}
-			return { initialSeed: i + 1, gamerTag: line.trim() };
-		});
-
-		const res = await fetch('/api/tournament', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				name: setupName,
-				slug: setupSlug,
-				entrants,
-				numStations: Number(setupStations),
-				streamStation: Number(setupStreamStation)
-			})
-		});
-
-		if (!res.ok) {
-			const data = await res.json();
-			error = data.error ?? 'Failed to create tournament';
-		} else {
-			tournament = await res.json();
-			showSetup = false;
-		}
-		loading = false;
 	}
 
 	async function startNextRound(regenerate = false) {
@@ -140,52 +94,12 @@
 	{/if}
 
 	{#if showSetup && !tournament}
-		<!-- Tournament Setup -->
-		<p class="mt-1 text-gray-400">Create a new tournament to get started.</p>
-
-		<form onsubmit={(e) => { e.preventDefault(); createTournament(); }} class="mt-6 space-y-4">
-			<div class="grid gap-4 sm:grid-cols-2">
-				<div>
-					<label for="name" class="block text-sm font-medium text-gray-300">
-						Tournament Name <span class="text-red-400">*</span>
-					</label>
-					<input id="name" type="text" bind:value={setupName} required placeholder="e.g. Microspacing 133" class={inputClass} />
-				</div>
-				<div>
-					<label for="slug" class="block text-sm font-medium text-gray-300">
-						Slug <span class="text-red-400">*</span>
-					</label>
-					<input id="slug" type="text" bind:value={setupSlug} required placeholder="e.g. microspacing-133" class={inputClass} />
-				</div>
-				<div>
-					<label for="stations" class="block text-sm font-medium text-gray-300">
-						Number of Stations <span class="text-red-400">*</span>
-					</label>
-					<input id="stations" type="number" bind:value={setupStations} required class={inputClass} />
-				</div>
-				<div>
-					<label for="stream" class="block text-sm font-medium text-gray-300">
-						Stream Station #
-					</label>
-					<input id="stream" type="number" bind:value={setupStreamStation} class={inputClass} />
-				</div>
-			</div>
-
-			<div>
-				<label for="entrants" class="block text-sm font-medium text-gray-300">
-					Entrants <span class="text-red-400">*</span>
-					<span class="text-gray-500 font-normal"> — one per line, format: "seed: gamerTag" or just "gamerTag"</span>
-				</label>
-				<textarea id="entrants" bind:value={setupEntrants} required rows={10}
-					placeholder={"1: Tweek\n2: MkLeo\n3: Sparg0\n..."}
-					class="{inputClass} font-mono text-sm"></textarea>
-			</div>
-
-			<button type="submit" disabled={loading || !setupName || !setupSlug || !setupEntrants}
-				class="rounded-lg bg-violet-600 px-6 py-2 font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50">
-				{loading ? 'Creating...' : 'Create Tournament'}
-			</button>
-		</form>
+		<div class="mt-6 rounded-xl border border-dashed border-gray-700 p-8 text-center text-gray-500">
+			No active tournament.
+			<a href="/dashboard/pre-tournament/seed" class="block mt-2 text-violet-400 hover:text-violet-300">
+				Run the seeder first, then click "Start Swiss →" &larr;
+			</a>
+		</div>
 
 	{:else if tournament}
 		<!-- Active Tournament -->

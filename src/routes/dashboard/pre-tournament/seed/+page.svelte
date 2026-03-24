@@ -12,9 +12,45 @@
 
 	import { onDestroy } from 'svelte';
 
+	import { goto } from '$app/navigation';
+
 	let loading = $state(false);
 	let error = $state('');
 	let liveLogs = $state<string[]>([]);
+
+	// Start Swiss setup
+	let startingSwiss = $state(false);
+	let numStations = $state('15');
+	let streamStation = $state('1');
+
+	async function startSwiss() {
+		if (!result) return;
+		startingSwiss = true;
+		error = '';
+
+		const slug = result.targetSlug.replace(/\//g, '-');
+		const name = result.targetSlug.split('/').pop() ?? slug;
+
+		const res = await fetch('/api/tournament', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				name,
+				slug,
+				entrants: result.entrants.map((e) => ({ gamerTag: e.gamerTag, initialSeed: e.seedNum })),
+				numStations: Number(numStations),
+				streamStation: Number(streamStation)
+			})
+		});
+
+		startingSwiss = false;
+		if (!res.ok) {
+			const data = await res.json();
+			error = data.error ?? 'Failed to create tournament';
+		} else {
+			goto('/dashboard/tournament/swiss');
+		}
+	}
 	let abortController: AbortController | null = null;
 	let result = $state<{
 		entrants: {
@@ -333,6 +369,28 @@
 					Seeding has been applied to StartGG.
 				</div>
 			{/if}
+
+			<!-- Start Swiss from these results -->
+			<div class="rounded-lg border border-violet-800 bg-violet-900/20 p-4">
+				<h3 class="font-semibold text-violet-300">Start Swiss with these results</h3>
+				<p class="mt-1 text-xs text-gray-400">Creates the tournament using this seeding as seeds 1–N. You can re-seed and restart if needed.</p>
+				<div class="mt-3 flex items-end gap-3 flex-wrap">
+					<div>
+						<label for="num-stations" class="block text-xs text-gray-400">Stations</label>
+						<input id="num-stations" type="number" bind:value={numStations} min="1"
+							class="mt-1 w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-violet-500 focus:outline-none" />
+					</div>
+					<div>
+						<label for="stream-stn" class="block text-xs text-gray-400">Stream station #</label>
+						<input id="stream-stn" type="number" bind:value={streamStation} min="1"
+							class="mt-1 w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-violet-500 focus:outline-none" />
+					</div>
+					<button onclick={startSwiss} disabled={startingSwiss || !numStations}
+						class="rounded-lg bg-violet-600 px-5 py-2 font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50">
+						{startingSwiss ? 'Creating...' : 'Start Swiss →'}
+					</button>
+				</div>
+			</div>
 		</div>
 	{/if}
 </main>
