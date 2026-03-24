@@ -8,7 +8,7 @@
 
 	let reportingMatch = $state<BracketMatch | null>(null);
 	let reportWinnerId = $state('');
-	let reportScore = $state<'2-0' | '2-1' | ''>('');
+	let reportScore = $state('');
 	let reportTopChar = $state('');
 	let reportBotChar = $state('');
 
@@ -52,6 +52,8 @@
 	}
 
 	function isTop8Match(match: BracketMatch, bracket: BracketState): boolean {
+		// GFR is always top 8
+		if (match.id.includes('-GFR-')) return true;
 		const totalPlayers = bracket.players.length;
 		if (totalPlayers <= 8) return true;
 		const maxWinnersRound = Math.max(...bracket.matches.filter((m) => m.round > 0).map((m) => m.round));
@@ -67,15 +69,17 @@
 		reportBotChar = '';
 	}
 
+	function parseScore(score: string, winnerId: string, match: BracketMatch): [number, number] {
+		const winnerIsTop = winnerId === match.topPlayerId;
+		const [w, l] = score.split('-').map(Number);
+		return winnerIsTop ? [w, l] : [l, w];
+	}
+
 	async function submitReport() {
 		if (!reportingMatch || !reportWinnerId || !reportScore) return;
 		error = '';
 
-		const [topScore, bottomScore] = (() => {
-			const winnerIsTop = reportWinnerId === reportingMatch!.topPlayerId;
-			if (reportScore === '2-0') return winnerIsTop ? [2, 0] : [0, 2];
-			return winnerIsTop ? [2, 1] : [1, 2];
-		})();
+		const [topScore, bottomScore] = parseScore(reportScore, reportWinnerId, reportingMatch);
 
 		const res = await fetch('/api/tournament/bracket', {
 			method: 'PATCH',
@@ -133,7 +137,10 @@
 		for (const [, ms] of byRound) ms.sort((a, b) => a.matchIndex - b.matchIndex);
 
 		const maxRound = Math.max(...allMatches.map((m) => m.round));
-		const gfRound = maxRound;
+		// GFR is at maxRound if it exists; GF is the round just below it among positive rounds
+		const hasGFR = allMatches.some((m) => m.id.includes('-GFR-'));
+		const gfRound = hasGFR ? maxRound - 1 : maxRound;
+		const gfrRound = hasGFR ? maxRound : null;
 
 		const winRounds = [...byRound.keys()].filter((r) => r > 0 && r < gfRound).sort((a, b) => a - b);
 		const losRounds = [...byRound.keys()].filter((r) => r < 0).sort((a, b) => Math.abs(a) - Math.abs(b));
@@ -164,9 +171,17 @@
 
 		// Position GF
 		const gfMs = byRound.get(gfRound);
+		const gfColX = winRounds.length * (CARD_W + H_GAP);
 		if (gfMs?.length) {
-			const colX = winRounds.length * (CARD_W + H_GAP);
-			posMap.set(gfMs[0].id, { x: colX, y: sectionOffsetY + (winnersH - CARD_H) / 2 });
+			posMap.set(gfMs[0].id, { x: gfColX, y: sectionOffsetY + (winnersH - CARD_H) / 2 });
+		}
+
+		// Position GFR (one column to the right of GF)
+		if (gfrRound !== null) {
+			const gfrMs = byRound.get(gfrRound);
+			if (gfrMs?.length) {
+				posMap.set(gfrMs[0].id, { x: gfColX + CARD_W + H_GAP, y: sectionOffsetY + (winnersH - CARD_H) / 2 });
+			}
 		}
 
 		// Position losers matches
@@ -196,6 +211,18 @@
 			const y2 = to.y + CARD_H / 2;
 			const mx = x1 + H_GAP / 2;
 			connectors.push({ x1, y1, mx, x2, y2 });
+		}
+
+		// GF → GFR connector (GF has no winnerNextMatchId since GFR is created dynamically)
+		if (gfrRound !== null) {
+			const gfPos = gfMs?.length ? posMap.get(gfMs[0].id) : undefined;
+			const gfrMs = byRound.get(gfrRound);
+			const gfrPos = gfrMs?.length ? posMap.get(gfrMs[0].id) : undefined;
+			if (gfPos && gfrPos) {
+				const x1 = gfPos.x + CARD_W;
+				const y1 = gfPos.y + CARD_H / 2;
+				connectors.push({ x1, y1, mx: x1 + H_GAP / 2, x2: gfrPos.x, y2: gfrPos.y + CARD_H / 2 });
+			}
 		}
 
 		// Compute canvas size
@@ -352,8 +379,8 @@
 								{/if}
 							</div>
 
-							<!-- Report button if ready -->
-							{#if ready}
+							<!-- Footer: station label + report/fix button -->
+							{#if ready || match.winnerId}
 								<div class="flex items-center justify-between px-2 py-1 border-t border-gray-800 bg-gray-900/50">
 									{#if match.station !== undefined}
 										<span class="text-xs {match.isStream ? 'text-violet-400' : 'text-gray-500'}">
@@ -362,10 +389,17 @@
 									{:else}
 										<span></span>
 									{/if}
-									<button onclick={() => openReport(match)}
-										class="rounded bg-violet-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-violet-600">
-										Report
-									</button>
+									{#if ready}
+										<button onclick={() => openReport(match)}
+											class="rounded bg-violet-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-violet-600">
+											Report
+										</button>
+									{:else if match.winnerId && match.topPlayerId && match.bottomPlayerId}
+										<button onclick={() => openReport(match)}
+											class="rounded border border-yellow-700/50 px-2 py-0.5 text-xs text-yellow-500 hover:bg-yellow-900/20">
+											Fix
+										</button>
+									{/if}
 								</div>
 							{/if}
 						</div>
@@ -377,12 +411,21 @@
 			{#if reportingMatch}
 				{@const top = getEntrant(reportingMatch.topPlayerId)}
 				{@const bot = getEntrant(reportingMatch.bottomPlayerId)}
-				{@const showChars = bracket ? isTop8Match(reportingMatch, bracket) : false}
+				{@const isTop8 = bracket ? isTop8Match(reportingMatch, bracket) : false}
+				{@const isBo5 = isTop8 && activeBracket === 'main'}
+				{@const showChars = isTop8}
 
 				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
 					<div class="w-full max-w-sm rounded-xl bg-gray-900 border border-gray-700 p-5">
-						<h3 class="text-base font-semibold text-white">Report Match</h3>
-						<p class="text-sm text-gray-400 mt-0.5">{top?.gamerTag ?? '?'} vs {bot?.gamerTag ?? '?'}</p>
+						<div class="flex items-start justify-between">
+							<div>
+								<h3 class="text-base font-semibold text-white">Report Match</h3>
+								<p class="text-sm text-gray-400 mt-0.5">{top?.gamerTag ?? '?'} vs {bot?.gamerTag ?? '?'}</p>
+							</div>
+							<span class="text-xs rounded-full px-2 py-0.5 {isBo5 ? 'bg-violet-900/60 text-violet-300' : 'bg-gray-800 text-gray-400'}">
+								{isBo5 ? 'BO5' : 'BO3'}
+							</span>
+						</div>
 
 						<!-- Step 1: Pick winner -->
 						<div class="mt-4 flex gap-2">
@@ -396,18 +439,27 @@
 							</button>
 						</div>
 
-						<!-- Step 2: Pick score -->
+						<!-- Step 2: Pick score (BO3 or BO5) -->
 						{#if reportWinnerId}
-							<div class="mt-3 flex gap-2">
-								<button onclick={() => reportScore = '2-0'}
-									class="flex-1 rounded-lg py-2 text-sm font-medium transition-colors {reportScore === '2-0' ? 'bg-violet-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
-									2 – 0
-								</button>
-								<button onclick={() => reportScore = '2-1'}
-									class="flex-1 rounded-lg py-2 text-sm font-medium transition-colors {reportScore === '2-1' ? 'bg-violet-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
-									2 – 1
-								</button>
-							</div>
+							{#if isBo5}
+								<div class="mt-3 grid grid-cols-3 gap-2">
+									{#each ['3-0', '3-1', '3-2'] as s}
+										<button onclick={() => reportScore = s}
+											class="rounded-lg py-2 text-sm font-medium transition-colors {reportScore === s ? 'bg-violet-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
+											{s.replace('-', ' – ')}
+										</button>
+									{/each}
+								</div>
+							{:else}
+								<div class="mt-3 flex gap-2">
+									{#each ['2-0', '2-1'] as s}
+										<button onclick={() => reportScore = s}
+											class="flex-1 rounded-lg py-2 text-sm font-medium transition-colors {reportScore === s ? 'bg-violet-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
+											{s.replace('-', ' – ')}
+										</button>
+									{/each}
+								</div>
+							{/if}
 						{/if}
 
 						<!-- Step 3: Characters (top 8 only) -->

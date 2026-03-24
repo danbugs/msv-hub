@@ -77,9 +77,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		bottomPlayerId: bot[0]
 	}));
 
+	// Collect players who were on stream last round to avoid repeat stream appearances
+	const lastCompleted = completedRounds.at(-1);
+	const recentStreamIds = new Set(
+		lastCompleted?.matches
+			.filter((m) => m.isStream)
+			.flatMap((m) => [m.topPlayerId, m.bottomPlayerId])
+			.filter(Boolean) as string[]
+	);
+
 	// Get stream recommendations and assign stations
 	const pairingIds = pairings.map(([t, b]) => [t[0], b[0]] as [string, string]);
-	const streamRecs = recommendStreamMatches(pairingIds, standings, tournament.entrants);
+	const streamRecs = recommendStreamMatches(pairingIds, standings, tournament.entrants, recentStreamIds);
 
 	// Fix match IDs in stream recs to match our generated IDs
 	const recsWithFixedIds = streamRecs.map((rec) => {

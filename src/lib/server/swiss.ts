@@ -441,7 +441,8 @@ export function assignBracketStations(bracket: BracketState, settings: Tournamen
 export function recommendStreamMatches(
 	pairings: [string, string][],
 	standings: Map<string, PlayerStanding>,
-	entrants: Entrant[]
+	entrants: Entrant[],
+	recentStreamPlayerIds?: Set<string>
 ): StreamRecommendation[] {
 	const entrantMap = new Map(entrants.map((e) => [e.id, e]));
 
@@ -499,6 +500,12 @@ export function recommendStreamMatches(
 		// Penalty for top seeds in early rounds
 		if (currentRound <= 3 && (top.seed <= 4 || bot.seed <= 4)) {
 			hypeScore -= 10;
+		}
+
+		// Penalty for players who were on stream last round
+		if (recentStreamPlayerIds?.has(topId) || recentStreamPlayerIds?.has(botId)) {
+			hypeScore -= 25;
+			reasons.push('⚠ recently on stream');
 		}
 
 		const matchId = `r${currentRound}-${topId}-${botId}`;
@@ -906,6 +913,28 @@ export function reportBracketMatch(
 	if (bottomScore !== undefined) match.bottomScore = bottomScore;
 
 	advancePlayer(updated.matches, match);
+
+	// Grand Finals Reset: if the GF bottom-slot player (losers finalist) wins,
+	// create a reset match — no bracket advantage, single game.
+	const maxRound = Math.max(...updated.matches.map((m) => m.round));
+	const isGF = match.round === maxRound && !match.winnerNextMatchId;
+	const isGFReset = match.id.includes('-GFR-');
+	if (isGF && !isGFReset && winnerId === match.bottomPlayerId) {
+		// Check a reset doesn't already exist
+		const resetExists = updated.matches.some((m) => m.id.includes('-GFR-'));
+		if (!resetExists) {
+			const resetMatch: BracketMatch = {
+				id: `${bracket.name}-GFR-0`,
+				round: maxRound + 1,
+				matchIndex: 0,
+				// Original winners finalist is top, losers finalist (who just won GF) is bottom
+				topPlayerId: match.topPlayerId,
+				bottomPlayerId: match.bottomPlayerId
+			};
+			updated.matches.push(resetMatch);
+		}
+	}
+
 	return settings ? assignBracketStations(updated, settings) : updated;
 }
 
