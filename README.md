@@ -1,42 +1,43 @@
-# sv
+# MSV Hub
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Tournament operations center for Microspacing Vancouver — a weekly Super Smash Bros. Ultimate series.
 
-## Creating a project
+Centralizes pre-tournament setup (Discord, seeding), tournament management (Swiss rounds, brackets, station assignments), and post-tournament tasks (graphics, VOD, Braacket/StartGG sync) into a single web app.
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Stack
 
-```sh
-# create a new project
-npx sv create my-app
-```
+- **SvelteKit** + TypeScript + Tailwind CSS
+- **Vercel** (serverless deployment)
+- **Resend** for OTP login emails
+- **jose** for JWT session tokens
 
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-npx sv@0.12.8 create --template minimal --types ts --no-install msv-hub
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Setup
 
 ```sh
+npm install
+cp .env.example .env  # edit with your values
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
-## Building
+### Environment Variables
 
-To create a production version of your app:
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `JWT_SECRET` | Yes (prod) | Random secret for signing session tokens |
+| `RESEND_API_KEY` | No | Resend API key — OTPs print to console without it |
+| `EMAIL_FROM` | No | Sender address (needs verified Resend domain) |
+| `SEED_TO_EMAILS` | No | Initial TO email(s), comma-separated |
+| `EXTRA_TO_EMAILS` | No | Additional TO email(s), comma-separated |
+| `STARTGG_TOKEN` | No | start.gg API bearer token |
+| `DISCORD_BOT_TOKEN` | No | Discord bot token for pre-tournament setup |
+
+## Development
 
 ```sh
-npm run build
+npm run dev           # start dev server
+npm run build         # production build
+npm run preview       # preview production build
+npm run check         # type-check
 ```
 
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Without `RESEND_API_KEY`, OTP codes are logged to the terminal — use `danilochiarlone@hotmail.com` (or whatever `SEED_TO_EMAILS` is set to) and check the console for the code.

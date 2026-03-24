@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { isAuthorizedEmail, verifyOTP, createSessionToken } from '$lib/server/auth';
+import { isAuthorizedEmail, verifyOTP, createSessionToken, SESSION_TTL_SECONDS } from '$lib/server/auth';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	const { email, code } = await request.json();
@@ -25,7 +25,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		httpOnly: true,
 		sameSite: 'lax',
 		secure: true,
-		maxAge: 60 * 60 * 24 * 7 // 7 days
+		maxAge: SESSION_TTL_SECONDS
 	});
 
 	return json({ ok: true });

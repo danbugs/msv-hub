@@ -1,18 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 
-	let { data } = $props();
-
 	let email = $state('');
 	let code = $state('');
 	let step = $state<'email' | 'code'>('email');
 	let loading = $state(false);
 	let error = $state('');
-
-	// Redirect if already logged in
-	$effect(() => {
-		if (data.user) goto('/dashboard');
-	});
 
 	async function sendOTP() {
 		loading = true;

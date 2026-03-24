@@ -1,16 +1,29 @@
+import { randomInt, timingSafeEqual } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
 import { env } from '$env/dynamic/private';
+import { dev } from '$app/environment';
 
-const getSecret = () => new TextEncoder().encode(env.JWT_SECRET ?? 'dev-secret-change-me');
+export const OTP_TTL_MS = 10 * 60 * 1000;
+export const SESSION_TTL_DAYS = 7;
+const SESSION_TTL_SECONDS = SESSION_TTL_DAYS * 24 * 60 * 60;
 
-// Initial TO — additional TOs stored in KV/env
+let cachedSecret: Uint8Array | null = null;
+function getSecret(): Uint8Array {
+	if (cachedSecret) return cachedSecret;
+	const secret = env.JWT_SECRET;
+	if (!secret && !dev) throw new Error('JWT_SECRET must be set in production');
+	cachedSecret = new TextEncoder().encode(secret ?? 'dev-secret-change-me');
+	return cachedSecret;
+}
+
 const SEED_TOS = (env.SEED_TO_EMAILS ?? 'danilochiarlone@hotmail.com').split(',').map(e => e.trim().toLowerCase());
 
-// In-memory OTP store (serverless-safe for short-lived codes)
+// In-memory OTP store — works for Vercel Node.js functions (instances are reused)
+// but won't survive cold starts. Acceptable for low-traffic TO-only auth.
 const otpStore = new Map<string, { code: string; expires: number }>();
 
 export function isAuthorizedEmail(email: string): boolean {
-	return getAllTOEmails().includes(email.toLowerCase());
+	return getAllTOEmails().includes(email);
 }
 
 export function getAllTOEmails(): string[] {
@@ -19,38 +32,42 @@ export function getAllTOEmails(): string[] {
 }
 
 export function generateOTP(): string {
-	const code = Math.floor(100000 + Math.random() * 900000).toString();
-	return code;
+	return randomInt(100000, 999999).toString();
 }
 
 export function storeOTP(email: string, code: string): void {
-	otpStore.set(email.toLowerCase(), { code, expires: Date.now() + 10 * 60 * 1000 }); // 10 min
+	otpStore.set(email, { code, expires: Date.now() + OTP_TTL_MS });
 }
 
 export function verifyOTP(email: string, code: string): boolean {
-	const entry = otpStore.get(email.toLowerCase());
+	const entry = otpStore.get(email);
 	if (!entry) return false;
 	if (Date.now() > entry.expires) {
-		otpStore.delete(email.toLowerCase());
+		otpStore.delete(email);
 		return false;
 	}
-	if (entry.code !== code) return false;
-	otpStore.delete(email.toLowerCase());
+	const expected = Buffer.from(entry.code);
+	const actual = Buffer.from(code);
+	if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return false;
+	otpStore.delete(email);
 	return true;
 }
 
 export async function createSessionToken(email: string): Promise<string> {
-	return new SignJWT({ email: email.toLowerCase() })
+	return new SignJWT({ email })
 		.setProtectedHeader({ alg: 'HS256' })
 		.setIssuedAt()
-		.setExpirationTime('7d')
+		.setExpirationTime(`${SESSION_TTL_DAYS}d`)
 		.sign(getSecret());
 }
+
+export { SESSION_TTL_SECONDS };
 
 export async function verifySessionToken(token: string): Promise<{ email: string } | null> {
 	try {
 		const { payload } = await jwtVerify(token, getSecret());
-		return { email: payload.email as string };
+		if (typeof payload.email !== 'string') return null;
+		return { email: payload.email };
 	} catch {
 		return null;
 	}

@@ -10,7 +10,6 @@
 
 <div class={projectorMode ? 'min-h-screen bg-black p-8' : 'min-h-screen bg-gray-950 px-4 py-8'}>
 	<div class={projectorMode ? 'mx-auto max-w-7xl' : 'mx-auto max-w-4xl'}>
-		<!-- Header -->
 		<div class="flex items-center justify-between">
 			<div>
 				<h1 class={projectorMode ? 'text-5xl font-bold text-violet-400' : 'text-2xl font-bold text-violet-400'}>
@@ -28,7 +27,6 @@
 			</button>
 		</div>
 
-		<!-- Station Assignments -->
 		<div class="mt-8">
 			<h2 class={projectorMode ? 'text-3xl font-semibold text-white' : 'text-lg font-semibold text-white'}>
 				Station Assignments
@@ -58,7 +56,6 @@
 			</div>
 		</div>
 
-		<!-- Standings -->
 		<div class="mt-8">
 			<h2 class={projectorMode ? 'text-3xl font-semibold text-white' : 'text-lg font-semibold text-white'}>
 				Standings

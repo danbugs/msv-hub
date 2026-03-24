@@ -2,6 +2,7 @@ node_modules
 .svelte-kit
 build
 .vercel
+.vscode
 .env
 .env.*
 !.env.example
