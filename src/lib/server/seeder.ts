@@ -188,10 +188,11 @@ async function collectTournamentData(
 	num: number,
 	type: 'micro' | 'macro',
 	playerRegistry: Map<number, string>,
-	log: (msg: string) => void
+	log: (msg: string) => void,
+	signal?: AbortSignal
 ): Promise<TournamentData | null> {
 	log(`Fetching tournament: ${slug}...`);
-	const data = await gql<TournamentQueryResult>(TOURNAMENT_QUERY, { slug });
+	const data = await gql<TournamentQueryResult>(TOURNAMENT_QUERY, { slug }, signal);
 	if (!data?.tournament) {
 		log(`Tournament '${slug}' not found, skipping.`);
 		return null;
@@ -208,7 +209,7 @@ async function collectTournamentData(
 	const allSets: SetResult[] = [];
 	for (const event of events) {
 		log(`  Event: ${event.name} (${event.numEntrants ?? 0} entrants)`);
-		const rawSets = await fetchAllSets(event.id);
+		const rawSets = await fetchAllSets(event.id, signal);
 		for (const raw of rawSets) {
 			const parsed = parseSet(raw, slug, event.name);
 			if (parsed) {
@@ -278,10 +279,11 @@ function parseEntrants(rawEntrants: Record<string, any>[]): Entrant[] {
 	return entrants;
 }
 
-async function estimateNewcomerElo(playerId: number): Promise<number> {
+async function estimateNewcomerElo(playerId: number, signal?: AbortSignal): Promise<number> {
 	const data = await gql<{ player: { recentStandings: { placement: number; entrant: { event: { numEntrants: number } } }[] } }>(
 		PLAYER_RECENT_STANDINGS_QUERY,
-		{ playerId }
+		{ playerId },
+		signal
 	);
 	if (!data?.player?.recentStandings?.length) return ELO_START;
 
@@ -302,7 +304,8 @@ async function estimateNewcomerElo(playerId: number): Promise<number> {
 async function assignEloRatings(
 	entrants: Entrant[],
 	eloRatings: Map<number, number>,
-	log: (msg: string) => void
+	log: (msg: string) => void,
+	signal?: AbortSignal
 ): Promise<void> {
 	for (const e of entrants) {
 		const known = eloRatings.get(e.playerId);
@@ -310,7 +313,7 @@ async function assignEloRatings(
 			e.elo = known;
 		} else {
 			log(`  Estimating Elo for newcomer: ${e.gamerTag}...`);
-			e.elo = await estimateNewcomerElo(e.playerId);
+			e.elo = await estimateNewcomerElo(e.playerId, signal);
 			e.isNewcomer = true;
 		}
 	}
@@ -353,8 +356,8 @@ function predictSwissR1Pairings(entrants: Entrant[]): [Entrant, Entrant][] {
 	return pairings;
 }
 
-async function fetchPreviousMatchups(prevSlug: string): Promise<Set<string>> {
-	const data = await gql<TournamentQueryResult>(TOURNAMENT_QUERY, { slug: prevSlug });
+async function fetchPreviousMatchups(prevSlug: string, signal?: AbortSignal): Promise<Set<string>> {
+	const data = await gql<TournamentQueryResult>(TOURNAMENT_QUERY, { slug: prevSlug }, signal);
 	if (!data?.tournament) return new Set();
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -363,7 +366,7 @@ async function fetchPreviousMatchups(prevSlug: string): Promise<Set<string>> {
 
 	for (const event of events) {
 		if (classifyEventName(event.name ?? '') !== 'swiss') continue;
-		const rawSets = await fetchAllSets(event.id);
+		const rawSets = await fetchAllSets(event.id, signal);
 		for (const raw of rawSets) {
 			const frt = (raw.fullRoundText ?? '').toLowerCase();
 			if (!frt.includes('round 1')) continue;
@@ -377,12 +380,12 @@ async function fetchPreviousMatchups(prevSlug: string): Promise<Set<string>> {
 	return pairings;
 }
 
-async function fetchAvoidanceFromEventSlugs(slugs: string[]): Promise<Set<string>> {
+async function fetchAvoidanceFromEventSlugs(slugs: string[], signal?: AbortSignal): Promise<Set<string>> {
 	const pairings = new Set<string>();
 	for (const slug of slugs) {
-		const data = await gql<{ event: { id: number; name: string } }>(EVENT_BY_SLUG_QUERY, { slug });
+		const data = await gql<{ event: { id: number; name: string } }>(EVENT_BY_SLUG_QUERY, { slug }, signal);
 		if (!data?.event) continue;
-		const rawSets = await fetchAllSets(data.event.id);
+		const rawSets = await fetchAllSets(data.event.id, signal);
 		for (const raw of rawSets) {
 			const parsed = parseSet(raw, slug, data.event.name ?? '');
 			if (parsed) {
@@ -442,7 +445,6 @@ function avoidMatchups(entrants: Entrant[], toAvoid: Set<string>): void {
 		}
 	}
 
-	// Re-assign seed numbers after swaps
 	for (let i = 0; i < entrants.length; i++) {
 		entrants[i].seedNum = i + 1;
 	}
@@ -453,9 +455,10 @@ function avoidMatchups(entrants: Entrant[], toAvoid: Set<string>): void {
 async function applySeeding(
 	targetSlug: string,
 	entrants: Entrant[],
-	log: (msg: string) => void
+	log: (msg: string) => void,
+	signal?: AbortSignal
 ): Promise<void> {
-	const data = await gql<TournamentQueryResult>(TOURNAMENT_QUERY, { slug: targetSlug });
+	const data = await gql<TournamentQueryResult>(TOURNAMENT_QUERY, { slug: targetSlug }, signal);
 	if (!data?.tournament) {
 		log('Error: Could not fetch target tournament for apply.');
 		return;
@@ -470,14 +473,15 @@ async function applySeeding(
 
 		const phaseData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
 			EVENT_PHASES_QUERY,
-			{ eventId: event.id }
+			{ eventId: event.id },
+			signal
 		);
 		if (!phaseData?.event?.phases) continue;
 
 		for (const phase of phaseData.event.phases) {
 			log(`  Phase: ${phase.name} (ID: ${phase.id})`);
 
-			const rawSeeds = await fetchPhaseSeeds(phase.id);
+			const rawSeeds = await fetchPhaseSeeds(phase.id, signal);
 			if (!rawSeeds.length) {
 				log(`  No seeds found for phase ${phase.name}`);
 				continue;
@@ -502,7 +506,7 @@ async function applySeeding(
 			const result = await gql(UPDATE_PHASE_SEEDING_MUTATION, {
 				phaseId: phase.id,
 				seedMapping
-			});
+			}, signal);
 
 			log(result ? `  Applied ${seedMapping.length} seeds` : `  ERROR: Mutation failed for ${phase.name}`);
 		}
@@ -511,7 +515,7 @@ async function applySeeding(
 
 // ── Main seeder function ────────────────────────────────────────────────
 
-export async function runSeeder(input: SeederInput, onLog?: LogCallback): Promise<SeederResult> {
+export async function runSeeder(input: SeederInput, onLog?: LogCallback, signal?: AbortSignal): Promise<SeederResult> {
 	const { log, warn, logs } = createLogger(onLog);
 
 	const isMicro = input.mode === 'micro';
@@ -530,7 +534,7 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback): Promis
 		const playerRegistry = new Map<number, string>();
 		const tournaments: TournamentData[] = [];
 		for (const { slug, number: num, type } of historySlugs) {
-			const td = await collectTournamentData(slug, num, type, playerRegistry, log);
+			const td = await collectTournamentData(slug, num, type, playerRegistry, log, signal);
 			if (td) tournaments.push(td);
 		}
 		tournaments.sort((a, b) => a.startAt - b.startAt);
@@ -542,7 +546,7 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback): Promis
 
 	// Step 2: Fetch target entrants
 	log(`Step 2: Fetching entrants for ${targetSlug}...`);
-	const tData = await gql<TournamentQueryResult>(TOURNAMENT_QUERY, { slug: targetSlug });
+	const tData = await gql<TournamentQueryResult>(TOURNAMENT_QUERY, { slug: targetSlug }, signal);
 	if (!tData?.tournament) throw new Error(`Tournament '${targetSlug}' not found.`);
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -551,7 +555,7 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback): Promis
 
 	const firstEvent = events[0];
 	log(`Using event: ${firstEvent.name}`);
-	const rawEntrants = await fetchAllEntrants(firstEvent.id);
+	const rawEntrants = await fetchAllEntrants(firstEvent.id, signal);
 	const entrants = parseEntrants(rawEntrants);
 	log(`Found ${entrants.length} entrants.`);
 
@@ -559,7 +563,7 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback): Promis
 
 	// Step 3: Assign Elo
 	log('Step 3: Assigning Elo ratings...');
-	await assignEloRatings(entrants, eloRatings, log);
+	await assignEloRatings(entrants, eloRatings, log, signal);
 	const newcomers = entrants.filter((e) => e.isNewcomer).length;
 	log(`${entrants.length - newcomers} with MSV Elo, ${newcomers} newcomers estimated.`);
 
@@ -576,11 +580,11 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback): Promis
 	if (isMicro && microEnd >= input.seasonStart) {
 		const prevSlug = `microspacing-vancouver-${input.targetNumber - 1}`;
 		log(`Step 6: Fetching R1 pairings from ${prevSlug} for avoidance...`);
-		toAvoid = await fetchPreviousMatchups(prevSlug);
+		toAvoid = await fetchPreviousMatchups(prevSlug, signal);
 		log(`Found ${toAvoid.size} R1 pairings to avoid.`);
 	} else if (!isMicro && input.avoidEvents?.length) {
 		log(`Step 6: Fetching pairings from ${input.avoidEvents.length} event(s) for avoidance...`);
-		toAvoid = await fetchAvoidanceFromEventSlugs(input.avoidEvents);
+		toAvoid = await fetchAvoidanceFromEventSlugs(input.avoidEvents, signal);
 		log(`Found ${toAvoid.size} pairings to avoid.`);
 	} else {
 		log('Step 6: No matchup avoidance configured.');
@@ -602,7 +606,7 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback): Promis
 	// Step 8: Apply if requested
 	if (input.apply) {
 		log('Step 8: Applying seeding to StartGG...');
-		await applySeeding(targetSlug, entrants, log);
+		await applySeeding(targetSlug, entrants, log, signal);
 		log('Seeding applied to all events/phases.');
 	} else {
 		log('Dry run complete. Use Apply to push seeding to StartGG.');

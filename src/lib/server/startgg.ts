@@ -10,15 +10,23 @@ function getToken(): string {
 	return token;
 }
 
-async function sleep(ms: number): Promise<void> {
-	return new Promise((r) => setTimeout(r, ms));
+async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+	return new Promise((resolve, reject) => {
+		if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+		const timer = setTimeout(resolve, ms);
+		signal?.addEventListener('abort', () => {
+			clearTimeout(timer);
+			reject(new DOMException('Aborted', 'AbortError'));
+		}, { once: true });
+	});
 }
 
 export async function gql<T = Record<string, unknown>>(
 	query: string,
-	variables: Record<string, unknown>
+	variables: Record<string, unknown>,
+	signal?: AbortSignal
 ): Promise<T | null> {
-	await sleep(API_DELAY);
+	await sleep(API_DELAY, signal);
 	const token = getToken();
 	const res = await fetch(API_URL, {
 		method: 'POST',
@@ -26,13 +34,14 @@ export async function gql<T = Record<string, unknown>>(
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${token}`
 		},
-		body: JSON.stringify({ query, variables })
+		body: JSON.stringify({ query, variables }),
+		signal
 	});
 
 	if (res.status === 429) {
 		console.warn('StartGG rate limited, waiting 10s...');
-		await sleep(10_000);
-		return gql(query, variables);
+		await sleep(10_000, signal);
+		return gql(query, variables, signal);
 	}
 
 	if (!res.ok) {
@@ -176,12 +185,13 @@ interface PagedResult<T> {
 async function fetchAllPages<T>(
 	query: string,
 	variables: Record<string, unknown>,
-	pathToData: (data: Record<string, unknown>) => PagedResult<T> | null
+	pathToData: (data: Record<string, unknown>) => PagedResult<T> | null,
+	signal?: AbortSignal
 ): Promise<T[]> {
 	const all: T[] = [];
 	let page = 1;
 	while (true) {
-		const data = await gql(query, { ...variables, page, perPage: SETS_PER_PAGE });
+		const data = await gql(query, { ...variables, page, perPage: SETS_PER_PAGE }, signal);
 		if (!data) break;
 		const paged = pathToData(data as Record<string, unknown>);
 		if (!paged) break;
@@ -195,25 +205,25 @@ async function fetchAllPages<T>(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type GqlRecord = Record<string, any>;
 
-export async function fetchAllSets(eventId: number): Promise<GqlRecord[]> {
+export async function fetchAllSets(eventId: number, signal?: AbortSignal): Promise<GqlRecord[]> {
 	return fetchAllPages(EVENT_SETS_QUERY, { eventId }, (d) => {
 		const event = d.event as GqlRecord | undefined;
 		return event?.sets ?? null;
-	});
+	}, signal);
 }
 
-export async function fetchAllEntrants(eventId: number): Promise<GqlRecord[]> {
+export async function fetchAllEntrants(eventId: number, signal?: AbortSignal): Promise<GqlRecord[]> {
 	return fetchAllPages(EVENT_ENTRANTS_QUERY, { eventId }, (d) => {
 		const event = d.event as GqlRecord | undefined;
 		return event?.entrants ?? null;
-	});
+	}, signal);
 }
 
-export async function fetchPhaseSeeds(phaseId: number): Promise<GqlRecord[]> {
+export async function fetchPhaseSeeds(phaseId: number, signal?: AbortSignal): Promise<GqlRecord[]> {
 	return fetchAllPages(PHASE_SEEDS_QUERY, { phaseId }, (d) => {
 		const phase = d.phase as GqlRecord | undefined;
 		return phase?.seeds ?? null;
-	});
+	}, signal);
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
