@@ -6,6 +6,7 @@
 
 <svelte:head>
 	<title>MSV Hub</title>
+	<link rel="icon" type="image/png" href="/favicon.png" />
 </svelte:head>
 
 <div class="min-h-screen bg-gray-950 text-gray-100">

@@ -75,11 +75,21 @@ export interface SeederInput {
 
 // ── Logging helper ──────────────────────────────────────────────────────
 
-function createLogger() {
+export type LogCallback = (msg: string) => void;
+
+function createLogger(onLog?: LogCallback) {
 	const logs: string[] = [];
 	return {
-		log: (msg: string) => { logs.push(msg); console.log(`[seeder] ${msg}`); },
-		warn: (msg: string) => { logs.push(`WARN: ${msg}`); console.warn(`[seeder] ${msg}`); },
+		log: (msg: string) => {
+			logs.push(msg);
+			console.log(`[seeder] ${msg}`);
+			onLog?.(msg);
+		},
+		warn: (msg: string) => {
+			logs.push(`WARN: ${msg}`);
+			console.warn(`[seeder] ${msg}`);
+			onLog?.(`WARN: ${msg}`);
+		},
 		logs
 	};
 }
@@ -501,8 +511,8 @@ async function applySeeding(
 
 // ── Main seeder function ────────────────────────────────────────────────
 
-export async function runSeeder(input: SeederInput): Promise<SeederResult> {
-	const { log, warn, logs } = createLogger();
+export async function runSeeder(input: SeederInput, onLog?: LogCallback): Promise<SeederResult> {
+	const { log, warn, logs } = createLogger(onLog);
 
 	const isMicro = input.mode === 'micro';
 	const targetSlug = isMicro

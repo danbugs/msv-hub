@@ -8,9 +8,11 @@
 	let jitter = $state('20');
 	let seed = $state('');
 	let apply = $state(false);
+	let showAdvanced = $state(false);
 
 	let loading = $state(false);
 	let error = $state('');
+	let liveLogs = $state<string[]>([]);
 	let result = $state<{
 		entrants: {
 			seedNum: number;
@@ -29,6 +31,7 @@
 		loading = true;
 		error = '';
 		result = null;
+		liveLogs = [];
 
 		const res = await fetch('/api/seeder', {
 			method: 'POST',
@@ -46,107 +49,141 @@
 			})
 		});
 
-		loading = false;
-		if (!res.ok) {
-			const body = await res.json();
-			error = body.error ?? 'Something went wrong';
+		if (!res.ok || !res.body) {
+			loading = false;
+			try {
+				const body = await res.json();
+				error = body.error ?? 'Something went wrong';
+			} catch {
+				error = `HTTP ${res.status}`;
+			}
 			return;
 		}
 
-		result = await res.json();
+		const reader = res.body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = '';
+
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+
+			const lines = buffer.split('\n');
+			buffer = lines.pop() ?? '';
+
+			let eventType = '';
+			for (const line of lines) {
+				if (line.startsWith('event: ')) {
+					eventType = line.slice(7);
+				} else if (line.startsWith('data: ')) {
+					const data = JSON.parse(line.slice(6));
+					if (eventType === 'log') {
+						liveLogs = [...liveLogs, data.message];
+					} else if (eventType === 'result') {
+						result = data;
+					} else if (eventType === 'error') {
+						error = data.error;
+					}
+				}
+			}
+		}
+
+		loading = false;
 	}
+
+	const inputClass = 'mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500';
 </script>
 
 <main class="mx-auto max-w-5xl px-4 py-8">
 	<a href="/dashboard" class="text-sm text-violet-400 hover:text-violet-300">&larr; Dashboard</a>
 	<h1 class="mt-4 text-2xl font-bold text-white">Seed Event</h1>
-	<p class="mt-1 text-gray-400">Elo-based seeding with configurable jitter — ported from <code>seeder.py</code>.</p>
+	<p class="mt-1 text-gray-400">Elo-based seeding with configurable jitter.</p>
 
 	<form onsubmit={(e) => { e.preventDefault(); runSeeder(); }} class="mt-6 space-y-4">
 		<div class="grid gap-4 sm:grid-cols-2">
-			<!-- Mode -->
 			<div>
-				<label for="mode" class="block text-sm font-medium text-gray-300">Mode</label>
-				<select id="mode" bind:value={mode}
-					class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white">
+				<label for="mode" class="block text-sm font-medium text-gray-300">
+					Mode <span class="text-red-400">*</span>
+				</label>
+				<select id="mode" bind:value={mode} class={inputClass}>
 					<option value="micro">Micro</option>
 					<option value="macro">Macro</option>
 				</select>
 			</div>
 
-			<!-- Target number -->
 			<div>
 				<label for="target" class="block text-sm font-medium text-gray-300">
-					{mode === 'micro' ? 'Microspacing' : 'Macrospacing'} #
+					{mode === 'micro' ? 'Microspacing' : 'Macrospacing'} # <span class="text-red-400">*</span>
 				</label>
 				<input id="target" type="number" bind:value={targetNumber} required
-					placeholder="e.g. 133"
-					class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500" />
+					placeholder="e.g. 133" class={inputClass} />
 			</div>
 
-			<!-- Season start -->
 			<div>
-				<label for="season-start" class="block text-sm font-medium text-gray-300">Season Start (first micro #)</label>
+				<label for="season-start" class="block text-sm font-medium text-gray-300">
+					Season Start (first micro #) <span class="text-red-400">*</span>
+				</label>
 				<input id="season-start" type="number" bind:value={seasonStart} required
-					placeholder="e.g. 120"
-					class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500" />
+					placeholder="e.g. 120" class={inputClass} />
 			</div>
 
-			<!-- Micro end -->
-			<div>
-				<label for="micro-end" class="block text-sm font-medium text-gray-300">
-					Micro End
-					<span class="text-gray-500">(defaults to target - 1 for micro)</span>
-				</label>
-				<input id="micro-end" type="number" bind:value={microEnd}
-					placeholder="auto"
-					class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500" />
-			</div>
-
-			<!-- Macros to include -->
-			<div>
-				<label for="macros" class="block text-sm font-medium text-gray-300">
-					Macros to include
-					<span class="text-gray-500">(comma-separated #s)</span>
-				</label>
-				<input id="macros" type="text" bind:value={macros}
-					placeholder="e.g. 6,7"
-					class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500" />
-			</div>
-
-			<!-- Jitter -->
 			<div>
 				<label for="jitter" class="block text-sm font-medium text-gray-300">
-					Jitter (max Elo noise)
+					Jitter <span class="text-gray-500">(max Elo noise, default 20)</span>
 				</label>
-				<input id="jitter" type="number" step="0.1" bind:value={jitter}
-					class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white" />
+				<input id="jitter" type="number" step="0.1" bind:value={jitter} class={inputClass} />
 			</div>
-
-			<!-- RNG Seed -->
-			<div>
-				<label for="rng-seed" class="block text-sm font-medium text-gray-300">
-					RNG Seed
-					<span class="text-gray-500">(optional, for reproducibility)</span>
-				</label>
-				<input id="rng-seed" type="number" bind:value={seed}
-					placeholder="random"
-					class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500" />
-			</div>
-
-			{#if mode === 'macro'}
-				<!-- Avoid events (macro only) -->
-				<div class="sm:col-span-2">
-					<label for="avoid" class="block text-sm font-medium text-gray-300">
-						Avoid Events
-						<span class="text-gray-500">(comma-separated slugs)</span>
-					</label>
-					<input id="avoid" type="text" bind:value={avoidEvents}
-						placeholder="tournament/slug/event/event-name"
-						class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500" />
-				</div>
-			{/if}
 		</div>
+
+		<!-- Advanced options -->
+		<button type="button"
+			onclick={() => showAdvanced = !showAdvanced}
+			class="text-sm text-gray-400 hover:text-violet-400 transition-colors">
+			{showAdvanced ? '▾' : '▸'} Advanced options
+		</button>
+
+		{#if showAdvanced}
+			<div class="grid gap-4 sm:grid-cols-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+				<div>
+					<label for="micro-end" class="block text-sm font-medium text-gray-300">
+						Micro End
+					</label>
+					<p class="text-xs text-gray-500 mb-1">Last micro # for Elo history. Defaults to target - 1. Use to exclude recent events.</p>
+					<input id="micro-end" type="number" bind:value={microEnd}
+						placeholder="auto" class={inputClass} />
+				</div>
+
+				<div>
+					<label for="rng-seed" class="block text-sm font-medium text-gray-300">
+						RNG Seed
+					</label>
+					<p class="text-xs text-gray-500 mb-1">Set for reproducible jitter. Leave empty for random.</p>
+					<input id="rng-seed" type="number" bind:value={seed}
+						placeholder="random" class={inputClass} />
+				</div>
+
+				<div>
+					<label for="macros" class="block text-sm font-medium text-gray-300">
+						Macros to include
+					</label>
+					<p class="text-xs text-gray-500 mb-1">Comma-separated macro numbers to include in Elo history.</p>
+					<input id="macros" type="text" bind:value={macros}
+						placeholder="e.g. 6,7" class={inputClass} />
+				</div>
+
+				{#if mode === 'macro'}
+					<div>
+						<label for="avoid" class="block text-sm font-medium text-gray-300">
+							Avoid Events
+						</label>
+						<p class="text-xs text-gray-500 mb-1">Comma-separated event slugs for matchup avoidance.</p>
+						<input id="avoid" type="text" bind:value={avoidEvents}
+							placeholder="tournament/slug/event/event-name" class={inputClass} />
+					</div>
+				{/if}
+			</div>
+		{/if}
 
 		<div class="flex items-center gap-4">
 			<button type="submit" disabled={loading || !targetNumber || !seasonStart}
@@ -167,15 +204,27 @@
 		</div>
 	{/if}
 
-	{#if loading}
-		<div class="mt-6 text-gray-400">
-			This may take a few minutes — fetching historical tournament data from StartGG...
+	{#if loading && liveLogs.length > 0}
+		<div class="mt-6 rounded-lg border border-gray-800 bg-gray-900 p-4">
+			<div class="flex items-center gap-2 mb-2">
+				<div class="h-2 w-2 rounded-full bg-violet-500 animate-pulse"></div>
+				<span class="text-sm font-medium text-gray-300">Progress</span>
+			</div>
+			<div class="max-h-48 overflow-y-auto">
+				{#each liveLogs as msg}
+					<div class="text-xs text-gray-400 font-mono py-0.5">{msg}</div>
+				{/each}
+			</div>
+		</div>
+	{:else if loading}
+		<div class="mt-6 flex items-center gap-2 text-gray-400">
+			<div class="h-2 w-2 rounded-full bg-violet-500 animate-pulse"></div>
+			Starting...
 		</div>
 	{/if}
 
 	{#if result}
 		<div class="mt-8 space-y-6">
-			<!-- Seed table -->
 			<div>
 				<h2 class="text-lg font-semibold text-white">Seeding — {result.targetSlug}</h2>
 				<div class="mt-3 overflow-x-auto">
@@ -204,7 +253,6 @@
 				</div>
 			</div>
 
-			<!-- Predicted R1 pairings -->
 			<div>
 				<h2 class="text-lg font-semibold text-white">Predicted Swiss R1 Pairings</h2>
 				<div class="mt-3 space-y-1">
@@ -228,7 +276,6 @@
 				</div>
 			</div>
 
-			<!-- Warnings -->
 			{#if result.unresolvedCollisions.length > 0}
 				<div class="rounded-lg border border-yellow-700 bg-yellow-900/20 p-4">
 					<h3 class="font-semibold text-yellow-400">Unresolved R1 Collisions</h3>
@@ -240,9 +287,8 @@
 				</div>
 			{/if}
 
-			<!-- Logs -->
 			<details class="rounded-lg border border-gray-800 bg-gray-900">
-				<summary class="cursor-pointer px-4 py-2 text-sm text-gray-400">Execution Log ({result.logs.length} entries)</summary>
+				<summary class="cursor-pointer px-4 py-2 text-sm text-gray-400">Full Log ({result.logs.length} entries)</summary>
 				<pre class="max-h-64 overflow-y-auto px-4 py-2 text-xs text-gray-500">{result.logs.join('\n')}</pre>
 			</details>
 
