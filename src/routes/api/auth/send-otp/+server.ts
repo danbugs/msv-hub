@@ -18,9 +18,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const code = generateOTP();
 	storeOTP(normalized, code);
-	const sent = await sendOTPEmail(normalized, code);
-	if (!sent) {
-		return json({ error: 'Failed to send login code. Please try again.' }, { status: 500 });
+	const result = await sendOTPEmail(normalized, code);
+	if (!result.ok) {
+		return json({ error: `Failed to send login code: ${result.detail ?? 'unknown error'}` }, { status: 500 });
 	}
 
 	return json({ ok: true });

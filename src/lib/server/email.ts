@@ -1,11 +1,11 @@
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
 
-export async function sendOTPEmail(to: string, code: string): Promise<boolean> {
+export async function sendOTPEmail(to: string, code: string): Promise<{ ok: boolean; detail?: string }> {
 	const apiKey = env.RESEND_API_KEY;
 	if (!apiKey) {
 		console.log(`[DEV] OTP for ${to}: ${code}`);
-		return true;
+		return { ok: true };
 	}
 
 	const resend = new Resend(apiKey);
@@ -27,7 +27,7 @@ export async function sendOTPEmail(to: string, code: string): Promise<boolean> {
 
 	if (error) {
 		console.error('Failed to send OTP email:', error);
-		return false;
+		return { ok: false, detail: error.message };
 	}
-	return true;
+	return { ok: true };
 }
