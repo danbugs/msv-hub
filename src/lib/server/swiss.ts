@@ -396,6 +396,46 @@ export function assignStations(
 	return assigned;
 }
 
+// ── Bracket station assignment ────────────────────────────────────────────
+
+export function assignBracketStations(bracket: BracketState, settings: TournamentSettings): BracketState {
+	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
+
+	// Find ready matches that don't have a station yet
+	const ready = updated.matches.filter(
+		(m) => m.topPlayerId && m.bottomPlayerId && !m.winnerId && m.station === undefined
+	);
+	if (ready.length === 0) return updated;
+
+	// Pick stream match: highest-round ready match (later rounds = more hype)
+	const maxReadyRound = Math.max(...ready.map((m) => Math.abs(m.round)));
+	const streamCandidate = ready.find((m) => Math.abs(m.round) === maxReadyRound);
+
+	if (streamCandidate) {
+		const idx = updated.matches.findIndex((m) => m.id === streamCandidate.id);
+		// Clear previous stream designation
+		for (let i = 0; i < updated.matches.length; i++) {
+			if (updated.matches[i].isStream && updated.matches[i].winnerId) {
+				updated.matches[i] = { ...updated.matches[i], isStream: false };
+			}
+		}
+		updated.matches[idx] = { ...updated.matches[idx], station: settings.streamStation, isStream: true };
+	}
+
+	// Assign remaining stations
+	let nextStation = 1;
+	for (let i = 0; i < updated.matches.length; i++) {
+		const m = updated.matches[i];
+		if (!m.topPlayerId || !m.bottomPlayerId || m.winnerId || m.station !== undefined) continue;
+		while (nextStation === settings.streamStation) nextStation++;
+		if (nextStation > settings.numStations) nextStation = 1;
+		updated.matches[i] = { ...m, station: nextStation };
+		nextStation++;
+	}
+
+	return updated;
+}
+
 // ── Stream recommendations ───────────────────────────────────────────────
 
 export function recommendStreamMatches(
@@ -656,7 +696,8 @@ import type { BracketMatch, BracketState } from '$lib/types/tournament';
 export function generateBracket(
 	name: string,
 	players: { entrantId: string; seed: number }[],
-	allStandings: FinalStanding[]
+	allStandings: FinalStanding[],
+	settings?: TournamentSettings
 ): BracketState {
 	const n = players.length;
 	// Pad to next power of 2 for bracket structure
@@ -805,13 +846,15 @@ export function generateBracket(
 		}
 	}
 
-	return {
+	const state: BracketState = {
 		name,
 		type: 'double_elimination',
 		players: optimized.map((p, i) => ({ entrantId: p.entrantId, seed: i + 1 })),
 		matches,
 		currentRound: 1
 	};
+
+	return settings ? assignBracketStations(state, settings) : state;
 }
 
 function advancePlayer(allMatches: BracketMatch[], completedMatch: BracketMatch) {
@@ -847,7 +890,10 @@ export function reportBracketMatch(
 	matchId: string,
 	winnerId: string,
 	topCharacter?: string,
-	bottomCharacter?: string
+	bottomCharacter?: string,
+	topScore?: number,
+	bottomScore?: number,
+	settings?: TournamentSettings
 ): BracketState {
 	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
 	const match = updated.matches.find((m) => m.id === matchId);
@@ -856,9 +902,11 @@ export function reportBracketMatch(
 	match.winnerId = winnerId;
 	if (topCharacter) match.topCharacter = topCharacter;
 	if (bottomCharacter) match.bottomCharacter = bottomCharacter;
+	if (topScore !== undefined) match.topScore = topScore;
+	if (bottomScore !== undefined) match.bottomScore = bottomScore;
 
 	advancePlayer(updated.matches, match);
-	return updated;
+	return settings ? assignBracketStations(updated, settings) : updated;
 }
 
 function optimizeBracketArrangement(

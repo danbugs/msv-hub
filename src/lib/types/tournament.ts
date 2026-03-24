@@ -30,6 +30,8 @@ export interface SwissMatch {
 	topPlayerId: string;
 	bottomPlayerId: string;
 	winnerId?: string;
+	topScore?: number;
+	bottomScore?: number;
 	station?: number;
 	isStream?: boolean;
 }
@@ -66,6 +68,8 @@ export interface BracketMatch {
 	bottomPlayerId?: string;
 	winnerId?: string;
 	loserId?: string;
+	topScore?: number;
+	bottomScore?: number;
 	topCharacter?: string;
 	bottomCharacter?: string;
 	/** Where winner advances to */
@@ -75,6 +79,7 @@ export interface BracketMatch {
 	loserNextMatchId?: string;
 	loserNextSlot?: 'top' | 'bottom';
 	station?: number;
+	isStream?: boolean;
 }
 
 export interface BracketState {

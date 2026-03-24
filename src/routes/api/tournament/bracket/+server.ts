@@ -11,12 +11,14 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (!tournament.brackets) return Response.json({ error: 'No brackets generated' }, { status: 400 });
 
 	const body = await request.json();
-	const { bracketName, matchId, winnerId, topCharacter, bottomCharacter } = body as {
+	const { bracketName, matchId, winnerId, topCharacter, bottomCharacter, topScore, bottomScore } = body as {
 		bracketName: 'main' | 'redemption';
 		matchId: string;
 		winnerId: string;
 		topCharacter?: string;
 		bottomCharacter?: string;
+		topScore?: number;
+		bottomScore?: number;
 	};
 
 	if (!bracketName || !matchId || !winnerId) {
@@ -28,7 +30,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		tournament.brackets[bracketName] = reportBracketMatch(
-			bracket, matchId, winnerId, topCharacter, bottomCharacter
+			bracket, matchId, winnerId, topCharacter, bottomCharacter, topScore, bottomScore, tournament.settings
 		);
 	} catch (err) {
 		return Response.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 400 });

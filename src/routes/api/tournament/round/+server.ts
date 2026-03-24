@@ -54,8 +54,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const redemptionPlayers = finalStandings.filter((s) => s.bracket === 'redemption').map((s, i) => ({ entrantId: s.entrantId, seed: i + 1 }));
 
 		tournament.brackets = {
-			main: generateBracket('main', mainPlayers, finalStandings),
-			redemption: generateBracket('redemption', redemptionPlayers, finalStandings)
+			main: generateBracket('main', mainPlayers, finalStandings, tournament.settings),
+			redemption: generateBracket('redemption', redemptionPlayers, finalStandings, tournament.settings)
 		};
 		tournament.phase = 'brackets';
 
@@ -121,10 +121,12 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
 
 	const body = await request.json();
-	const { matchId, winnerId, roundNumber } = body as {
+	const { matchId, winnerId, roundNumber, topScore, bottomScore } = body as {
 		matchId: string;
 		winnerId: string;
 		roundNumber?: number;
+		topScore?: number;
+		bottomScore?: number;
 	};
 
 	if (!matchId || !winnerId) {
@@ -151,6 +153,8 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	const wasMisreport = match.winnerId !== undefined && match.winnerId !== winnerId;
 	match.winnerId = winnerId;
+	if (topScore !== undefined) match.topScore = topScore;
+	if (bottomScore !== undefined) match.bottomScore = bottomScore;
 
 	await saveTournament(tournament);
 
