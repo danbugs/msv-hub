@@ -70,8 +70,8 @@ export interface BracketMatch {
 	loserId?: string;
 	topScore?: number;
 	bottomScore?: number;
-	topCharacter?: string;
-	bottomCharacter?: string;
+	topCharacters?: string[];
+	bottomCharacters?: string[];
 	/** Where winner advances to */
 	winnerNextMatchId?: string;
 	winnerNextSlot?: 'top' | 'bottom';

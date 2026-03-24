@@ -896,8 +896,8 @@ export function reportBracketMatch(
 	bracket: BracketState,
 	matchId: string,
 	winnerId: string,
-	topCharacter?: string,
-	bottomCharacter?: string,
+	topCharacters?: string[],
+	bottomCharacters?: string[],
 	topScore?: number,
 	bottomScore?: number,
 	settings?: TournamentSettings
@@ -907,8 +907,8 @@ export function reportBracketMatch(
 	if (!match) throw new Error(`Match ${matchId} not found`);
 
 	match.winnerId = winnerId;
-	if (topCharacter) match.topCharacter = topCharacter;
-	if (bottomCharacter) match.bottomCharacter = bottomCharacter;
+	if (topCharacters?.length) match.topCharacters = topCharacters;
+	if (bottomCharacters?.length) match.bottomCharacters = bottomCharacters;
 	if (topScore !== undefined) match.topScore = topScore;
 	if (bottomScore !== undefined) match.bottomScore = bottomScore;
 

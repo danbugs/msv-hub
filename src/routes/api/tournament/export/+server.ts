@@ -51,8 +51,8 @@ export const GET: RequestHandler = async ({ url }) => {
 					topPlayer: entrantMap.get(m.topPlayerId!)?.gamerTag ?? m.topPlayerId,
 					bottomPlayer: entrantMap.get(m.bottomPlayerId!)?.gamerTag ?? m.bottomPlayerId,
 					winner: entrantMap.get(m.winnerId!)?.gamerTag ?? m.winnerId,
-					topCharacter: m.topCharacter,
-					bottomCharacter: m.bottomCharacter,
+					topCharacters: m.topCharacters,
+					bottomCharacters: m.bottomCharacters,
 					topPlayerId: m.topPlayerId,
 					bottomPlayerId: m.bottomPlayerId,
 					winnerId: m.winnerId

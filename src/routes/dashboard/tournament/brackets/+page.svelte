@@ -9,8 +9,20 @@
 	let reportingMatch = $state<BracketMatch | null>(null);
 	let reportWinnerId = $state('');
 	let reportScore = $state('');
-	let reportTopChar = $state('');
-	let reportBotChar = $state('');
+	let reportTopChars = $state<string[]>([]);
+	let reportBotChars = $state<string[]>([]);
+
+	function toggleChar(side: 'top' | 'bot', char: string) {
+		if (side === 'top') {
+			reportTopChars = reportTopChars.includes(char)
+				? reportTopChars.filter((c) => c !== char)
+				: [...reportTopChars, char];
+		} else {
+			reportBotChars = reportBotChars.includes(char)
+				? reportBotChars.filter((c) => c !== char)
+				: [...reportBotChars, char];
+		}
+	}
 
 	const CHARACTERS = [
 		'Mario', 'Donkey Kong', 'Link', 'Samus', 'Dark Samus', 'Yoshi', 'Kirby', 'Fox',
@@ -26,8 +38,6 @@
 		'Banjo & Kazooie', 'Terry', 'Byleth', 'Min Min', 'Steve', 'Sephiroth', 'Pyra/Mythra',
 		'Kazuya', 'Sora'
 	];
-
-	const inputClass = 'mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500';
 
 	// ── Layout constants ──────────────────────────────────────────────────
 	const CARD_W = 192;
@@ -65,8 +75,8 @@
 		reportingMatch = match;
 		reportWinnerId = '';
 		reportScore = '';
-		reportTopChar = '';
-		reportBotChar = '';
+		reportTopChars = match.topCharacters ? [...match.topCharacters] : [];
+		reportBotChars = match.bottomCharacters ? [...match.bottomCharacters] : [];
 	}
 
 	function parseScore(score: string, winnerId: string, match: BracketMatch): [number, number] {
@@ -88,8 +98,8 @@
 				bracketName: activeBracket,
 				matchId: reportingMatch.id,
 				winnerId: reportWinnerId,
-				topCharacter: reportTopChar || undefined,
-				bottomCharacter: reportBotChar || undefined,
+				topCharacters: reportTopChars.length ? reportTopChars : undefined,
+				bottomCharacters: reportBotChars.length ? reportBotChars : undefined,
 				topScore,
 				bottomScore
 			})
@@ -379,6 +389,13 @@
 								{/if}
 							</div>
 
+							<!-- Characters used (top 8, shown after report) -->
+							{#if match.winnerId && (match.topCharacters?.length || match.bottomCharacters?.length)}
+								<div class="px-2 py-1 text-xs text-gray-500 border-t border-gray-800 leading-relaxed">
+									{#if match.topCharacters?.length}<span class="text-gray-400">{getEntrant(match.topPlayerId)?.gamerTag}:</span> {match.topCharacters.join(', ')}{/if}{#if match.topCharacters?.length && match.bottomCharacters?.length} · {/if}{#if match.bottomCharacters?.length}<span class="text-gray-400">{getEntrant(match.bottomPlayerId)?.gamerTag}:</span> {match.bottomCharacters.join(', ')}{/if}
+								</div>
+							{/if}
+
 							<!-- Footer: station label + report/fix button -->
 							{#if ready || match.winnerId}
 								<div class="flex items-center justify-between px-2 py-1 border-t border-gray-800 bg-gray-900/50">
@@ -462,26 +479,44 @@
 							{/if}
 						{/if}
 
-						<!-- Step 3: Characters (top 8 only) -->
+						<!-- Step 3: Characters played (top 8 only, multi-select) -->
 						{#if reportWinnerId && showChars}
-							<div class="mt-3 space-y-2">
+							<div class="mt-3 space-y-3">
 								<div>
-									<label for="top-char" class="block text-xs text-gray-400">{top?.gamerTag}'s character</label>
-									<select id="top-char" bind:value={reportTopChar} class={inputClass}>
-										<option value="">— select —</option>
-										{#each CHARACTERS as char}
-											<option value={char}>{char}</option>
-										{/each}
-									</select>
+									<p class="text-xs text-gray-400 mb-1.5">
+										{top?.gamerTag}'s characters
+										{#if reportTopChars.length}
+											<span class="text-violet-400">({reportTopChars.join(', ')})</span>
+										{/if}
+									</p>
+									<div class="max-h-28 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800/50 p-2">
+										<div class="flex flex-wrap gap-1">
+											{#each CHARACTERS as char}
+												<button type="button" onclick={() => toggleChar('top', char)}
+													class="rounded px-1.5 py-0.5 text-xs transition-colors {reportTopChars.includes(char) ? 'bg-violet-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}">
+													{char}
+												</button>
+											{/each}
+										</div>
+									</div>
 								</div>
 								<div>
-									<label for="bot-char" class="block text-xs text-gray-400">{bot?.gamerTag}'s character</label>
-									<select id="bot-char" bind:value={reportBotChar} class={inputClass}>
-										<option value="">— select —</option>
-										{#each CHARACTERS as char}
-											<option value={char}>{char}</option>
-										{/each}
-									</select>
+									<p class="text-xs text-gray-400 mb-1.5">
+										{bot?.gamerTag}'s characters
+										{#if reportBotChars.length}
+											<span class="text-violet-400">({reportBotChars.join(', ')})</span>
+										{/if}
+									</p>
+									<div class="max-h-28 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800/50 p-2">
+										<div class="flex flex-wrap gap-1">
+											{#each CHARACTERS as char}
+												<button type="button" onclick={() => toggleChar('bot', char)}
+													class="rounded px-1.5 py-0.5 text-xs transition-colors {reportBotChars.includes(char) ? 'bg-violet-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}">
+													{char}
+												</button>
+											{/each}
+										</div>
+									</div>
 								</div>
 							</div>
 						{/if}
