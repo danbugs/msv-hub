@@ -10,9 +10,12 @@
 	let apply = $state(false);
 	let showAdvanced = $state(false);
 
+	import { onDestroy } from 'svelte';
+
 	let loading = $state(false);
 	let error = $state('');
 	let liveLogs = $state<string[]>([]);
+	let abortController: AbortController | null = null;
 	let result = $state<{
 		entrants: {
 			seedNum: number;
@@ -27,27 +30,47 @@
 		logs: string[];
 	} | null>(null);
 
+	function cancelSeeder() {
+		abortController?.abort();
+		abortController = null;
+		loading = false;
+	}
+
+	onDestroy(() => abortController?.abort());
+
 	async function runSeeder() {
 		loading = true;
 		error = '';
 		result = null;
 		liveLogs = [];
 
-		const res = await fetch('/api/seeder', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				mode,
-				targetNumber,
-				seasonStart,
-				microEnd: microEnd || undefined,
-				macros: macros || undefined,
-				avoidEvents: avoidEvents || undefined,
-				jitter: jitter || 20,
-				seed: seed || undefined,
-				apply
-			})
-		});
+		abortController = new AbortController();
+		const signal = abortController.signal;
+
+		let res: Response;
+		try {
+			res = await fetch('/api/seeder', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					mode,
+					targetNumber,
+					seasonStart,
+					microEnd: microEnd || undefined,
+					macros: macros || undefined,
+					avoidEvents: avoidEvents || undefined,
+					jitter: jitter || 20,
+					seed: seed || undefined,
+					apply
+				}),
+				signal
+			});
+		} catch (err) {
+			if (signal.aborted) return;
+			loading = false;
+			error = err instanceof Error ? err.message : 'Network error';
+			return;
+		}
 
 		if (!res.ok || !res.body) {
 			loading = false;
@@ -64,32 +87,38 @@
 		const decoder = new TextDecoder();
 		let buffer = '';
 
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				buffer += decoder.decode(value, { stream: true });
 
-			const lines = buffer.split('\n');
-			buffer = lines.pop() ?? '';
+				const lines = buffer.split('\n');
+				buffer = lines.pop() ?? '';
 
-			let eventType = '';
-			for (const line of lines) {
-				if (line.startsWith('event: ')) {
-					eventType = line.slice(7);
-				} else if (line.startsWith('data: ')) {
-					const data = JSON.parse(line.slice(6));
-					if (eventType === 'log') {
-						liveLogs = [...liveLogs, data.message];
-					} else if (eventType === 'result') {
-						result = data;
-					} else if (eventType === 'error') {
-						error = data.error;
+				let eventType = '';
+				for (const line of lines) {
+					if (line.startsWith('event: ')) {
+						eventType = line.slice(7);
+					} else if (line.startsWith('data: ')) {
+						const data = JSON.parse(line.slice(6));
+						if (eventType === 'log') {
+							liveLogs = [...liveLogs, data.message];
+						} else if (eventType === 'result') {
+							result = data;
+						} else if (eventType === 'error') {
+							error = data.error;
+						}
 					}
 				}
 			}
+		} catch (err) {
+			if (signal.aborted) return;
+			throw err;
 		}
 
 		loading = false;
+		abortController = null;
 	}
 
 	const inputClass = 'mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500';
@@ -186,11 +215,18 @@
 		{/if}
 
 		<div class="flex items-center gap-4">
-			<button type="submit" disabled={loading || !targetNumber || !seasonStart}
-				class="rounded-lg bg-violet-600 px-6 py-2 font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50">
-				{loading ? 'Running...' : 'Preview Seeding'}
-			</button>
-			<label class="flex items-center gap-2 text-sm text-gray-400">
+			{#if loading}
+				<button type="button" onclick={cancelSeeder}
+					class="rounded-lg bg-red-600 px-6 py-2 font-medium text-white transition-colors hover:bg-red-500">
+					Cancel
+				</button>
+			{:else}
+				<button type="submit" disabled={!targetNumber || !seasonStart}
+					class="rounded-lg bg-violet-600 px-6 py-2 font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50">
+					Preview Seeding
+				</button>
+			{/if}
+			<label class="flex items-center gap-4 text-sm text-gray-400">
 				<input type="checkbox" bind:checked={apply}
 					class="rounded border-gray-600 bg-gray-800 text-violet-600 focus:ring-violet-500" />
 				Apply to StartGG

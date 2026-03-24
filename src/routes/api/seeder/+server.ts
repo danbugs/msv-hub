@@ -34,6 +34,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
+	const ac = new AbortController();
 	const encoder = new TextEncoder();
 	const stream = new ReadableStream({
 		async start(controller) {
@@ -44,7 +45,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			try {
 				const result = await runSeeder(input, (msg) => {
 					sendEvent('log', { message: msg });
-				});
+				}, ac.signal);
 
 				sendEvent('result', {
 					entrants: result.entrants,
@@ -54,11 +55,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					logs: result.logs
 				});
 			} catch (err) {
+				if (err instanceof DOMException && err.name === 'AbortError') return;
 				const msg = err instanceof Error ? err.message : 'Unknown error';
 				sendEvent('error', { error: msg });
 			}
 
 			controller.close();
+		},
+		cancel() {
+			ac.abort();
 		}
 	});
 
