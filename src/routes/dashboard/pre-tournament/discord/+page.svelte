@@ -24,15 +24,22 @@
 	});
 
 	let pingRunning = $state(false);
+	let pingMessage = $state('');
 	let pingResult = $state<{ ok: boolean; msg: string } | null>(null);
 
 	async function sendPing() {
+		if (!pingMessage.trim()) return;
 		pingRunning = true;
 		pingResult = null;
-		const res = await fetch('/api/discord/ping', { method: 'POST' });
+		const res = await fetch('/api/discord/ping', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ message: pingMessage.trim() })
+		});
 		const data = await res.json().catch(() => ({}));
 		if (res.ok) {
-			pingResult = { ok: true, msg: 'Message sent! Check the test channel.' };
+			pingResult = { ok: true, msg: 'Sent to #general.' };
+			pingMessage = '';
 		} else {
 			pingResult = { ok: false, msg: (data as { error?: string }).error ?? `HTTP ${res.status}` };
 		}
@@ -209,18 +216,27 @@
 		<code class="rounded bg-gray-800 px-1 py-0.5 text-xs text-violet-300">!do_pre_tournament_setup</code>.
 	</p>
 
-	<!-- Connectivity test -->
-	<div class="mt-4 flex flex-wrap items-center gap-3">
-		<button
-			type="button"
-			onclick={sendPing}
-			disabled={pingRunning}
-			class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors"
-		>
-			{pingRunning ? 'Sending…' : 'Say Hello'}
-		</button>
+	<!-- Send to #general -->
+	<div class="mt-4">
+		<div class="flex gap-2">
+			<input
+				type="text"
+				bind:value={pingMessage}
+				placeholder="Send a message to #general…"
+				onkeydown={(e) => e.key === 'Enter' && sendPing()}
+				class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none"
+			/>
+			<button
+				type="button"
+				onclick={sendPing}
+				disabled={pingRunning || !pingMessage.trim()}
+				class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors"
+			>
+				{pingRunning ? 'Sending…' : 'Send'}
+			</button>
+		</div>
 		{#if pingResult}
-			<span class="text-sm {pingResult.ok ? 'text-green-400' : 'text-red-400'}">{pingResult.msg}</span>
+			<p class="mt-1.5 text-xs {pingResult.ok ? 'text-green-400' : 'text-red-400'}">{pingResult.msg}</p>
 		{/if}
 	</div>
 
