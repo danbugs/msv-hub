@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
 import { getDiscordConfig, saveDiscordConfig } from '$lib/server/store';
+import { updateCronSchedule } from '$lib/server/github';
 
 /** GET — return current Discord config */
 export const GET: RequestHandler = async ({ locals }) => {
@@ -19,7 +20,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		registrationDay,
 		registrationHour,
 		registrationMinute,
-		announcementTemplate
+		announcementTemplate,
+		paused,
+		waitlistCreated
 	} = body as {
 		eventSlug?: string;
 		attendeeCap?: 32 | 64;
@@ -27,6 +30,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		registrationHour?: number;
 		registrationMinute?: number;
 		announcementTemplate?: string;
+		paused?: boolean;
+		waitlistCreated?: boolean;
 	};
 
 	// Validate attendeeCap if provided
@@ -48,14 +53,39 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'registrationMinute must be 0–59' }, { status: 400 });
 	}
 
+	// Load current config so we can detect changes.
+	const current = await getDiscordConfig();
+
+	// If a new eventSlug is being set and it differs from the stored one, reset
+	// waitlistCreated so the attendee monitor fires for the new event.
+	const slugChanged = eventSlug !== undefined && eventSlug !== current.eventSlug;
+
 	const updated = await saveDiscordConfig({
 		...(eventSlug !== undefined && { eventSlug }),
 		...(attendeeCap !== undefined && { attendeeCap }),
 		...(registrationDay !== undefined && { registrationDay }),
 		...(registrationHour !== undefined && { registrationHour }),
 		...(registrationMinute !== undefined && { registrationMinute }),
-		...(announcementTemplate !== undefined && { announcementTemplate })
+		...(announcementTemplate !== undefined && { announcementTemplate }),
+		...(paused !== undefined && { paused }),
+		...(waitlistCreated !== undefined && { waitlistCreated }),
+		...(slugChanged && { waitlistCreated: false })
 	});
+
+	// Auto-update the cron schedule in .github/workflows/discord-cron.yml
+	// whenever registration time changes. Best-effort — errors are swallowed.
+	const timeChanged =
+		registrationDay !== undefined ||
+		registrationHour !== undefined ||
+		registrationMinute !== undefined;
+
+	if (timeChanged) {
+		await updateCronSchedule(
+			updated.registrationDay,
+			updated.registrationHour,
+			updated.registrationMinute
+		);
+	}
 
 	return Response.json(updated);
 };

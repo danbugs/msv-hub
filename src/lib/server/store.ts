@@ -22,6 +22,10 @@ export interface DiscordConfig {
 	registrationMinute: number;
 	/** Custom announcement message template. Empty string = use hardcoded default. */
 	announcementTemplate: string;
+	/** When true, cron and attendee-check endpoints skip all Discord actions. */
+	paused: boolean;
+	/** Set to true once the waitlist thread has been created for the current event. */
+	waitlistCreated: boolean;
 	updatedAt: number;
 }
 
@@ -34,6 +38,8 @@ const DEFAULT_DISCORD_CONFIG: DiscordConfig = {
 	registrationHour: 8,
 	registrationMinute: 30,
 	announcementTemplate: '',
+	paused: false,
+	waitlistCreated: false,
 	updatedAt: 0
 };
 

@@ -66,6 +66,11 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const config = await getDiscordConfig();
 
+	// Respect the pause flag — skip all Discord actions when paused.
+	if (config.paused) {
+		return Response.json({ ok: true, fired: false, reason: 'bot is paused' });
+	}
+
 	const results: string[] = [];
 	let fired = false;
 
