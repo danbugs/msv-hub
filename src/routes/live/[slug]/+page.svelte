@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import type { TournamentState, Entrant, BracketMatch, BracketState, SwissRound } from '$lib/types/tournament';
+	import BracketView from '$lib/components/BracketView.svelte';
 
 	let { data } = $props();
 	let tournament = $derived<TournamentState | null>(data.tournament);
@@ -372,55 +373,10 @@
 
 					{#if tournament.brackets[showBracket]}
 					{@const bracket = tournament.brackets[showBracket]}
-					{@const groups = bracketRoundGroups(bracket)}
 					{@const totalM = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).length}
 					{@const doneM = bracket.matches.filter((m) => m.winnerId).length}
 					<p class="text-xs text-gray-500 mb-3">{doneM}/{totalM} matches complete</p>
-
-					<div class="space-y-5">
-						{#each groups as group}
-							<div>
-								<div class="flex items-center gap-2 mb-2">
-									<span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">{group.label}</span>
-									<div class="flex-1 border-t border-gray-800"></div>
-								</div>
-								<div class="space-y-1">
-									{#each group.matches.filter((m) => m.topPlayerId || m.bottomPlayerId) as match}
-										{@const top = getEntrant(match.topPlayerId)}
-										{@const bot = getEntrant(match.bottomPlayerId)}
-										<div class="rounded-lg {match.isStream && !match.winnerId ? 'border border-violet-600 bg-violet-900/10' : 'bg-gray-900'} px-3 py-2">
-											<div class="flex items-center gap-2 text-sm">
-												{#if match.station !== undefined}
-													<span class="text-xs {match.isStream ? 'text-violet-400' : 'text-gray-600'} w-16 shrink-0">
-														{match.isStream && !match.winnerId ? 'STREAM' : `Stn ${match.station}`}
-													</span>
-												{/if}
-												<span class="{match.winnerId === match.topPlayerId ? 'text-green-300 font-semibold' : match.winnerId && match.topPlayerId ? 'text-gray-500' : 'text-white'} flex-1 truncate">
-													{top?.gamerTag ?? (match.topPlayerId ? '?' : '—')}
-												</span>
-												{#if match.topScore !== undefined}
-													<span class="text-xs {match.winnerId === match.topPlayerId ? 'text-green-400' : 'text-gray-500'} shrink-0">{match.topScore}</span>
-												{/if}
-												<span class="text-gray-700 text-xs shrink-0">–</span>
-												{#if match.bottomScore !== undefined}
-													<span class="text-xs {match.winnerId === match.bottomPlayerId ? 'text-green-400' : 'text-gray-500'} shrink-0">{match.bottomScore}</span>
-												{/if}
-												<span class="{match.winnerId === match.bottomPlayerId ? 'text-green-300 font-semibold' : match.winnerId && match.bottomPlayerId ? 'text-gray-500' : 'text-white'} flex-1 truncate text-right">
-													{bot?.gamerTag ?? (match.bottomPlayerId ? '?' : '—')}
-												</span>
-											</div>
-											{#if match.topCharacters?.length || match.bottomCharacters?.length}
-												<div class="mt-0.5 text-xs text-gray-600 flex gap-3">
-													{#if match.topCharacters?.length}<span>{top?.gamerTag}: {match.topCharacters.join(', ')}</span>{/if}
-													{#if match.bottomCharacters?.length}<span>{bot?.gamerTag}: {match.bottomCharacters.join(', ')}</span>{/if}
-												</div>
-											{/if}
-										</div>
-									{/each}
-								</div>
-							</div>
-						{/each}
-					</div>
+					<BracketView bracket={bracket} entrants={tournament.entrants} />
 					{/if}
 				</div>
 			{/if}

@@ -170,6 +170,22 @@ query EventBySlug($slug: String!) {
   event(slug: $slug) { id name }
 }`;
 
+export const PHASE_SEEDS_WITH_TAGS_QUERY = `
+query PhaseSeedsWithTags($phaseId: ID!, $page: Int!, $perPage: Int!) {
+  phase(id: $phaseId) {
+    seeds(query: { page: $page, perPage: $perPage }) {
+      pageInfo { totalPages }
+      nodes {
+        seedNum
+        entrant {
+          name
+          participants { player { gamerTag } }
+        }
+      }
+    }
+  }
+}`;
+
 export const UPDATE_PHASE_SEEDING_MUTATION = `
 mutation UpdatePhaseSeeding($phaseId: ID!, $seedMapping: [UpdatePhaseSeedInfo]!) {
   updatePhaseSeeding(phaseId: $phaseId, seedMapping: $seedMapping) { id }
@@ -224,6 +240,17 @@ export async function fetchPhaseSeeds(phaseId: number, signal?: AbortSignal): Pr
 		const phase = d.phase as GqlRecord | undefined;
 		return phase?.seeds ?? null;
 	}, signal);
+}
+
+export async function fetchPhaseSeedsWithTags(phaseId: number, signal?: AbortSignal): Promise<{ seedNum: number; gamerTag: string }[]> {
+	const nodes = await fetchAllPages(PHASE_SEEDS_WITH_TAGS_QUERY, { phaseId }, (d) => {
+		const phase = d.phase as GqlRecord | undefined;
+		return phase?.seeds ?? null;
+	}, signal);
+	return (nodes as GqlRecord[]).map((n) => ({
+		seedNum: n.seedNum as number,
+		gamerTag: (n.entrant?.participants?.[0]?.player?.gamerTag ?? n.entrant?.name ?? 'Unknown') as string
+	})).sort((a, b) => a.seedNum - b.seedNum);
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────

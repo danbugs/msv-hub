@@ -23,6 +23,32 @@
 	let numStations = $state('16');
 	let streamStation = $state('16');
 
+	// Start from existing seeded event
+	let eventUrl = $state('');
+	let loadingEvent = $state(false);
+
+	async function startFromEvent() {
+		if (!eventUrl.trim()) return;
+		loadingEvent = true;
+		error = '';
+		const res = await fetch('/api/tournament/from-event', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				eventSlug: eventUrl.trim(),
+				numStations: Number(numStations),
+				streamStation: Number(streamStation)
+			})
+		});
+		loadingEvent = false;
+		if (!res.ok) {
+			const data = await res.json();
+			error = data.error ?? 'Failed to load event';
+		} else {
+			goto('/dashboard/tournament/swiss');
+		}
+	}
+
 	async function startSwiss() {
 		if (!result) return;
 		startingSwiss = true;
@@ -165,7 +191,41 @@
 	<h1 class="mt-4 text-2xl font-bold text-white">Seed Event</h1>
 	<p class="mt-1 text-gray-400">Elo-based seeding with configurable jitter.</p>
 
-	<form onsubmit={(e) => { e.preventDefault(); runSeeder(); }} class="mt-6 space-y-4">
+	<!-- Quick-start from an already-seeded StartGG event -->
+	<div class="mt-6 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+		<h2 class="text-sm font-semibold text-gray-300">Start from existing seeded event</h2>
+		<p class="mt-0.5 text-xs text-gray-500">Paste a StartGG event URL or slug to use its current seedings directly.</p>
+		<div class="mt-3 flex flex-wrap items-end gap-3">
+			<div class="flex-1 min-w-48">
+				<label for="event-url" class="block text-xs text-gray-400">StartGG event URL or slug</label>
+				<input id="event-url" type="text" bind:value={eventUrl}
+					placeholder="tournament/micro-132/event/singles"
+					class={inputClass} />
+			</div>
+			<div>
+				<label for="fe-stations" class="block text-xs text-gray-400">Stations</label>
+				<input id="fe-stations" type="number" bind:value={numStations} min="1"
+					class="mt-1 w-20 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-violet-500 focus:outline-none" />
+			</div>
+			<div>
+				<label for="fe-stream" class="block text-xs text-gray-400">Stream stn</label>
+				<input id="fe-stream" type="number" bind:value={streamStation} min="1"
+					class="mt-1 w-20 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-violet-500 focus:outline-none" />
+			</div>
+			<button type="button" onclick={startFromEvent} disabled={loadingEvent || !eventUrl.trim()}
+				class="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50">
+				{loadingEvent ? 'Loading…' : 'Start Swiss →'}
+			</button>
+		</div>
+	</div>
+
+	<div class="mt-6 flex items-center gap-3 text-xs text-gray-600">
+		<div class="flex-1 border-t border-gray-800"></div>
+		<span>OR seed a new event</span>
+		<div class="flex-1 border-t border-gray-800"></div>
+	</div>
+
+	<form onsubmit={(e) => { e.preventDefault(); runSeeder(); }} class="mt-4 space-y-4">
 		<div class="grid gap-4 sm:grid-cols-2">
 			<div>
 				<label for="mode" class="block text-sm font-medium text-gray-300">

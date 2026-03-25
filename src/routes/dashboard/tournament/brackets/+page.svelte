@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { TournamentState, BracketMatch, BracketState, Entrant } from '$lib/types/tournament';
+	import BracketView from '$lib/components/BracketView.svelte';
 
 	let tournament = $state<TournamentState | null>(null);
 	let activeBracket = $state<'main' | 'redemption'>('main');
@@ -215,8 +216,6 @@
 
 		{@const bracket = getBracket()}
 		{#if bracket}
-			{@const layout = computeLayout(bracket)}
-			{@const maxRound = Math.max(...bracket.matches.map((m) => m.round))}
 			{@const totalMatches = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).length}
 			{@const doneMatches = bracket.matches.filter((m) => m.winnerId).length}
 
@@ -229,107 +228,11 @@
 			</div>
 
 			<!-- Visual bracket (scrollable) -->
-			<div class="mt-4 overflow-x-auto overflow-y-auto rounded-xl border border-gray-800 bg-gray-950 p-4"
-				style="max-height: 80vh">
-				<div class="relative" style="width: {layout.width}px; height: {layout.height}px">
-					<!-- Connector SVG -->
-					<svg class="absolute inset-0 pointer-events-none overflow-visible"
-						width={layout.width} height={layout.height}>
-						{#each layout.connectors as c}
-							<!-- Horizontal right arm from match -->
-							<line x1={c.x1} y1={c.y1} x2={c.mx} y2={c.y1} stroke="#374151" stroke-width="1.5" />
-							<!-- Vertical to next match's y level -->
-							{#if c.y1 !== c.y2}
-								<line x1={c.mx} y1={c.y1} x2={c.mx} y2={c.y2} stroke="#374151" stroke-width="1.5" />
-							{/if}
-							<!-- Horizontal arm into next match -->
-							<line x1={c.mx} y1={c.y2} x2={c.x2} y2={c.y2} stroke="#374151" stroke-width="1.5" />
-						{/each}
-					</svg>
-
-					<!-- Match cards -->
-					{#each layout.matchPositions as { match, x, y }}
-						{@const top = getEntrant(match.topPlayerId)}
-						{@const bot = getEntrant(match.bottomPlayerId)}
-						{@const ready = !match.winnerId && !!match.topPlayerId && !!match.bottomPlayerId}
-						{@const showChars = isTop8Match(match, bracket)}
-
-						<div class="absolute rounded-lg border bg-gray-900 overflow-hidden"
-							style="left: {x}px; top: {y}px; width: {CARD_W}px"
-							class:border-violet-600={match.isStream && ready}
-							class:border-gray-700={!match.isStream || !ready}>
-
-							<!-- Top player row -->
-							<div class="flex items-center gap-1.5 px-2 py-1.5 border-b border-gray-800
-								{match.winnerId === match.topPlayerId ? 'bg-green-900/20' :
-								 match.winnerId && match.topPlayerId ? 'opacity-40' : ''}">
-								<span class="text-xs text-gray-500 w-6 text-right shrink-0">
-									{tournament?.entrants.find((e) => e.id === match.topPlayerId)
-										? `#${tournament!.entrants.find((e) => e.id === match.topPlayerId)!.initialSeed}`
-										: ''}
-								</span>
-								<span class="flex-1 truncate text-sm {match.winnerId === match.topPlayerId ? 'text-green-300 font-medium' : 'text-white'}">
-									{top?.gamerTag ?? (match.topPlayerId ? '?' : '—')}
-								</span>
-								{#if match.topScore !== undefined}
-									<span class="text-xs font-mono {match.winnerId === match.topPlayerId ? 'text-green-400' : 'text-gray-500'} shrink-0">
-										{match.topScore}
-									</span>
-								{/if}
-							</div>
-
-							<!-- Bottom player row -->
-							<div class="flex items-center gap-1.5 px-2 py-1.5
-								{match.winnerId === match.bottomPlayerId ? 'bg-green-900/20' :
-								 match.winnerId && match.bottomPlayerId ? 'opacity-40' : ''}">
-								<span class="text-xs text-gray-500 w-6 text-right shrink-0">
-									{tournament?.entrants.find((e) => e.id === match.bottomPlayerId)
-										? `#${tournament!.entrants.find((e) => e.id === match.bottomPlayerId)!.initialSeed}`
-										: ''}
-								</span>
-								<span class="flex-1 truncate text-sm {match.winnerId === match.bottomPlayerId ? 'text-green-300 font-medium' : 'text-white'}">
-									{bot?.gamerTag ?? (match.bottomPlayerId ? '?' : '—')}
-								</span>
-								{#if match.bottomScore !== undefined}
-									<span class="text-xs font-mono {match.winnerId === match.bottomPlayerId ? 'text-green-400' : 'text-gray-500'} shrink-0">
-										{match.bottomScore}
-									</span>
-								{/if}
-							</div>
-
-							<!-- Characters used (top 8, shown after report) -->
-							{#if match.winnerId && (match.topCharacters?.length || match.bottomCharacters?.length)}
-								<div class="px-2 py-1 text-xs text-gray-500 border-t border-gray-800 leading-relaxed">
-									{#if match.topCharacters?.length}<span class="text-gray-400">{getEntrant(match.topPlayerId)?.gamerTag}:</span> {match.topCharacters.join(', ')}{/if}{#if match.topCharacters?.length && match.bottomCharacters?.length} · {/if}{#if match.bottomCharacters?.length}<span class="text-gray-400">{getEntrant(match.bottomPlayerId)?.gamerTag}:</span> {match.bottomCharacters.join(', ')}{/if}
-								</div>
-							{/if}
-
-							<!-- Footer: station label + report/fix button -->
-							{#if ready || match.winnerId}
-								<div class="flex items-center justify-between px-2 py-1 border-t border-gray-800 bg-gray-900/50">
-									{#if match.station !== undefined}
-										<span class="text-xs {match.isStream ? 'text-violet-400' : 'text-gray-500'}">
-											{match.isStream ? 'STREAM' : `Stn ${match.station}`}
-										</span>
-									{:else}
-										<span></span>
-									{/if}
-									{#if ready}
-										<button onclick={() => openReport(match)}
-											class="rounded bg-violet-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-violet-600">
-											Report
-										</button>
-									{:else if match.winnerId && match.topPlayerId && match.bottomPlayerId}
-										<button onclick={() => openReport(match)}
-											class="rounded border border-yellow-700/50 px-2 py-0.5 text-xs text-yellow-500 hover:bg-yellow-900/20">
-											Fix
-										</button>
-									{/if}
-								</div>
-							{/if}
-						</div>
-					{/each}
-				</div>
+			<div class="mt-4">
+				<BracketView
+					bracket={bracket}
+					entrants={tournament!.entrants}
+					onReport={openReport} />
 			</div>
 
 			<!-- Report modal -->
