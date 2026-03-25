@@ -1,6 +1,9 @@
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
 import type { TournamentState } from '$lib/types/tournament';
+import { DEFAULT_MOTIVATIONAL_MESSAGES } from '$lib/defaults';
+
+export { DEFAULT_MOTIVATIONAL_MESSAGES };
 
 // ---------------------------------------------------------------------------
 // Discord config
@@ -17,6 +20,8 @@ export interface DiscordConfig {
 	registrationHour: number;
 	/** Scheduled announcement: minute (0-59) */
 	registrationMinute: number;
+	/** Custom announcement message template. Empty string = use hardcoded default. */
+	announcementTemplate: string;
 	updatedAt: number;
 }
 
@@ -28,8 +33,59 @@ const DEFAULT_DISCORD_CONFIG: DiscordConfig = {
 	registrationDay: 'wed',
 	registrationHour: 8,
 	registrationMinute: 30,
+	announcementTemplate: '',
 	updatedAt: 0
 };
+
+// ---------------------------------------------------------------------------
+// Community config (motivational messages list)
+// ---------------------------------------------------------------------------
+
+export interface CommunityConfig {
+	motivationalMessages: string[];
+	updatedAt: number;
+}
+
+const COMMUNITY_CONFIG_KEY = 'discord:community';
+
+const DEFAULT_COMMUNITY_CONFIG: CommunityConfig = {
+	motivationalMessages: DEFAULT_MOTIVATIONAL_MESSAGES,
+	updatedAt: 0
+};
+
+export async function getCommunityConfig(): Promise<CommunityConfig> {
+	const redis = getRedis();
+	const data = await redis.get<string>(COMMUNITY_CONFIG_KEY);
+	if (!data) return { ...DEFAULT_COMMUNITY_CONFIG };
+	const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+	return { ...DEFAULT_COMMUNITY_CONFIG, ...parsed };
+}
+
+export async function saveCommunityConfig(config: Partial<CommunityConfig>): Promise<CommunityConfig> {
+	const redis = getRedis();
+	const current = await getCommunityConfig();
+	const next: CommunityConfig = { ...current, ...config, updatedAt: Date.now() };
+	await redis.set(COMMUNITY_CONFIG_KEY, JSON.stringify(next));
+	return next;
+}
+
+// ---------------------------------------------------------------------------
+// Last motivational timestamp
+// ---------------------------------------------------------------------------
+
+const LAST_MOTIVATIONAL_KEY = 'discord:last_motivational';
+
+export async function getLastMotivationalTs(): Promise<number> {
+	const redis = getRedis();
+	const val = await redis.get<string>(LAST_MOTIVATIONAL_KEY);
+	if (!val) return 0;
+	return parseInt(typeof val === 'string' ? val : String(val), 10);
+}
+
+export async function setLastMotivationalTs(ts: number): Promise<void> {
+	const redis = getRedis();
+	await redis.set(LAST_MOTIVATIONAL_KEY, String(ts));
+}
 
 export async function getDiscordConfig(): Promise<DiscordConfig> {
 	const redis = getRedis();

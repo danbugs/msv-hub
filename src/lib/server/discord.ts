@@ -130,3 +130,27 @@ export function shortenSlug(slug: string): string {
 export function truncateTo100(s: string): string {
 	return s.length < 100 ? s : s.slice(0, 96) + '...';
 }
+
+// ---------------------------------------------------------------------------
+// Message fetching
+// ---------------------------------------------------------------------------
+
+export interface DiscordMessage {
+	id: string;
+	content: string;
+	author: {
+		id: string;
+		username: string;
+		bot?: boolean;
+	};
+}
+
+/** Fetch recent messages from a text channel. */
+export async function getMessages(channelId: string, limit = 100): Promise<DiscordMessage[]> {
+	const res = await discordFetch(`/channels/${channelId}/messages?limit=${limit}`);
+	if (!res.ok) {
+		const body = await res.text();
+		throw new Error(`Failed to fetch messages from ${channelId}: ${res.status} ${body}`);
+	}
+	return res.json() as Promise<DiscordMessage[]>;
+}
