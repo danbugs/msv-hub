@@ -84,8 +84,7 @@
 			regDayInput = config.registrationDay;
 			regHourInput = config.registrationHour;
 			regMinuteInput = config.registrationMinute;
-			// Pre-fill with default so the user can edit from a starting point rather than a blank slate.
-		announcementTemplateInput = config.announcementTemplate || DEFAULT_TEMPLATE;
+			announcementTemplateInput = config.announcementTemplate || '';
 		} else {
 			configError = 'Failed to load config.';
 		}
@@ -488,13 +487,13 @@
 					id="announce-template"
 					bind:value={announcementTemplateInput}
 					rows={8}
-					placeholder={DEFAULT_TEMPLATE}
+					placeholder="Leave blank to use the default message. Supports {{slug}} and {{cap}}."
 					class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 font-mono text-sm text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
 				></textarea>
 				{#if announcementTemplateInput.trim()}
 					<p class="mt-1 text-xs text-amber-500">Custom template active — default message will not be used.</p>
 				{:else}
-					<p class="mt-1 text-xs text-gray-600">Using default hardcoded message.</p>
+					<p class="mt-1 text-xs text-gray-600">Using default message.</p>
 				{/if}
 			</div>
 
