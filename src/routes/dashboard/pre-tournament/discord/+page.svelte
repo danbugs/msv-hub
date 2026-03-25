@@ -493,7 +493,7 @@
 					id="announce-template"
 					bind:value={announcementTemplateInput}
 					rows={8}
-					placeholder="Leave blank to use the default message. Supports {{slug}} and {{cap}}."
+					placeholder={"Leave blank to use the default message. Supports {{slug}} and {{cap}}."}
 					class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 font-mono text-sm text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
 				></textarea>
 				<div class="mt-1 flex items-center justify-between gap-3">
