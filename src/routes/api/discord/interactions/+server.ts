@@ -12,7 +12,7 @@
 
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { getDiscordConfig, getActiveTournament } from '$lib/server/store';
+import { getDiscordConfig, getActiveTournament, getCommunityConfig, DEFAULT_GIF_URLS } from '$lib/server/store';
 import { getMessages } from '$lib/server/discord';
 import nacl from 'tweetnacl';
 
@@ -58,6 +58,10 @@ function verifyDiscordSignature(
 
 function reply(content: string): Response {
 	return Response.json({ type: CHANNEL_MESSAGE_WITH_SOURCE, data: { content } });
+}
+
+function gifReply(url: string): Response {
+	return Response.json({ type: CHANNEL_MESSAGE_WITH_SOURCE, data: { embeds: [{ image: { url } }] } });
 }
 
 function pong(): Response {
@@ -187,16 +191,11 @@ async function handleStandings(): Promise<string> {
 	return `🏆 Swiss Standings (Top 10):\n${lines.join('\n')}`;
 }
 
-const GIFS = [
-	'https://tenor.com/view/smash-bros-ultimate-gif-14562613',
-	'https://tenor.com/view/super-smash-bros-ultimate-gif-14764292',
-	'https://tenor.com/view/smash-ultimate-gif-15056593',
-	'https://tenor.com/view/super-smash-bros-smash-gif-11891166',
-	'https://tenor.com/view/smash-bros-gg-gif-17510049'
-];
-
-async function handleGif(): Promise<string> {
-	return GIFS[Math.floor(Math.random() * GIFS.length)];
+async function handleGif(): Promise<Response> {
+	const config = await getCommunityConfig();
+	const urls = config.gifUrls?.length ? config.gifUrls : DEFAULT_GIF_URLS;
+	const url = urls[Math.floor(Math.random() * urls.length)];
+	return gifReply(url);
 }
 
 async function handleBalrogHelp(): Promise<string> {
@@ -308,7 +307,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				case 'bracket':
 					return reply(await handleBracket());
 				case 'gif':
-					return reply(await handleGif());
+					return await handleGif();
 				case 'balrog_help':
 					return reply(await handleBalrogHelp());
 				default:

@@ -18,11 +18,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const body = (await request.json().catch(() => ({}))) as {
-		action: 'motivational' | 'dice' | 'yes_or_no' | 'goat' | 'quote' | 'thanks' | 'save_messages';
+		action: 'motivational' | 'dice' | 'yes_or_no' | 'goat' | 'quote' | 'thanks' | 'save_messages' | 'save_gifs';
 		messages?: string[];
+		gifUrls?: string[];
 	};
 
-	const { action, messages } = body;
+	const { action, messages, gifUrls } = body;
 
 	try {
 		switch (action) {
@@ -33,6 +34,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				const filtered = messages.map((m) => m.trim()).filter(Boolean);
 				await saveCommunityConfig({ motivationalMessages: filtered });
 				return Response.json({ ok: true, saved: filtered.length });
+			}
+
+			case 'save_gifs': {
+				if (!Array.isArray(gifUrls)) {
+					return Response.json({ error: 'gifUrls must be an array' }, { status: 400 });
+				}
+				const filteredGifs = gifUrls.map((u) => u.trim()).filter(Boolean);
+				await saveCommunityConfig({ gifUrls: filteredGifs });
+				return Response.json({ ok: true, saved: filteredGifs.length });
 			}
 
 			case 'motivational': {

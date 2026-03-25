@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { DEFAULT_MOTIVATIONAL_MESSAGES } from '$lib/defaults';
+	import { DEFAULT_MOTIVATIONAL_MESSAGES, DEFAULT_GIF_URLS } from '$lib/defaults';
 
 	// ---------------------------------------------------------------------------
 	// Motivational messages
@@ -56,6 +56,38 @@
 	}
 
 	// ---------------------------------------------------------------------------
+	// GIF URLs
+	// ---------------------------------------------------------------------------
+
+	let gifText = $state('');
+	let gifUrls = $derived(
+		gifText
+			.split('\n')
+			.map((l) => l.trim())
+			.filter(Boolean)
+	);
+
+	let saveGifsRunning = $state(false);
+	let saveGifsResult = $state<{ ok: boolean; msg: string } | null>(null);
+
+	async function saveGifs() {
+		saveGifsRunning = true;
+		saveGifsResult = null;
+		const res = await fetch('/api/discord/community', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ action: 'save_gifs', gifUrls })
+		});
+		const data = await res.json().catch(() => ({}));
+		if (res.ok) {
+			saveGifsResult = { ok: true, msg: `Saved ${(data as { saved?: number }).saved ?? gifUrls.length} GIF URLs.` };
+		} else {
+			saveGifsResult = { ok: false, msg: (data as { error?: string }).error ?? `HTTP ${res.status}` };
+		}
+		saveGifsRunning = false;
+	}
+
+	// ---------------------------------------------------------------------------
 	// Slash command registration
 	// ---------------------------------------------------------------------------
 
@@ -78,11 +110,18 @@
 
 	onMount(async () => {
 		motivationalText = DEFAULT_MOTIVATIONAL_MESSAGES.join('\n');
+		gifText = DEFAULT_GIF_URLS.join('\n');
 		const commRes = await fetch('/api/discord/community/config').catch(() => null);
 		if (commRes && commRes.ok) {
-			const data = (await commRes.json().catch(() => null)) as { motivationalMessages?: string[] } | null;
+			const data = (await commRes.json().catch(() => null)) as {
+				motivationalMessages?: string[];
+				gifUrls?: string[];
+			} | null;
 			if (data?.motivationalMessages?.length) {
 				motivationalText = data.motivationalMessages.join('\n');
+			}
+			if (data?.gifUrls?.length) {
+				gifText = data.gifUrls.join('\n');
 			}
 		}
 	});
@@ -135,7 +174,35 @@
 	</section>
 
 	<!-- =========================================================
-	     Section 2: Slash Commands
+	     Section 2: GIF URLs
+	     ========================================================= -->
+	<section class="mt-10">
+		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">GIF URLs</h2>
+		<p class="mt-1 text-xs text-gray-500">
+			One direct GIF URL per line (e.g. Giphy CDN or Tenor media URLs). Used by <code class="text-gray-400">/gif</code>.
+		</p>
+
+		<textarea
+			bind:value={gifText}
+			rows={8}
+			placeholder={DEFAULT_GIF_URLS.join('\n')}
+			class="mt-3 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 font-mono text-sm text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+		></textarea>
+		<p class="mt-1 text-xs text-gray-600">{gifUrls.length} URL{gifUrls.length !== 1 ? 's' : ''}</p>
+
+		<div class="mt-3">
+			<button type="button" onclick={saveGifs} disabled={saveGifsRunning} class={primaryBtnClass}>
+				{saveGifsRunning ? 'Saving…' : 'Save GIF List'}
+			</button>
+		</div>
+
+		{#if saveGifsResult}
+			<p class="mt-2 text-xs {saveGifsResult.ok ? 'text-green-400' : 'text-red-400'}">{saveGifsResult.msg}</p>
+		{/if}
+	</section>
+
+	<!-- =========================================================
+	     Section 3: Slash Commands
 	     ========================================================= -->
 	<section class="mt-10">
 		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Slash Commands</h2>

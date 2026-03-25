@@ -22,3 +22,19 @@
 [data-theme="light"] .text-white {
   color: oklch(10% 0 0);
 }
+
+/*
+ * Colored "light" text shades (300/400) are designed to contrast against dark
+ * backgrounds. In light mode they become unreadable on the now-light surface.
+ * Map them to their dark equivalents so contrast is maintained everywhere.
+ */
+[data-theme="light"] {
+  --color-violet-300: oklch(44% 0.22 277);
+  --color-violet-400: oklch(48% 0.22 277);
+  --color-amber-300:  oklch(46% 0.13 78);
+  --color-amber-400:  oklch(41% 0.13 78);
+  --color-yellow-300: oklch(46% 0.12 92);
+  --color-yellow-400: oklch(41% 0.12 92);
+  --color-green-400:  oklch(42% 0.15 150);
+  --color-red-400:    oklch(42% 0.18 27);
+}

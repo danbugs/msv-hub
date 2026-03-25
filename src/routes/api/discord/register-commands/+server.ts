@@ -52,13 +52,22 @@ export const POST: RequestHandler = async ({ locals }) => {
 		return Response.json({ error: 'DISCORD_GUILD_ID is not configured' }, { status: 500 });
 	}
 
+	const headers = {
+		Authorization: `Bot ${botToken}`,
+		'Content-Type': 'application/json'
+	};
+
+	// Clear any lingering global commands that cause duplicates in the command list.
+	await fetch(`${DISCORD_API}/applications/${appId}/commands`, {
+		method: 'PUT',
+		headers,
+		body: JSON.stringify([])
+	});
+
 	// Guild commands are instant; global commands take up to 1 hour.
 	const res = await fetch(`${DISCORD_API}/applications/${appId}/guilds/${guildId}/commands`, {
 		method: 'PUT',
-		headers: {
-			Authorization: `Bot ${botToken}`,
-			'Content-Type': 'application/json'
-		},
+		headers,
 		body: JSON.stringify(COMMANDS)
 	});
 

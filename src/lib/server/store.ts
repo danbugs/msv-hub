@@ -1,9 +1,9 @@
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
 import type { TournamentState } from '$lib/types/tournament';
-import { DEFAULT_MOTIVATIONAL_MESSAGES } from '$lib/defaults';
+import { DEFAULT_MOTIVATIONAL_MESSAGES, DEFAULT_GIF_URLS } from '$lib/defaults';
 
-export { DEFAULT_MOTIVATIONAL_MESSAGES };
+export { DEFAULT_MOTIVATIONAL_MESSAGES, DEFAULT_GIF_URLS };
 
 // ---------------------------------------------------------------------------
 // Discord config
@@ -49,6 +49,7 @@ const DEFAULT_DISCORD_CONFIG: DiscordConfig = {
 
 export interface CommunityConfig {
 	motivationalMessages: string[];
+	gifUrls: string[];
 	updatedAt: number;
 }
 
@@ -56,6 +57,7 @@ const COMMUNITY_CONFIG_KEY = 'discord:community';
 
 const DEFAULT_COMMUNITY_CONFIG: CommunityConfig = {
 	motivationalMessages: DEFAULT_MOTIVATIONAL_MESSAGES,
+	gifUrls: DEFAULT_GIF_URLS,
 	updatedAt: 0
 };
 
