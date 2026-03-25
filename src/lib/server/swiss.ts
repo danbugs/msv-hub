@@ -432,9 +432,11 @@ export function assignBracketStations(bracket: BracketState, settings: Tournamen
 	const maxReadyRound = Math.max(...ready.map((m) => Math.abs(m.round)));
 	const streamCandidate = ready.find((m) => Math.abs(m.round) === maxReadyRound);
 
-	if (streamCandidate) {
+	// Only assign a new stream match if there isn't one currently active
+	const activeStream = updated.matches.find((m) => m.isStream && !m.winnerId);
+	if (!activeStream && streamCandidate) {
 		const idx = updated.matches.findIndex((m) => m.id === streamCandidate.id);
-		// Clear previous stream designation
+		// Clear completed stream designations
 		for (let i = 0; i < updated.matches.length; i++) {
 			if (updated.matches[i].isStream && updated.matches[i].winnerId) {
 				updated.matches[i] = { ...updated.matches[i], isStream: false };
@@ -881,15 +883,31 @@ export function generateBracket(
 		}
 	}
 
+	const bracketPlayers = optimized.map((p, i) => ({ entrantId: p.entrantId, seed: i + 1 }));
+	normalizeSeedOrder(matches, bracketPlayers);
+
 	const state: BracketState = {
 		name,
 		type: 'double_elimination',
-		players: optimized.map((p, i) => ({ entrantId: p.entrantId, seed: i + 1 })),
+		players: bracketPlayers,
 		matches,
 		currentRound: 1
 	};
 
 	return settings ? assignBracketStations(state, settings) : state;
+}
+
+/** Swap top/bottom so the better-seeded player is always on top (cosmetic, doesn't affect wiring). */
+function normalizeSeedOrder(matches: BracketMatch[], players: { entrantId: string; seed: number }[]): void {
+	const seedMap = new Map(players.map((p) => [p.entrantId, p.seed]));
+	for (const m of matches) {
+		if (!m.topPlayerId || !m.bottomPlayerId || m.winnerId) continue;
+		const topSeed = seedMap.get(m.topPlayerId) ?? Infinity;
+		const botSeed = seedMap.get(m.bottomPlayerId) ?? Infinity;
+		if (botSeed < topSeed) {
+			[m.topPlayerId, m.bottomPlayerId] = [m.bottomPlayerId, m.topPlayerId];
+		}
+	}
 }
 
 function advancePlayer(allMatches: BracketMatch[], completedMatch: BracketMatch) {
@@ -941,6 +959,7 @@ export function reportBracketMatch(
 	if (bottomScore !== undefined) match.bottomScore = bottomScore;
 
 	advancePlayer(updated.matches, match);
+	normalizeSeedOrder(updated.matches, updated.players);
 
 	// Grand Finals Reset: if the GF bottom-slot player (losers finalist) wins,
 	// create a reset match — no bracket advantage, single game.

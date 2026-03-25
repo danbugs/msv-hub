@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { BracketMatch, BracketState, Entrant } from '$lib/types/tournament';
 
 	interface MatchPos { match: BracketMatch; x: number; y: number; }
@@ -10,9 +11,22 @@
 		entrants: Entrant[];
 		/** If provided, Report/Fix buttons appear on match cards. */
 		onReport?: (match: BracketMatch) => void;
+		/** If provided, Call/Uncall buttons appear on ready match cards. */
+		onCall?: (match: BracketMatch) => void;
 	}
 
-	let { bracket, entrants, onReport }: Props = $props();
+	let { bracket, entrants, onReport, onCall }: Props = $props();
+
+	let now = $state(Date.now());
+	onMount(() => {
+		const id = setInterval(() => { now = Date.now(); }, 1000);
+		return () => clearInterval(id);
+	});
+
+	function elapsed(calledAt: number): string {
+		const s = Math.floor((now - calledAt) / 1000);
+		return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+	}
 
 	const CARD_W = 192;
 	const CARD_H = 100;
@@ -148,11 +162,13 @@
 			{@const top = getEntrant(match.topPlayerId)}
 			{@const bot = getEntrant(match.bottomPlayerId)}
 			{@const ready = !match.winnerId && !!match.topPlayerId && !!match.bottomPlayerId}
+			{@const called = ready && !!match.calledAt}
 
 			<div class="absolute rounded-lg border bg-gray-900 overflow-hidden"
 				style="left: {x}px; top: {y}px; width: {CARD_W}px"
-				class:border-violet-600={match.isStream && ready}
-				class:border-gray-700={!match.isStream || !ready}>
+				class:border-green-600={called}
+				class:border-violet-600={match.isStream && ready && !called}
+				class:border-gray-700={!match.isStream && !called}>
 
 				<!-- Top player -->
 				<div class="flex items-center gap-1.5 px-2 py-1.5 border-b border-gray-800
@@ -195,29 +211,44 @@
 					</div>
 				{/if}
 
-				<!-- Footer: station + action button -->
+				<!-- Footer: station + action buttons -->
 				{#if ready || match.winnerId}
 					<div class="flex items-center justify-between px-2 py-1 border-t border-gray-800 bg-gray-900/50">
-						{#if match.station !== undefined}
-							<span class="text-xs {match.isStream ? 'text-violet-400' : 'text-gray-500'}">
-								{match.isStream ? 'STREAM' : `Stn ${match.station}`}
-							</span>
-						{:else}
-							<span></span>
-						{/if}
-						{#if onReport}
-							{#if ready}
-								<button onclick={() => onReport!(match)}
-									class="rounded bg-violet-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-violet-600">
-									Report
-								</button>
-							{:else if match.winnerId && match.topPlayerId && match.bottomPlayerId}
-								<button onclick={() => onReport!(match)}
-									class="rounded border border-yellow-700/50 px-2 py-0.5 text-xs text-yellow-500 hover:bg-yellow-900/20">
-									Fix
+						<div class="flex items-center gap-1.5 min-w-0">
+							{#if match.station !== undefined}
+								{#if match.isStream}
+									<a href="https://twitch.tv/microspacing" target="_blank"
+										class="text-xs text-violet-400 hover:text-violet-300 shrink-0">STREAM ↗</a>
+								{:else}
+									<span class="text-xs text-gray-500 shrink-0">Stn {match.station}</span>
+								{/if}
+							{/if}
+							{#if called && match.calledAt}
+								<span class="text-xs text-green-400 font-mono">{elapsed(match.calledAt)}</span>
+							{/if}
+						</div>
+						<div class="flex items-center gap-1 shrink-0">
+							{#if onCall && ready}
+								<button onclick={() => onCall!(match)}
+									class="rounded px-2 py-0.5 text-xs font-medium transition-colors
+										{called ? 'bg-green-900/40 text-green-400 hover:bg-green-900/60' : 'border border-gray-600 text-gray-400 hover:text-green-400 hover:border-green-600'}">
+									{called ? 'Called' : 'Call'}
 								</button>
 							{/if}
-						{/if}
+							{#if onReport}
+								{#if ready}
+									<button onclick={() => onReport!(match)}
+										class="rounded bg-violet-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-violet-600">
+										Report
+									</button>
+								{:else if match.winnerId && match.topPlayerId && match.bottomPlayerId}
+									<button onclick={() => onReport!(match)}
+										class="rounded border border-yellow-700/50 px-2 py-0.5 text-xs text-yellow-500 hover:bg-yellow-900/20">
+										Fix
+									</button>
+								{/if}
+							{/if}
+						</div>
 					</div>
 				{/if}
 			</div>

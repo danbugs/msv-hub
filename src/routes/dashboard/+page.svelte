@@ -24,16 +24,10 @@
 			]
 		},
 		{
-			title: 'Tournament',
-			items: [
-				{ label: 'Run Swiss', href: '/dashboard/tournament/swiss', desc: 'Swiss rounds, station assignment, score reporting' },
-				{ label: 'Brackets', href: '/dashboard/tournament/brackets', desc: 'Main & Redemption brackets with auto-split' }
-			]
-		},
-		{
 			title: 'Post-Tournament',
 			items: [
-				{ label: 'Results & Export', href: '/dashboard/post-tournament', desc: 'Graphics, VOD, Braacket upload, StartGG sync' }
+				{ label: 'Results & Export', href: '/dashboard/post-tournament', desc: 'Graphics, VOD, Braacket upload, StartGG sync' },
+				{ label: 'League Overview', href: '#', desc: 'Season standings, Elo history, weekly recap — coming soon', disabled: true }
 			]
 		},
 		{
@@ -122,13 +116,18 @@
 				<h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{section.title}</h2>
 				<div class="space-y-2">
 					{#each section.items as item}
-						<a
-							href={item.href}
-							class="block rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50"
-						>
-							<div class="font-medium text-white">{item.label}</div>
-							<div class="mt-1 text-sm text-gray-400">{item.desc}</div>
-						</a>
+						{#if (item as any).disabled}
+							<div class="block rounded-lg border border-dashed border-gray-800 bg-gray-900/50 p-4 opacity-60 cursor-default">
+								<div class="font-medium text-gray-400">{item.label}</div>
+								<div class="mt-1 text-sm text-gray-500">{item.desc}</div>
+							</div>
+						{:else}
+							<a href={item.href}
+								class="block rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
+								<div class="font-medium text-white">{item.label}</div>
+								<div class="mt-1 text-sm text-gray-400">{item.desc}</div>
+							</a>
+						{/if}
 					{/each}
 				</div>
 			</div>

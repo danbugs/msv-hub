@@ -80,6 +80,8 @@ export interface BracketMatch {
 	loserNextSlot?: 'top' | 'bottom';
 	station?: number;
 	isStream?: boolean;
+	/** Timestamp (ms) when TO called this match to the station */
+	calledAt?: number;
 }
 
 export interface BracketState {

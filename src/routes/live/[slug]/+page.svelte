@@ -171,6 +171,8 @@
 						</div>
 					{/if}
 				</div>
+				<a href="https://twitch.tv/microspacing" target="_blank"
+					class="text-xs text-violet-400 hover:text-violet-300 shrink-0">twitch ↗</a>
 			</div>
 
 			<!-- Player search -->

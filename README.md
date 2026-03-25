@@ -4,6 +4,14 @@ Tournament operations center for Microspacing Vancouver — a weekly Super Smash
 
 Centralizes pre-tournament setup (Discord, seeding), tournament management (Swiss rounds, brackets, station assignments), and post-tournament tasks (graphics, VOD, Braacket/StartGG sync) into a single web app.
 
+## Built From
+
+This project consolidates tooling previously spread across several places:
+
+- **[daness](https://github.com/danbugs/daness)** — Swiss pairing engine (ported to TypeScript as `src/lib/server/swiss.ts`)
+- **[msv-discord-bot](https://github.com/danbugs/msv-discord-bot)** — Discord pre-tournament automation (in progress)
+- **[start.gg API](https://developer.start.gg)** — Event import, seed sync
+
 ## Stack
 
 - **SvelteKit** + TypeScript + Tailwind CSS

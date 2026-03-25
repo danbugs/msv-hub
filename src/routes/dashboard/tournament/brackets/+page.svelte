@@ -145,6 +145,15 @@
 		return winnerIsTop ? [w, l] : [l, w];
 	}
 
+	async function callMatch(match: BracketMatch) {
+		await fetch('/api/tournament/bracket/call', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ bracketName: activeBracket, matchId: match.id })
+		});
+		await loadTournament();
+	}
+
 	async function submitReport() {
 		if (!reportingMatch || !reportWinnerId || !reportScore) return;
 		error = '';
@@ -218,12 +227,20 @@
 		{#if bracket}
 			{@const totalMatches = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).length}
 			{@const doneMatches = bracket.matches.filter((m) => m.winnerId).length}
+			{@const readyMatches = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId && !m.winnerId)}
+			{@const calledMatches = readyMatches.filter((m) => m.calledAt)}
 
-			<div class="mt-2 text-xs text-gray-500">
-				{bracket.players.length} players · {doneMatches}/{totalMatches} matches complete
+			<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+				<span>{bracket.players.length} players · {doneMatches}/{totalMatches} matches complete</span>
+				{#if readyMatches.length > 0}
+					<span class="{calledMatches.length === readyMatches.length ? 'text-green-400' : 'text-gray-400'}">
+						{calledMatches.length}/{readyMatches.length} called
+						{#if calledMatches.length === readyMatches.length}&nbsp;✓{/if}
+					</span>
+				{/if}
 				{#if bracket.matches.some((m) => m.isStream && !m.winnerId)}
 					{@const streamM = bracket.matches.find((m) => m.isStream && !m.winnerId)!}
-					· <span class="text-violet-400">Stream: {getEntrant(streamM.topPlayerId)?.gamerTag} vs {getEntrant(streamM.bottomPlayerId)?.gamerTag}</span>
+					<span class="text-violet-400">Stream: {getEntrant(streamM.topPlayerId)?.gamerTag} vs {getEntrant(streamM.bottomPlayerId)?.gamerTag}</span>
 				{/if}
 			</div>
 
@@ -232,7 +249,8 @@
 				<BracketView
 					bracket={bracket}
 					entrants={tournament!.entrants}
-					onReport={openReport} />
+					onReport={openReport}
+					onCall={callMatch} />
 			</div>
 
 			<!-- Report modal -->
@@ -241,7 +259,7 @@
 				{@const bot = getEntrant(reportingMatch.bottomPlayerId)}
 				{@const isTop8 = bracket ? isTop8Match(reportingMatch, bracket) : false}
 				{@const isBo5 = activeBracket === 'main' ? isTop8 : (bracket ? isFinalsMatch(reportingMatch, bracket) : false)}
-				{@const showChars = isTop8}
+				{@const showChars = isBo5}
 
 				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
 					<div class="w-full max-w-sm rounded-xl bg-gray-900 border border-gray-700 p-5">
