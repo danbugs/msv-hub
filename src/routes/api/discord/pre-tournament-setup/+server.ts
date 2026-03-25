@@ -84,12 +84,7 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 	const log: StepResult[] = [];
 
 	// Helper: run a step, catch errors, keep going.
-	// Pass skipInDryRun=true for locking steps — nothing to lock in a fresh test channel.
-	async function step(name: string, fn: () => Promise<string>, skipInDryRun = false): Promise<void> {
-		if (dry && skipInDryRun) {
-			log.push({ step: name, ok: true, detail: '[DRY RUN] Skipped.' });
-			return;
-		}
+	async function step(name: string, fn: () => Promise<string>): Promise<void> {
 		try {
 			const detail = await fn();
 			log.push({ step: name, ok: true, detail: dry ? `[DRY RUN] ${detail}` : detail });
@@ -98,90 +93,23 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 		}
 	}
 
-	// 1. Lock waitlist threads
-	await step(
-		'Lock waitlist threads',
-		async () => {
+	if (dry) {
+		// Dry run: lock the waitlist channel (verifies the lock path works) then
+		// create one test thread (verifies the create path works). That's enough —
+		// the remaining lock+create pairs are identical code. Finish with a sample
+		// announcement to the test-announcements channel.
+		await step('Lock waitlist threads (test channel)', async () => {
 			const { locked, names } = await lockThreadsInChannel(guildId!, channels.waitlist);
 			if (locked === 0) return 'No open waitlist threads to lock.';
 			return `Locked ${locked} thread(s): ${names.join(', ')}`;
-		},
-		true // skip in dry run
-	);
+		});
 
-	// 2. Top-8 graphic forum
-	const top8Name = truncateTo100(`Top 8 graphic for ${shortSlug}`);
-	await step(
-		'Lock top-8 graphic threads',
-		async () => {
-			const { locked } = await lockThreadsInChannel(guildId!, channels.top8);
-			return locked > 0 ? `Locked ${locked} thread(s).` : 'No open threads to lock.';
-		},
-		true // skip in dry run
-	);
-	await step(
-		'Create top-8 graphic thread',
-		async () => {
-			const thread = await createForumPost(channels.top8, top8Name, 'Reply below w/ your characters and alts for the top 8');
+		const testThreadName = truncateTo100(`[TEST] Top 8 graphic for ${shortSlug}`);
+		await step('Create test thread', async () => {
+			const thread = await createForumPost(channels.top8, testThreadName, 'Dry-run test thread — safe to delete.');
 			return `Created "${thread.name}" (${thread.id})`;
-		}
-	);
+		});
 
-	// 3. Dropping-out forum
-	const dropoutName = truncateTo100(`Dropping Out from ${shortSlug}?`);
-	let dropoutContent = 'Let me know below!';
-	if (config.attendeeCap === 32) {
-		dropoutContent +=
-			'\n\nThe deadline to drop-out without penalty is 9AM on Monday. ' +
-			"If you drop out after 9AM but before 3PM, you're banned from next event. " +
-			"If you drop out after 3PM, you're banned from the next 2 events. " +
-			'For more details, see #faq .';
-	} else if (config.attendeeCap === 64) {
-		dropoutContent += '\n\nThe deadline to drop-out without penalty is Sunday midnight. ';
-	}
-	await step(
-		'Lock dropping-out threads',
-		async () => {
-			const { locked } = await lockThreadsInChannel(guildId!, channels.dropout);
-			return locked > 0 ? `Locked ${locked} thread(s).` : 'No open threads to lock.';
-		},
-		true // skip in dry run
-	);
-	await step(
-		'Create dropping-out thread',
-		async () => {
-			const thread = await createForumPost(channels.dropout, dropoutName, dropoutContent);
-			return `Created "${thread.name}" (${thread.id})`;
-		}
-	);
-
-	// 4. Priority-registration forum
-	const priRegName = truncateTo100(`Pri. Reg. for ${shortSlug}`);
-	const priRegContent =
-		config.attendeeCap === 32
-			? "If you were in the top 8 for the waitlist for this last micro event, " +
-			  "you have priority registration for next week, so, if you can make it, " +
-			  "I'll add you to bracket!~ just let me know before Wednesday 'cause reg. goes live then."
-			: 'See below!';
-	await step(
-		'Lock priority-registration threads',
-		async () => {
-			const { locked } = await lockThreadsInChannel(guildId!, channels.priReg);
-			return locked > 0 ? `Locked ${locked} thread(s).` : 'No open threads to lock.';
-		},
-		true // skip in dry run
-	);
-	await step(
-		'Create priority-registration thread',
-		async () => {
-			const thread = await createForumPost(channels.priReg, priRegName, priRegContent);
-			return `Created "${thread.name}" (${thread.id})`;
-		}
-	);
-
-	// 5. Dry-run only: post the announcement to the test-announcements channel
-	//    so you can verify the message content before the real event.
-	if (dry) {
 		await step('Post sample announcement (test channel)', async () => {
 			const msg = buildAnnouncementMessage(
 				config.eventSlug,
@@ -190,6 +118,62 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 			);
 			await sendMessage(TEST_ANNOUNCE, msg);
 			return `Posted to test-announcements (${TEST_ANNOUNCE})`;
+		});
+	} else {
+		// 1. Lock waitlist threads
+		await step('Lock waitlist threads', async () => {
+			const { locked, names } = await lockThreadsInChannel(guildId!, channels.waitlist);
+			if (locked === 0) return 'No open waitlist threads to lock.';
+			return `Locked ${locked} thread(s): ${names.join(', ')}`;
+		});
+
+		// 2. Top-8 graphic forum
+		const top8Name = truncateTo100(`Top 8 graphic for ${shortSlug}`);
+		await step('Lock top-8 graphic threads', async () => {
+			const { locked } = await lockThreadsInChannel(guildId!, channels.top8);
+			return locked > 0 ? `Locked ${locked} thread(s).` : 'No open threads to lock.';
+		});
+		await step('Create top-8 graphic thread', async () => {
+			const thread = await createForumPost(channels.top8, top8Name, 'Reply below w/ your characters and alts for the top 8');
+			return `Created "${thread.name}" (${thread.id})`;
+		});
+
+		// 3. Dropping-out forum
+		const dropoutName = truncateTo100(`Dropping Out from ${shortSlug}?`);
+		let dropoutContent = 'Let me know below!';
+		if (config.attendeeCap === 32) {
+			dropoutContent +=
+				'\n\nThe deadline to drop-out without penalty is 9AM on Monday. ' +
+				"If you drop out after 9AM but before 3PM, you're banned from next event. " +
+				"If you drop out after 3PM, you're banned from the next 2 events. " +
+				'For more details, see #faq .';
+		} else if (config.attendeeCap === 64) {
+			dropoutContent += '\n\nThe deadline to drop-out without penalty is Sunday midnight. ';
+		}
+		await step('Lock dropping-out threads', async () => {
+			const { locked } = await lockThreadsInChannel(guildId!, channels.dropout);
+			return locked > 0 ? `Locked ${locked} thread(s).` : 'No open threads to lock.';
+		});
+		await step('Create dropping-out thread', async () => {
+			const thread = await createForumPost(channels.dropout, dropoutName, dropoutContent);
+			return `Created "${thread.name}" (${thread.id})`;
+		});
+
+		// 4. Priority-registration forum
+		const priRegName = truncateTo100(`Pri. Reg. for ${shortSlug}`);
+		const priRegContent =
+			config.attendeeCap === 32
+				? "If you were in the top 8 for the waitlist for this last micro event, " +
+				  "you have priority registration for next week, so, if you can make it, " +
+				  "I'll add you to bracket!~ just let me know before Wednesday 'cause reg. goes live then."
+				: 'See below!';
+		await step('Lock priority-registration threads', async () => {
+			const { locked } = await lockThreadsInChannel(guildId!, channels.priReg);
+			return locked > 0 ? `Locked ${locked} thread(s).` : 'No open threads to lock.';
+		});
+		await step('Create priority-registration thread', async () => {
+			const thread = await createForumPost(channels.priReg, priRegName, priRegContent);
+			return `Created "${thread.name}" (${thread.id})`;
 		});
 	}
 
