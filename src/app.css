@@ -6,19 +6,19 @@
  * `color: var(--color-gray-N)` so overriding the variable is enough.
  */
 [data-theme="light"] {
-  --color-gray-950: oklch(98.5% .002 247.84);
-  --color-gray-900: oklch(96.7% .003 264.54);
-  --color-gray-800: oklch(92.8% .006 264.5);
-  --color-gray-700: oklch(87.2% .01 258.34);
-  --color-gray-600: oklch(70.7% .022 261.33);
-  --color-gray-500: oklch(55.1% .027 264.36);
-  --color-gray-400: oklch(44.6% .03 256.8);
-  --color-gray-300: oklch(37.2% .044 257.29);
-  --color-gray-200: oklch(27.8% .033 256.85);
-  --color-gray-100: oklch(21% .006 285.89);
+  --color-gray-950: oklch(98.5% .002 247.84);  /* was near-black → now near-white */
+  --color-gray-900: oklch(93% .004 264.54);
+  --color-gray-800: oklch(87% .006 264.5);
+  --color-gray-700: oklch(60% .012 258.34);
+  --color-gray-600: oklch(42% .022 261.33);     /* secondary text: clearly readable */
+  --color-gray-500: oklch(35% .022 264.36);
+  --color-gray-400: oklch(28% .025 256.8);      /* muted text: dark enough on light bg */
+  --color-gray-300: oklch(22% .03 257.29);
+  --color-gray-200: oklch(18% .03 256.85);
+  --color-gray-100: oklch(12% .006 285.89);     /* was near-white text → now near-black */
 }
 
-/* text-white is hardcoded — override to dark in light mode */
+/* text-white is hardcoded white — override to near-black in light mode */
 [data-theme="light"] .text-white {
-  color: oklch(14.5% 0 0);
+  color: oklch(10% 0 0);
 }

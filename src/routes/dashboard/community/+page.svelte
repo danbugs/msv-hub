@@ -56,94 +56,6 @@
 	}
 
 	// ---------------------------------------------------------------------------
-	// Fun commands
-	// ---------------------------------------------------------------------------
-
-	type FunResult = { ok: boolean; msg: string } | null;
-
-	let diceResult = $state<FunResult>(null);
-	let diceRunning = $state(false);
-
-	let ynResult = $state<FunResult>(null);
-	let ynRunning = $state(false);
-
-	let goatResult = $state<FunResult>(null);
-	let goatRunning = $state(false);
-
-	let quoteResult = $state<FunResult>(null);
-	let quoteRunning = $state(false);
-
-	let thanksResult = $state<FunResult>(null);
-	let thanksRunning = $state(false);
-
-	async function runAction(
-		action: string,
-		setRunning: (v: boolean) => void,
-		setResult: (v: FunResult) => void,
-		formatOk: (data: Record<string, unknown>) => string
-	) {
-		setRunning(true);
-		setResult(null);
-		const res = await fetch('/api/discord/community', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ action })
-		});
-		const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-		if (res.ok) {
-			setResult({ ok: true, msg: formatOk(data) });
-		} else {
-			setResult({ ok: false, msg: (data['error'] as string | undefined) ?? `HTTP ${res.status}` });
-		}
-		setRunning(false);
-	}
-
-	async function rollDice() {
-		await runAction(
-			'dice',
-			(v) => (diceRunning = v),
-			(v) => (diceResult = v),
-			(d) => `Posted: 🎲 Rolled a ${d['roll']}!`
-		);
-	}
-
-	async function yesOrNo() {
-		await runAction(
-			'yes_or_no',
-			(v) => (ynRunning = v),
-			(v) => (ynResult = v),
-			(d) => `Posted: ${d['answer']}`
-		);
-	}
-
-	async function whosDaGoat() {
-		await runAction(
-			'goat',
-			(v) => (goatRunning = v),
-			(v) => (goatResult = v),
-			(d) => `Posted: @${d['goat']} is da goat! 🐐`
-		);
-	}
-
-	async function postQuote() {
-		await runAction(
-			'quote',
-			(v) => (quoteRunning = v),
-			(v) => (quoteResult = v),
-			(d) => `Posted quote by ${d['author']}.`
-		);
-	}
-
-	async function postThanks() {
-		await runAction(
-			'thanks',
-			(v) => (thanksRunning = v),
-			(v) => (thanksResult = v),
-			(d) => `Posted: "${d['sent']}"`
-		);
-	}
-
-	// ---------------------------------------------------------------------------
 	// Slash command registration
 	// ---------------------------------------------------------------------------
 
@@ -164,15 +76,8 @@
 		registerRunning = false;
 	}
 
-	// Load saved messages on mount
 	onMount(async () => {
-		const res = await fetch('/api/discord/config');
-		// Community messages are stored separately — fetch from community endpoint indirectly.
-		// We can't call getCommunityConfig from client, but we load via a dedicated approach:
-		// Just pre-fill with defaults if nothing is saved.
 		motivationalText = DEFAULT_MOTIVATIONAL_MESSAGES.join('\n');
-
-		// Try to load saved community config
 		const commRes = await fetch('/api/discord/community/config').catch(() => null);
 		if (commRes && commRes.ok) {
 			const data = (await commRes.json().catch(() => null)) as { motivationalMessages?: string[] } | null;
@@ -182,17 +87,17 @@
 		}
 	});
 
-	const btnClass =
-		'rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors';
 	const primaryBtnClass =
 		'rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50 transition-colors';
+	const secondaryBtnClass =
+		'rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors';
 </script>
 
 <main class="mx-auto max-w-3xl px-4 py-8">
 	<a href="/dashboard" class="text-sm text-violet-400 hover:text-violet-300">&larr; Dashboard</a>
 	<h1 class="mt-4 text-2xl font-bold text-white">Community</h1>
 	<p class="mt-1 text-gray-400">
-		Balrog's fun community commands — trigger them manually from here and post results to #general.
+		Balrog's community features — motivational messages and Discord slash commands.
 	</p>
 
 	<!-- =========================================================
@@ -201,7 +106,7 @@
 	<section class="mt-8">
 		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Motivational Messages</h2>
 		<p class="mt-1 text-xs text-gray-500">
-			One message per line. The cron sends a random one to #general every 48h. Saving updates the stored list.
+			One message per line. The cron posts a random one to #general every 48–72h.
 		</p>
 
 		<textarea
@@ -213,22 +118,11 @@
 		<p class="mt-1 text-xs text-gray-600">{motivMessages.length} message{motivMessages.length !== 1 ? 's' : ''}</p>
 
 		<div class="mt-3 flex flex-wrap items-center gap-3">
-			<button
-				type="button"
-				onclick={saveMessages}
-				disabled={saveMessagesRunning}
-				class={primaryBtnClass}
-			>
+			<button type="button" onclick={saveMessages} disabled={saveMessagesRunning} class={primaryBtnClass}>
 				{saveMessagesRunning ? 'Saving…' : 'Save Message List'}
 			</button>
-
-			<button
-				type="button"
-				onclick={postMotivational}
-				disabled={motivRunning}
-				class={btnClass}
-			>
-				{motivRunning ? 'Posting…' : 'Post Random Motivational Message'}
+			<button type="button" onclick={postMotivational} disabled={motivRunning} class={secondaryBtnClass}>
+				{motivRunning ? 'Posting…' : 'Post Random Now'}
 			</button>
 		</div>
 
@@ -241,133 +135,28 @@
 	</section>
 
 	<!-- =========================================================
-	     Section 2: Fun Commands
-	     ========================================================= -->
-	<section class="mt-10">
-		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Fun Commands</h2>
-		<p class="mt-1 text-xs text-gray-500">Each posts a result to #general.</p>
-
-		<div class="mt-4 grid gap-4 sm:grid-cols-2">
-
-			<!-- Roll Dice -->
-			<div class="rounded-lg border border-gray-800 bg-gray-900 p-4">
-				<h3 class="text-sm font-medium text-white">Roll Dice</h3>
-				<p class="mt-0.5 text-xs text-gray-500">Posts "🎲 Rolled a {1-6}!" to #general.</p>
-				<button
-					type="button"
-					onclick={rollDice}
-					disabled={diceRunning}
-					class="mt-3 {btnClass}"
-				>
-					{diceRunning ? 'Rolling…' : 'Roll Dice'}
-				</button>
-				{#if diceResult}
-					<p class="mt-2 text-xs {diceResult.ok ? 'text-green-400' : 'text-red-400'}">{diceResult.msg}</p>
-				{/if}
-			</div>
-
-			<!-- Yes or No -->
-			<div class="rounded-lg border border-gray-800 bg-gray-900 p-4">
-				<h3 class="text-sm font-medium text-white">Yes or No</h3>
-				<p class="mt-0.5 text-xs text-gray-500">Posts "Yes." or "No." randomly to #general.</p>
-				<button
-					type="button"
-					onclick={yesOrNo}
-					disabled={ynRunning}
-					class="mt-3 {btnClass}"
-				>
-					{ynRunning ? 'Deciding…' : 'Yes or No'}
-				</button>
-				{#if ynResult}
-					<p class="mt-2 text-xs {ynResult.ok ? 'text-green-400' : 'text-red-400'}">{ynResult.msg}</p>
-				{/if}
-			</div>
-
-			<!-- Who's Da Goat -->
-			<div class="rounded-lg border border-gray-800 bg-gray-900 p-4">
-				<h3 class="text-sm font-medium text-white">Who's Da Goat</h3>
-				<p class="mt-0.5 text-xs text-gray-500">
-					Picks a random recent author from #general and crowns them 🐐.
-				</p>
-				<button
-					type="button"
-					onclick={whosDaGoat}
-					disabled={goatRunning}
-					class="mt-3 {btnClass}"
-				>
-					{goatRunning ? 'Finding…' : "Who's Da Goat"}
-				</button>
-				{#if goatResult}
-					<p class="mt-2 text-xs {goatResult.ok ? 'text-green-400' : 'text-red-400'}">{goatResult.msg}</p>
-				{/if}
-			</div>
-
-			<!-- Quote -->
-			<div class="rounded-lg border border-gray-800 bg-gray-900 p-4">
-				<h3 class="text-sm font-medium text-white">Quote</h3>
-				<p class="mt-0.5 text-xs text-gray-500">
-					Picks a random recent message from #general and reposts it as a quote.
-				</p>
-				<button
-					type="button"
-					onclick={postQuote}
-					disabled={quoteRunning}
-					class="mt-3 {btnClass}"
-				>
-					{quoteRunning ? 'Quoting…' : 'Post Quote'}
-				</button>
-				{#if quoteResult}
-					<p class="mt-2 text-xs {quoteResult.ok ? 'text-green-400' : 'text-red-400'}">{quoteResult.msg}</p>
-				{/if}
-			</div>
-
-			<!-- Thanks -->
-			<div class="rounded-lg border border-gray-800 bg-gray-900 p-4">
-				<h3 class="text-sm font-medium text-white">Thanks Response</h3>
-				<p class="mt-0.5 text-xs text-gray-500">
-					Posts a random thanks reply to #general (e.g. "No worries!", "You got it!").
-				</p>
-				<button
-					type="button"
-					onclick={postThanks}
-					disabled={thanksRunning}
-					class="mt-3 {btnClass}"
-				>
-					{thanksRunning ? 'Posting…' : 'Post Thanks Response'}
-				</button>
-				{#if thanksResult}
-					<p class="mt-2 text-xs {thanksResult.ok ? 'text-green-400' : 'text-red-400'}">{thanksResult.msg}</p>
-				{/if}
-			</div>
-
-		</div>
-	</section>
-
-	<!-- =========================================================
-	     Section 3: Slash Command Registration
+	     Section 2: Slash Commands
 	     ========================================================= -->
 	<section class="mt-10">
 		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Slash Commands</h2>
 		<p class="mt-1 text-xs text-gray-500">
-			Registers all slash commands globally with Discord. Run this once after any command changes.
-			Commands may take up to an hour to propagate.
+			Registers guild commands instantly. Run once after any command changes.
 		</p>
 
 		<div class="mt-4 rounded-lg border border-gray-800 bg-gray-900 p-4">
-			<h3 class="text-sm font-medium text-white">Register Slash Commands</h3>
-			<p class="mt-0.5 text-xs text-gray-500">
-				Bulk-overwrites all global commands: <code class="text-gray-400">/roll_dice</code>,
-				<code class="text-gray-400">/yes_or_no</code>, <code class="text-gray-400">/thanks</code>,
-				<code class="text-gray-400">/who_is_da_goat</code>, <code class="text-gray-400">/quote</code>,
-				<code class="text-gray-400">/nextweek</code>, <code class="text-gray-400">/standings</code>,
-				<code class="text-gray-400">/bracket</code>.
+			<p class="text-xs text-gray-500 mb-3">
+				Commands: <code class="text-gray-400">/roll_dice</code>
+				<code class="text-gray-400">/yes_or_no</code>
+				<code class="text-gray-400">/thanks</code>
+				<code class="text-gray-400">/who_is_da_goat</code>
+				<code class="text-gray-400">/quote</code>
+				<code class="text-gray-400">/gif</code>
+				<code class="text-gray-400">/nextweek</code>
+				<code class="text-gray-400">/standings</code>
+				<code class="text-gray-400">/bracket</code>
+				<code class="text-gray-400">/balrog_help</code>
 			</p>
-			<button
-				type="button"
-				onclick={registerSlashCommands}
-				disabled={registerRunning}
-				class="mt-3 {primaryBtnClass}"
-			>
+			<button type="button" onclick={registerSlashCommands} disabled={registerRunning} class={primaryBtnClass}>
 				{registerRunning ? 'Registering…' : 'Register Slash Commands'}
 			</button>
 			{#if registerResult}
