@@ -26,12 +26,20 @@ function channelId(envKey: string, fallback: string): string {
 	return (env as Record<string, string | undefined>)[envKey] ?? fallback;
 }
 
-function getChannels() {
+function getChannels(dry: boolean) {
+	if (dry) {
+		return {
+			waitlist: channelId('DISCORD_CHANNEL_TEST_WAITLIST', '') || channelId('DISCORD_CHANNEL_WAITLIST', '1193295598166737118'),
+			top8:     channelId('DISCORD_CHANNEL_TEST_TOP8', '')     || channelId('DISCORD_CHANNEL_TOP8', '1193298151503831163'),
+			dropout:  channelId('DISCORD_CHANNEL_TEST_DROPOUT', '')  || channelId('DISCORD_CHANNEL_DROPOUT', '1193304496583999588'),
+			priReg:   channelId('DISCORD_CHANNEL_TEST_PRI_REG', '')  || channelId('DISCORD_CHANNEL_PRI_REG', '1194324348014698496')
+		};
+	}
 	return {
 		waitlist: channelId('DISCORD_CHANNEL_WAITLIST', '1193295598166737118'),
-		top8: channelId('DISCORD_CHANNEL_TOP8', '1193298151503831163'),
-		dropout: channelId('DISCORD_CHANNEL_DROPOUT', '1193304496583999588'),
-		priReg: channelId('DISCORD_CHANNEL_PRI_REG', '1194324348014698496')
+		top8:     channelId('DISCORD_CHANNEL_TOP8', '1193298151503831163'),
+		dropout:  channelId('DISCORD_CHANNEL_DROPOUT', '1193304496583999588'),
+		priReg:   channelId('DISCORD_CHANNEL_PRI_REG', '1194324348014698496')
 	};
 }
 
@@ -47,7 +55,7 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 	const dry = url.searchParams.get('dry') === 'true';
 
 	const guildId = env.DISCORD_GUILD_ID;
-	if (!guildId && !dry) return Response.json({ error: 'DISCORD_GUILD_ID is not configured' }, { status: 500 });
+	if (!guildId) return Response.json({ error: 'DISCORD_GUILD_ID is not configured' }, { status: 500 });
 
 	const config = await getDiscordConfig();
 	if (!config.eventSlug) {
@@ -58,19 +66,16 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 	}
 
 	const shortSlug = shortenSlug(config.eventSlug);
-	const channels = getChannels();
+	// In dry-run mode use test channel IDs so all real Discord calls happen
+	// against safe channels rather than production ones.
+	const channels = getChannels(dry);
 	const log: StepResult[] = [];
 
 	// Helper: run a step, catch errors, keep going.
-	// In dry-run mode, skip actual API calls and just report what would happen.
-	async function step(name: string, dryDetail: string, fn: () => Promise<string>): Promise<void> {
-		if (dry) {
-			log.push({ step: name, ok: true, detail: `[DRY RUN] ${dryDetail}` });
-			return;
-		}
+	async function step(name: string, fn: () => Promise<string>): Promise<void> {
 		try {
 			const detail = await fn();
-			log.push({ step: name, ok: true, detail });
+			log.push({ step: name, ok: true, detail: dry ? `[DRY RUN] ${detail}` : detail });
 		} catch (e) {
 			log.push({ step: name, ok: false, detail: e instanceof Error ? e.message : String(e) });
 		}
@@ -79,7 +84,6 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 	// 1. Lock waitlist threads
 	await step(
 		'Lock waitlist threads',
-		`Would lock all open threads in waitlist channel (${channels.waitlist})`,
 		async () => {
 			const { locked, names } = await lockThreadsInChannel(guildId!, channels.waitlist);
 			if (locked === 0) return 'No open waitlist threads to lock.';
@@ -91,7 +95,6 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 	const top8Name = truncateTo100(`Top 8 graphic for ${shortSlug}`);
 	await step(
 		'Lock top-8 graphic threads',
-		`Would lock all open threads in top-8 channel (${channels.top8})`,
 		async () => {
 			const { locked } = await lockThreadsInChannel(guildId!, channels.top8);
 			return locked > 0 ? `Locked ${locked} thread(s).` : 'No open threads to lock.';
@@ -99,7 +102,6 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 	);
 	await step(
 		'Create top-8 graphic thread',
-		`Would create post "${top8Name}" in channel ${channels.top8}`,
 		async () => {
 			const thread = await createForumPost(channels.top8, top8Name, 'Reply below w/ your characters and alts for the top 8');
 			return `Created "${thread.name}" (${thread.id})`;
@@ -120,7 +122,6 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 	}
 	await step(
 		'Lock dropping-out threads',
-		`Would lock all open threads in dropout channel (${channels.dropout})`,
 		async () => {
 			const { locked } = await lockThreadsInChannel(guildId!, channels.dropout);
 			return locked > 0 ? `Locked ${locked} thread(s).` : 'No open threads to lock.';
@@ -128,7 +129,6 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 	);
 	await step(
 		'Create dropping-out thread',
-		`Would create post "${dropoutName}" in channel ${channels.dropout}`,
 		async () => {
 			const thread = await createForumPost(channels.dropout, dropoutName, dropoutContent);
 			return `Created "${thread.name}" (${thread.id})`;
@@ -145,7 +145,6 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 			: 'See below!';
 	await step(
 		'Lock priority-registration threads',
-		`Would lock all open threads in pri-reg channel (${channels.priReg})`,
 		async () => {
 			const { locked } = await lockThreadsInChannel(guildId!, channels.priReg);
 			return locked > 0 ? `Locked ${locked} thread(s).` : 'No open threads to lock.';
@@ -153,7 +152,6 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 	);
 	await step(
 		'Create priority-registration thread',
-		`Would create post "${priRegName}" in channel ${channels.priReg}`,
 		async () => {
 			const thread = await createForumPost(channels.priReg, priRegName, priRegContent);
 			return `Created "${thread.name}" (${thread.id})`;

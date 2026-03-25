@@ -18,8 +18,12 @@
   --color-gray-100: oklch(12% .006 285.89);     /* was near-white text → now near-black */
 }
 
-/* text-white is hardcoded white — override to near-black in light mode */
-[data-theme="light"] .text-white {
+/*
+ * text-white is hardcoded white — override to near-black in light mode,
+ * but ONLY when the element doesn't also carry a colored bg-* class
+ * (e.g. bg-violet-600, bg-red-600 buttons must keep their white text).
+ */
+[data-theme="light"] .text-white:not([class*="bg-violet"]):not([class*="bg-red-"]):not([class*="bg-blue-"]) {
   color: oklch(10% 0 0);
 }
 

@@ -567,7 +567,7 @@
 						bind:checked={setupDry}
 						class="h-4 w-4 rounded border-gray-600 bg-gray-800 accent-violet-500"
 					/>
-					Dry run (simulate, no Discord calls)
+					Dry run (uses test channels)
 				</label>
 			</div>
 		{/if}
@@ -606,7 +606,7 @@
 								: 'border-yellow-700 bg-yellow-900/20 text-yellow-300'}"
 					>
 						{#if setupDry}
-							Dry run complete — no Discord calls were made.
+							Dry run complete — actions ran against test channels.
 						{:else}
 							{allOk ? 'All steps completed successfully.' : 'Setup finished with some errors — see above.'}
 						{/if}
