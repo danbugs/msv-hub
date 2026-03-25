@@ -184,6 +184,34 @@ async function handleStandings(): Promise<string> {
 	return `🏆 Swiss Standings (Top 10):\n${lines.join('\n')}`;
 }
 
+const GIFS = [
+	'https://tenor.com/view/smash-bros-ultimate-gif-14562613',
+	'https://tenor.com/view/super-smash-bros-ultimate-gif-14764292',
+	'https://tenor.com/view/smash-ultimate-gif-15056593',
+	'https://tenor.com/view/super-smash-bros-smash-gif-11891166',
+	'https://tenor.com/view/smash-bros-gg-gif-17510049'
+];
+
+async function handleGif(): Promise<string> {
+	return GIFS[Math.floor(Math.random() * GIFS.length)];
+}
+
+async function handleBalrogHelp(): Promise<string> {
+	return (
+		'**Balrog commands:**\n' +
+		'`/roll_dice` — roll a 6-sided die\n' +
+		'`/yes_or_no` — random yes or no\n' +
+		'`/thanks` — a random "you\'re welcome"\n' +
+		'`/who_is_da_goat` — crown a GOAT 🐐\n' +
+		'`/quote` — random quote from #general\n' +
+		'`/gif` — random Smash GIF 🎬\n' +
+		'`/nextweek` — next event info\n' +
+		'`/standings` — current Swiss standings\n' +
+		'`/bracket` — open bracket matches\n' +
+		'`/balrog_help` — this message'
+	);
+}
+
 async function handleBracket(): Promise<string> {
 	const tournament = await getActiveTournament();
 	if (!tournament) {
@@ -269,6 +297,10 @@ export const POST: RequestHandler = async ({ request }) => {
 					return reply(await handleStandings());
 				case 'bracket':
 					return reply(await handleBracket());
+				case 'gif':
+					return reply(await handleGif());
+				case 'balrog_help':
+					return reply(await handleBalrogHelp());
 				default:
 					return reply(`Unknown command: /${name}`);
 			}

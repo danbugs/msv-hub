@@ -16,38 +16,16 @@ const DISCORD_API = 'https://discord.com/api/v10';
 // ---------------------------------------------------------------------------
 
 const COMMANDS = [
-	{
-		name: 'roll_dice',
-		description: 'Roll a 6-sided die'
-	},
-	{
-		name: 'yes_or_no',
-		description: 'Get a random Yes or No answer'
-	},
-	{
-		name: 'thanks',
-		description: "Post a random 'you're welcome' reply"
-	},
-	{
-		name: 'who_is_da_goat',
-		description: 'Crown a random recent #general author as the GOAT 🐐'
-	},
-	{
-		name: 'quote',
-		description: 'Share a random recent message from #general as a quote'
-	},
-	{
-		name: 'nextweek',
-		description: 'Show next event slug, cap, and registration time'
-	},
-	{
-		name: 'standings',
-		description: 'Show current tournament standings (Swiss top 10 or brackets status)'
-	},
-	{
-		name: 'bracket',
-		description: 'Show open bracket matches with station numbers'
-	}
+	{ name: 'roll_dice',       description: 'Roll a 6-sided die' },
+	{ name: 'yes_or_no',       description: 'Get a random Yes or No answer' },
+	{ name: 'thanks',          description: "Post a random 'you're welcome' reply" },
+	{ name: 'who_is_da_goat',  description: 'Crown a random recent #general author as the GOAT 🐐' },
+	{ name: 'quote',           description: 'Share a random recent message from #general as a quote' },
+	{ name: 'nextweek',        description: 'Show next event slug, cap, and registration time' },
+	{ name: 'standings',       description: 'Show current tournament standings (Swiss top 10 or brackets status)' },
+	{ name: 'bracket',         description: 'Show open bracket matches with station numbers' },
+	{ name: 'gif',             description: 'Post a random Balrog GIF 🎬' },
+	{ name: 'balrog_help',     description: 'List all Balrog slash commands' }
 ];
 
 // ---------------------------------------------------------------------------
@@ -69,7 +47,13 @@ export const POST: RequestHandler = async ({ locals }) => {
 		);
 	}
 
-	const res = await fetch(`${DISCORD_API}/applications/${appId}/commands`, {
+	const guildId = env.DISCORD_GUILD_ID;
+	if (!guildId) {
+		return Response.json({ error: 'DISCORD_GUILD_ID is not configured' }, { status: 500 });
+	}
+
+	// Guild commands are instant; global commands take up to 1 hour.
+	const res = await fetch(`${DISCORD_API}/applications/${appId}/guilds/${guildId}/commands`, {
 		method: 'PUT',
 		headers: {
 			Authorization: `Bot ${botToken}`,
