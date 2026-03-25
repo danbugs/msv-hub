@@ -117,6 +117,41 @@ export async function sendMessage(channelId: string, content: string): Promise<v
 }
 
 // ---------------------------------------------------------------------------
+// Announcement message builder
+// ---------------------------------------------------------------------------
+
+export function buildAnnouncementMessage(slug: string, cap: 32 | 64, template?: string): string {
+	if (template && template.trim()) {
+		return template
+			.replace(/\{\{slug\}\}/g, slug)
+			.replace(/\{\{cap\}\}/g, String(cap));
+	}
+
+	let message =
+		`@everyone ~ registration for next week's event is open!\n\n` +
+		`- ${cap} player cap.\n` +
+		`- for venue access, see: #how-to-get-to-the-venue .\n` +
+		`- **:warning: BRING YOUR NINTENDO SWITCHES (DOCK, CONSOLE, POWER CABLE, AND HDMI) WITH GAME CUBE ADAPTERS :warning:**`;
+
+	if (cap === 32) {
+		message +=
+			` (running Swiss is dependent on having at least 20 setups; otherwise, we'll do normal Redemption). We've got monitors.\n`;
+	} else {
+		message += `\n`;
+	}
+
+	message +=
+		`- if you are trying to register, but we've already reached the cap, please drop your StartGG tag ` +
+		`(and say if you can bring a setup) at #add-me-to-the-waitlist once it opens. ` +
+		`Are you from out-of-region? If so, you have priority in the waitlist!\n\n` +
+		`PS If you can't bring a full setup, but would still like to contribute, _please bring your GCC adapter_. ` +
+		`There are some people that can bring full setups but only play w/ pro cons., so it's always best to have extras.\n\n` +
+		`https://start.gg/${slug}`;
+
+	return message;
+}
+
+// ---------------------------------------------------------------------------
 // Slug helpers (mirror bot logic)
 // ---------------------------------------------------------------------------
 

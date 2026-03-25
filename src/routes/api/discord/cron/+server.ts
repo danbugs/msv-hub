@@ -15,8 +15,7 @@
 
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { sendMessage } from '$lib/server/discord';
-import { buildAnnouncementMessage } from '../announce/+server';
+import { sendMessage, buildAnnouncementMessage } from '$lib/server/discord';
 import {
 	getDiscordConfig,
 	getCommunityConfig,
