@@ -84,7 +84,7 @@
 			regDayInput = config.registrationDay;
 			regHourInput = config.registrationHour;
 			regMinuteInput = config.registrationMinute;
-			announcementTemplateInput = config.announcementTemplate || '';
+			announcementTemplateInput = config.announcementTemplate || DEFAULT_TEMPLATE;
 		} else {
 			configError = 'Failed to load config.';
 		}
@@ -490,11 +490,22 @@
 					placeholder="Leave blank to use the default message. Supports {{slug}} and {{cap}}."
 					class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 font-mono text-sm text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
 				></textarea>
-				{#if announcementTemplateInput.trim()}
-					<p class="mt-1 text-xs text-amber-500">Custom template active — default message will not be used.</p>
-				{:else}
-					<p class="mt-1 text-xs text-gray-600">Using default message.</p>
-				{/if}
+				<div class="mt-1 flex items-center justify-between gap-3">
+					{#if announcementTemplateInput.trim() && announcementTemplateInput.trim() !== DEFAULT_TEMPLATE.trim()}
+						<p class="text-xs text-amber-500">Custom template active — default message will not be used.</p>
+					{:else}
+						<p class="text-xs text-gray-600">Using default message.</p>
+					{/if}
+					{#if announcementTemplateInput.trim() !== DEFAULT_TEMPLATE.trim()}
+						<button
+							type="button"
+							onclick={() => (announcementTemplateInput = DEFAULT_TEMPLATE)}
+							class="shrink-0 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+						>
+							Revert to default
+						</button>
+					{/if}
+				</div>
 			</div>
 
 			{#if configError}
