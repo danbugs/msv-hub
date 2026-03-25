@@ -26,13 +26,18 @@ function channelId(envKey: string, fallback: string): string {
 	return (env as Record<string, string | undefined>)[envKey] ?? fallback;
 }
 
+// Test channel IDs match Balrog's hardcoded test channels.
+// Top-8/dropout/pri-reg have no dedicated test forums, so all forum
+// operations in dry-run mode are routed to the test waitlist channel.
+const TEST_WAITLIST = '1317322581938016317';
+
 function getChannels(dry: boolean) {
 	if (dry) {
 		return {
-			waitlist: channelId('DISCORD_CHANNEL_TEST_WAITLIST', '') || channelId('DISCORD_CHANNEL_WAITLIST', '1193295598166737118'),
-			top8:     channelId('DISCORD_CHANNEL_TEST_TOP8', '')     || channelId('DISCORD_CHANNEL_TOP8', '1193298151503831163'),
-			dropout:  channelId('DISCORD_CHANNEL_TEST_DROPOUT', '')  || channelId('DISCORD_CHANNEL_DROPOUT', '1193304496583999588'),
-			priReg:   channelId('DISCORD_CHANNEL_TEST_PRI_REG', '')  || channelId('DISCORD_CHANNEL_PRI_REG', '1194324348014698496')
+			waitlist: TEST_WAITLIST,
+			top8:     TEST_WAITLIST,
+			dropout:  TEST_WAITLIST,
+			priReg:   TEST_WAITLIST
 		};
 	}
 	return {
