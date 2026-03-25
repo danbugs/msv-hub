@@ -11,7 +11,7 @@
  */
 
 import type { RequestHandler } from './$types';
-import { createVerify } from 'node:crypto';
+import { verify } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 import { getDiscordConfig, getActiveTournament } from '$lib/server/store';
 import { getMessages } from '$lib/server/discord';
@@ -41,9 +41,12 @@ function verifyDiscordSignature(
 	body: string
 ): boolean {
 	try {
-		const verify = createVerify('ed25519');
-		verify.update(timestamp + body);
-		return verify.verify(Buffer.from(publicKey, 'hex'), Buffer.from(signature, 'hex'));
+		return verify(
+			null, // Ed25519 doesn't use a separate hash algorithm
+			Buffer.from(timestamp + body),
+			{ key: Buffer.from(publicKey, 'hex'), format: 'raw', type: 'public' },
+			Buffer.from(signature, 'hex')
+		);
 	} catch {
 		return false;
 	}
