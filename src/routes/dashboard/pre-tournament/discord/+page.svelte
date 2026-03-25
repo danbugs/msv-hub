@@ -104,6 +104,7 @@
 	let setupLog = $state<StepResult[]>([]);
 	let setupError = $state('');
 	let setupDone = $state(false);
+	let setupDry = $state(false);
 
 	async function runPreTournamentSetup() {
 		setupRunning = true;
@@ -111,7 +112,10 @@
 		setupError = '';
 		setupDone = false;
 
-		const res = await fetch('/api/discord/pre-tournament-setup', { method: 'POST' });
+		const url = setupDry
+			? '/api/discord/pre-tournament-setup?dry=true'
+			: '/api/discord/pre-tournament-setup';
+		const res = await fetch(url, { method: 'POST' });
 		const data = await res.json().catch(() => ({}));
 
 		if (!res.ok) {
@@ -195,6 +199,34 @@
 			Loading config…
 		</div>
 	{:else}
+
+	<!-- Current event status card (!check_current_event) -->
+	<div class="mt-6 rounded-xl border {config.eventSlug ? 'border-violet-800 bg-violet-900/10' : 'border-dashed border-gray-700 bg-gray-900/50'} p-4">
+		<div class="flex items-start justify-between gap-4">
+			<div class="min-w-0">
+				<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Current Event</p>
+				{#if config.eventSlug}
+					<p class="mt-1 font-mono text-sm text-white break-all">{config.eventSlug}</p>
+					<div class="mt-1.5 flex flex-wrap gap-3 text-xs text-gray-400">
+						<span>Cap: <span class="text-gray-200">{config.attendeeCap}</span></span>
+						<span>Reg: <span class="text-gray-200">{days.find(d => d.value === config.registrationDay)?.label} {String(config.registrationHour).padStart(2,'0')}:{String(config.registrationMinute).padStart(2,'0')} PST</span></span>
+						{#if config.updatedAt}
+							<span>Updated: <span class="text-gray-200">{new Date(config.updatedAt).toLocaleString()}</span></span>
+						{/if}
+					</div>
+				{:else}
+					<p class="mt-1 text-sm text-gray-500">No event configured yet.</p>
+				{/if}
+			</div>
+			<button
+				type="button"
+				onclick={loadConfig}
+				class="shrink-0 rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-violet-600 hover:text-violet-400 transition-colors"
+			>
+				Refresh
+			</button>
+		</div>
+	</div>
 
 	<!-- =========================================================
 	     Section 1: Config
@@ -325,15 +357,24 @@
 				</p>
 			</div>
 
-			<div class="mt-4">
+			<div class="mt-4 flex flex-wrap items-center gap-3">
 				<button
 					type="button"
 					onclick={runPreTournamentSetup}
 					disabled={setupRunning}
-					class="rounded-lg bg-violet-600 px-5 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50 transition-colors"
+					class="rounded-lg {setupDry ? 'bg-gray-700 hover:bg-gray-600' : 'bg-violet-600 hover:bg-violet-500'} px-5 py-2 text-sm font-medium text-white disabled:opacity-50 transition-colors"
 				>
-					{setupRunning ? 'Running…' : 'Run Pre-Tournament Setup'}
+					{setupRunning ? 'Running…' : setupDry ? 'Dry Run' : 'Run Pre-Tournament Setup'}
 				</button>
+
+				<label class="flex cursor-pointer items-center gap-2 text-sm text-gray-400 select-none">
+					<input
+						type="checkbox"
+						bind:checked={setupDry}
+						class="h-4 w-4 rounded border-gray-600 bg-gray-800 accent-violet-500"
+					/>
+					Dry run (simulate, no Discord calls)
+				</label>
 			</div>
 		{/if}
 
@@ -370,7 +411,11 @@
 								? 'border-green-700 bg-green-900/20 text-green-300'
 								: 'border-yellow-700 bg-yellow-900/20 text-yellow-300'}"
 					>
-						{allOk ? 'All steps completed successfully.' : 'Setup finished with some errors — see above.'}
+						{#if setupDry}
+							Dry run complete — no Discord calls were made.
+						{:else}
+							{allOk ? 'All steps completed successfully.' : 'Setup finished with some errors — see above.'}
+						{/if}
 					</div>
 				{/if}
 			</div>
