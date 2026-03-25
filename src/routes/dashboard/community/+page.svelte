@@ -143,6 +143,27 @@
 		);
 	}
 
+	// ---------------------------------------------------------------------------
+	// Slash command registration
+	// ---------------------------------------------------------------------------
+
+	let registerRunning = $state(false);
+	let registerResult = $state<{ ok: boolean; msg: string } | null>(null);
+
+	async function registerSlashCommands() {
+		registerRunning = true;
+		registerResult = null;
+		const res = await fetch('/api/discord/register-commands', { method: 'POST' });
+		const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+		if (res.ok) {
+			const names = (data['registered'] as string[] | undefined) ?? [];
+			registerResult = { ok: true, msg: `Registered ${names.length} command(s): ${names.join(', ')}` };
+		} else {
+			registerResult = { ok: false, msg: (data['error'] as string | undefined) ?? `HTTP ${res.status}` };
+		}
+		registerRunning = false;
+	}
+
 	// Load saved messages on mount
 	onMount(async () => {
 		const res = await fetch('/api/discord/config');
@@ -319,6 +340,39 @@
 				{/if}
 			</div>
 
+		</div>
+	</section>
+
+	<!-- =========================================================
+	     Section 3: Slash Command Registration
+	     ========================================================= -->
+	<section class="mt-10">
+		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Slash Commands</h2>
+		<p class="mt-1 text-xs text-gray-500">
+			Registers all slash commands globally with Discord. Run this once after any command changes.
+			Commands may take up to an hour to propagate.
+		</p>
+
+		<div class="mt-4 rounded-lg border border-gray-800 bg-gray-900 p-4">
+			<h3 class="text-sm font-medium text-white">Register Slash Commands</h3>
+			<p class="mt-0.5 text-xs text-gray-500">
+				Bulk-overwrites all global commands: <code class="text-gray-400">/roll_dice</code>,
+				<code class="text-gray-400">/yes_or_no</code>, <code class="text-gray-400">/thanks</code>,
+				<code class="text-gray-400">/who_is_da_goat</code>, <code class="text-gray-400">/quote</code>,
+				<code class="text-gray-400">/nextweek</code>, <code class="text-gray-400">/standings</code>,
+				<code class="text-gray-400">/bracket</code>.
+			</p>
+			<button
+				type="button"
+				onclick={registerSlashCommands}
+				disabled={registerRunning}
+				class="mt-3 {primaryBtnClass}"
+			>
+				{registerRunning ? 'Registering…' : 'Register Slash Commands'}
+			</button>
+			{#if registerResult}
+				<p class="mt-2 text-xs {registerResult.ok ? 'text-green-400' : 'text-red-400'}">{registerResult.msg}</p>
+			{/if}
 		</div>
 	</section>
 </main>
