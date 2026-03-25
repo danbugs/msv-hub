@@ -22,6 +22,14 @@
 		}
 	}
 
+	const ANNOUNCE_CHANNELS = [
+		{ value: '',               label: 'No announcement' },
+		{ value: 'talk-to-balrog', label: '#talk-to-balrog' },
+		{ value: 'general',        label: '#general' },
+		{ value: 'announcements',  label: '#announcements' }
+	];
+	let roundAnnounceChannel = $state('talk-to-balrog');
+
 	async function startNextRound(regenerate = false) {
 		loading = true;
 		error = '';
@@ -29,7 +37,7 @@
 		const res = await fetch('/api/tournament/round', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ regenerate })
+			body: JSON.stringify({ regenerate, announceChannel: roundAnnounceChannel })
 		});
 
 		const data = await res.json();
@@ -194,12 +202,18 @@
 
 		{#if tournament.phase === 'swiss'}
 			<!-- Round controls -->
-			<div class="mt-6 flex items-center gap-3">
+			<div class="mt-6 flex flex-wrap items-center gap-3">
 				{#if tournament.currentRound === 0 || isRoundComplete()}
 					<button onclick={() => startNextRound()} disabled={loading}
 						class="rounded-lg bg-violet-600 px-5 py-2 font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50">
 						{loading ? 'Generating...' : tournament.currentRound === 0 ? 'Start Round 1' : (isSwissComplete() || isFinalRoundComplete()) ? 'Generate Bracket Split →' : `Start Round ${tournament.currentRound + 1}`}
 					</button>
+					<select bind:value={roundAnnounceChannel}
+						class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 focus:border-violet-500 focus:outline-none">
+						{#each ANNOUNCE_CHANNELS as ch}
+							<option value={ch.value}>{ch.label}</option>
+						{/each}
+					</select>
 				{/if}
 				<button onclick={deleteTournament}
 					class="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:border-red-700 hover:text-red-400 transition-colors">

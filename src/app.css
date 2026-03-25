@@ -39,6 +39,7 @@
   --color-amber-400:  oklch(41% 0.13 78);
   --color-yellow-300: oklch(46% 0.12 92);
   --color-yellow-400: oklch(41% 0.12 92);
+  --color-green-300:  oklch(38% 0.14 150);
   --color-green-400:  oklch(42% 0.15 150);
   --color-red-400:    oklch(42% 0.18 27);
 }

@@ -1,5 +1,7 @@
 import type { RequestHandler } from './$types';
+import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
+import { sendMessage } from '$lib/server/discord';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -20,6 +22,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const body = await request.json().catch(() => ({}));
 	const regenerate = body.regenerate === true;
+	const announceChannel = (body.announceChannel as string | undefined) ?? '';
 
 	// If regenerating, remove the current round if it has no reported results
 	if (regenerate && tournament.rounds.length > 0) {
@@ -112,6 +115,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	tournament.rounds.push(round);
 	tournament.currentRound = nextRound;
 	await saveTournament(tournament);
+
+	// Optionally announce the new round to a Discord channel.
+	if (announceChannel) {
+		const CHANNEL_IDS: Record<string, string> = {
+			'general':        '1066863005591162961',
+			'announcements':  '1066863301885173800',
+			'talk-to-balrog': '1317322917129879562'
+		};
+		const channelId = CHANNEL_IDS[announceChannel] ?? announceChannel;
+		const appUrl = (env as Record<string, string | undefined>)['APP_URL']
+			? `https://${(env as Record<string, string | undefined>)['APP_URL']}`
+			: '';
+		const liveLink = appUrl ? ` Check it out here: ${appUrl}/live/${tournament.slug}` : '';
+		await sendMessage(channelId, `🎮 Round ${nextRound} is starting!${liveLink}`)
+			.catch(() => { /* best-effort */ });
+	}
 
 	const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
 	return Response.json({

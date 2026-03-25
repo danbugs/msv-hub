@@ -7,6 +7,10 @@
  *   3. Lock old "dropping out" threads, create a new one.
  *   4. Lock old priority-registration threads, create a new one.
  *
+ * ?dry=true — routes all operations to test channels; locking steps are
+ * skipped (nothing to lock in a clean test channel) and a sample
+ * announcement is posted to the test-announcements channel.
+ *
  * Returns a structured log of every action taken so the UI can show progress.
  */
 
@@ -15,6 +19,8 @@ import { env } from '$env/dynamic/private';
 import {
 	lockThreadsInChannel,
 	createForumPost,
+	sendMessage,
+	buildAnnouncementMessage,
 	shortenSlug,
 	truncateTo100
 } from '$lib/server/discord';
@@ -29,7 +35,8 @@ function channelId(envKey: string, fallback: string): string {
 // Test channel IDs match Balrog's hardcoded test channels.
 // Top-8/dropout/pri-reg have no dedicated test forums, so all forum
 // operations in dry-run mode are routed to the test waitlist channel.
-const TEST_WAITLIST = '1317322581938016317';
+const TEST_WAITLIST  = '1317322581938016317';
+const TEST_ANNOUNCE  = '1317322763043864616';
 
 function getChannels(dry: boolean) {
 	if (dry) {
@@ -77,7 +84,12 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 	const log: StepResult[] = [];
 
 	// Helper: run a step, catch errors, keep going.
-	async function step(name: string, fn: () => Promise<string>): Promise<void> {
+	// Pass skipInDryRun=true for locking steps — nothing to lock in a fresh test channel.
+	async function step(name: string, fn: () => Promise<string>, skipInDryRun = false): Promise<void> {
+		if (dry && skipInDryRun) {
+			log.push({ step: name, ok: true, detail: '[DRY RUN] Skipped.' });
+			return;
+		}
 		try {
 			const detail = await fn();
 			log.push({ step: name, ok: true, detail: dry ? `[DRY RUN] ${detail}` : detail });
@@ -93,7 +105,8 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 			const { locked, names } = await lockThreadsInChannel(guildId!, channels.waitlist);
 			if (locked === 0) return 'No open waitlist threads to lock.';
 			return `Locked ${locked} thread(s): ${names.join(', ')}`;
-		}
+		},
+		true // skip in dry run
 	);
 
 	// 2. Top-8 graphic forum
@@ -103,7 +116,8 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 		async () => {
 			const { locked } = await lockThreadsInChannel(guildId!, channels.top8);
 			return locked > 0 ? `Locked ${locked} thread(s).` : 'No open threads to lock.';
-		}
+		},
+		true // skip in dry run
 	);
 	await step(
 		'Create top-8 graphic thread',
@@ -130,7 +144,8 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 		async () => {
 			const { locked } = await lockThreadsInChannel(guildId!, channels.dropout);
 			return locked > 0 ? `Locked ${locked} thread(s).` : 'No open threads to lock.';
-		}
+		},
+		true // skip in dry run
 	);
 	await step(
 		'Create dropping-out thread',
@@ -153,7 +168,8 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 		async () => {
 			const { locked } = await lockThreadsInChannel(guildId!, channels.priReg);
 			return locked > 0 ? `Locked ${locked} thread(s).` : 'No open threads to lock.';
-		}
+		},
+		true // skip in dry run
 	);
 	await step(
 		'Create priority-registration thread',
@@ -162,6 +178,20 @@ export const POST: RequestHandler = async ({ locals, url }) => {
 			return `Created "${thread.name}" (${thread.id})`;
 		}
 	);
+
+	// 5. Dry-run only: post the announcement to the test-announcements channel
+	//    so you can verify the message content before the real event.
+	if (dry) {
+		await step('Post sample announcement (test channel)', async () => {
+			const msg = buildAnnouncementMessage(
+				config.eventSlug,
+				config.attendeeCap,
+				config.announcementTemplate || undefined
+			);
+			await sendMessage(TEST_ANNOUNCE, msg);
+			return `Posted to test-announcements (${TEST_ANNOUNCE})`;
+		});
+	}
 
 	const anyFailed = log.some((s) => !s.ok);
 	return Response.json({ ok: !anyFailed, log });

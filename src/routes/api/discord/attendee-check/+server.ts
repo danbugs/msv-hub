@@ -13,11 +13,12 @@
 
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { createForumPost, shortenSlug, truncateTo100 } from '$lib/server/discord';
+import { createForumPost, sendMessage, shortenSlug, truncateTo100 } from '$lib/server/discord';
 import { getDiscordConfig, saveDiscordConfig } from '$lib/server/store';
 
 const STARTGG_API = 'https://api.start.gg/gql/alpha';
 const WAITLIST_CHANNEL_ID = '1193295598166737118';
+const ANNOUNCE_CHANNEL_ID = '1066863301885173800';
 
 const ENTRANTS_QUERY = `
 query getEventEntrants($slug: String!) {
@@ -90,6 +91,13 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		await createForumPost(WAITLIST_CHANNEL_ID, title, content);
 		await saveDiscordConfig({ waitlistCreated: true });
+
+		// Announce the cap in #announcements so people know to check the waitlist.
+		const shortSlugStr = shortenSlug(config.eventSlug);
+		await sendMessage(
+			ANNOUNCE_CHANNEL_ID,
+			`📢 **${shortSlugStr}** just capped! Add yourself to the waitlist: <#${WAITLIST_CHANNEL_ID}>`
+		).catch(() => { /* best-effort — don't fail the whole check if announce fails */ });
 
 		return Response.json({ ok: true, fired: true, entrants: numEntrants });
 	}
