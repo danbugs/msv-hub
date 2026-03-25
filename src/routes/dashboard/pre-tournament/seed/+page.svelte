@@ -20,8 +20,8 @@
 
 	// Start Swiss setup
 	let startingSwiss = $state(false);
-	let numStations = $state('15');
-	let streamStation = $state('1');
+	let numStations = $state('16');
+	let streamStation = $state('16');
 
 	async function startSwiss() {
 		if (!result) return;

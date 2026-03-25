@@ -45,7 +45,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		settings: {
 			numRounds,
 			numStations,
-			streamStation: streamStation ?? 1
+			streamStation: streamStation ?? 16
 		},
 		rounds: [],
 		currentRound: 0,

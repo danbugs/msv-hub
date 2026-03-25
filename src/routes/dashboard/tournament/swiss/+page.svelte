@@ -109,6 +109,11 @@
 		return tournament.rounds.filter((r) => r.status === 'completed').length >= tournament.settings.numRounds;
 	}
 
+	function isFinalRoundComplete(): boolean {
+		if (!tournament) return false;
+		return isRoundComplete() && tournament.currentRound >= tournament.settings.numRounds;
+	}
+
 	/** Returns each player's W-L record going INTO the given round (based on rounds before it). */
 	function getRecordBefore(playerId: string, roundNumber: number): string {
 		let wins = 0, losses = 0;
@@ -193,7 +198,7 @@
 				{#if tournament.currentRound === 0 || isRoundComplete()}
 					<button onclick={() => startNextRound()} disabled={loading}
 						class="rounded-lg bg-violet-600 px-5 py-2 font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50">
-						{loading ? 'Generating...' : tournament.currentRound === 0 ? 'Start Round 1' : isSwissComplete() ? 'Finish Swiss & Generate Brackets' : `Start Round ${tournament.currentRound + 1}`}
+						{loading ? 'Generating...' : tournament.currentRound === 0 ? 'Start Round 1' : (isSwissComplete() || isFinalRoundComplete()) ? 'Generate Bracket Split →' : `Start Round ${tournament.currentRound + 1}`}
 					</button>
 				{/if}
 				<button onclick={deleteTournament}

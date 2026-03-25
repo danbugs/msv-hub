@@ -9,20 +9,11 @@
 	let reportingMatch = $state<BracketMatch | null>(null);
 	let reportWinnerId = $state('');
 	let reportScore = $state('');
-	let reportTopChars = $state<string[]>([]);
-	let reportBotChars = $state<string[]>([]);
-
-	function toggleChar(side: 'top' | 'bot', char: string) {
-		if (side === 'top') {
-			reportTopChars = reportTopChars.includes(char)
-				? reportTopChars.filter((c) => c !== char)
-				: [...reportTopChars, char];
-		} else {
-			reportBotChars = reportBotChars.includes(char)
-				? reportBotChars.filter((c) => c !== char)
-				: [...reportBotChars, char];
-		}
-	}
+	// Per-game character tracking: index = game number
+	let gameTopChars = $state<string[]>([]);
+	let gameBotChars = $state<string[]>([]);
+	let gameTopSearch = $state<string[]>([]);
+	let gameBotSearch = $state<string[]>([]);
 
 	const CHARACTERS = [
 		'Mario', 'Donkey Kong', 'Link', 'Samus', 'Dark Samus', 'Yoshi', 'Kirby', 'Fox',
@@ -39,11 +30,57 @@
 		'Kazuya', 'Sora'
 	];
 
+	function filteredChars(search: string, already: string[]): string[] {
+		if (!search.trim()) return [];
+		const q = search.toLowerCase();
+		return CHARACTERS.filter((c) => c.toLowerCase().includes(q) && !already.includes(c)).slice(0, 8);
+	}
+
+	// Simple color from character name hash for visual distinction
+	function charColor(name: string): string {
+		const colors = ['#7c3aed','#dc2626','#d97706','#16a34a','#0284c7','#db2777','#65a30d','#0891b2','#7c2d12','#4338ca'];
+		let h = 0;
+		for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+		return colors[h % colors.length];
+	}
+
+	function numGames(score: string): number {
+		const [w, l] = score.split('-').map(Number);
+		return w + l;
+	}
+
+	function resizeGameArrays(n: number) {
+		gameTopChars = Array.from({ length: n }, (_, i) => gameTopChars[i] ?? '');
+		gameBotChars = Array.from({ length: n }, (_, i) => gameBotChars[i] ?? '');
+		gameTopSearch = Array.from({ length: n }, (_, i) => gameTopSearch[i] ?? '');
+		gameBotSearch = Array.from({ length: n }, (_, i) => gameBotSearch[i] ?? '');
+	}
+
+	function setScore(s: string) {
+		reportScore = s;
+		resizeGameArrays(numGames(s));
+	}
+
+	function setGameChar(side: 'top' | 'bot', gameIdx: number, char: string) {
+		if (side === 'top') {
+			gameTopChars = gameTopChars.map((v, i) => i === gameIdx ? char : v);
+			gameTopSearch = gameTopSearch.map((v, i) => i === gameIdx ? '' : v);
+		} else {
+			gameBotChars = gameBotChars.map((v, i) => i === gameIdx ? char : v);
+			gameBotSearch = gameBotSearch.map((v, i) => i === gameIdx ? '' : v);
+		}
+	}
+
+	function clearGameChar(side: 'top' | 'bot', gameIdx: number) {
+		if (side === 'top') gameTopChars = gameTopChars.map((v, i) => i === gameIdx ? '' : v);
+		else gameBotChars = gameBotChars.map((v, i) => i === gameIdx ? '' : v);
+	}
+
 	// ── Layout constants ──────────────────────────────────────────────────
 	const CARD_W = 192;
 	const CARD_H = 100;
-	const H_GAP = 40;   // horizontal gap between card columns
-	const BASE_SLOT_H = 120; // slot height for first round (CARD_H + min vertical gap)
+	const H_GAP = 40;
+	const BASE_SLOT_H = 120;
 
 	onMount(loadTournament);
 
@@ -62,7 +99,6 @@
 	}
 
 	function isTop8Match(match: BracketMatch, bracket: BracketState): boolean {
-		// GFR is always top 8
 		if (match.id.includes('-GFR-')) return true;
 		const totalPlayers = bracket.players.length;
 		if (totalPlayers <= 8) return true;
@@ -71,12 +107,35 @@
 		return match.round <= -(Math.max(...bracket.matches.filter((m) => m.round < 0).map((m) => Math.abs(m.round))) - 3);
 	}
 
+	/** Redemption finals: only WF, LF, GF, GFR are BO5 */
+	function isFinalsMatch(match: BracketMatch, bracket: BracketState): boolean {
+		if (match.id.includes('-GFR-')) return true;
+		const positiveRounds = bracket.matches.filter((m) => m.round > 0 && !m.id.includes('-GFR-'));
+		if (positiveRounds.length === 0) return false;
+		const maxWR = Math.max(...positiveRounds.map((m) => m.round));
+		// GF = maxWR, WF = maxWR - 1
+		if (match.round >= maxWR - 1) return true;
+		const negativeRounds = bracket.matches.filter((m) => m.round < 0);
+		if (negativeRounds.length === 0) return false;
+		const maxLR = Math.max(...negativeRounds.map((m) => Math.abs(m.round)));
+		return match.round === -maxLR;
+	}
+
 	function openReport(match: BracketMatch) {
 		reportingMatch = match;
-		reportWinnerId = '';
+		reportWinnerId = match.winnerId ?? '';
 		reportScore = '';
-		reportTopChars = match.topCharacters ? [...match.topCharacters] : [];
-		reportBotChars = match.bottomCharacters ? [...match.bottomCharacters] : [];
+		gameTopChars = [];
+		gameBotChars = [];
+		gameTopSearch = [];
+		gameBotSearch = [];
+		// Pre-fill from existing characters (restore per-game if available)
+		if (match.topCharacters?.length || match.bottomCharacters?.length) {
+			const existing = match.topCharacters ?? match.bottomCharacters ?? [];
+			resizeGameArrays(existing.length || 1);
+			if (match.topCharacters) match.topCharacters.forEach((c, i) => { gameTopChars[i] = c; });
+			if (match.bottomCharacters) match.bottomCharacters.forEach((c, i) => { gameBotChars[i] = c; });
+		}
 	}
 
 	function parseScore(score: string, winnerId: string, match: BracketMatch): [number, number] {
@@ -90,6 +149,8 @@
 		error = '';
 
 		const [topScore, bottomScore] = parseScore(reportScore, reportWinnerId, reportingMatch);
+		const topCharacters = gameTopChars.filter(Boolean);
+		const bottomCharacters = gameBotChars.filter(Boolean);
 
 		const res = await fetch('/api/tournament/bracket', {
 			method: 'PATCH',
@@ -98,8 +159,8 @@
 				bracketName: activeBracket,
 				matchId: reportingMatch.id,
 				winnerId: reportWinnerId,
-				topCharacters: reportTopChars.length ? reportTopChars : undefined,
-				bottomCharacters: reportBotChars.length ? reportBotChars : undefined,
+				topCharacters: topCharacters.length ? topCharacters : undefined,
+				bottomCharacters: bottomCharacters.length ? bottomCharacters : undefined,
 				topScore,
 				bottomScore
 			})
@@ -112,159 +173,6 @@
 			reportingMatch = null;
 			await loadTournament();
 		}
-	}
-
-	// ── Visual bracket layout ─────────────────────────────────────────────
-
-	interface MatchPos {
-		match: BracketMatch;
-		x: number;
-		y: number;
-	}
-
-	interface Connector {
-		x1: number; y1: number;
-		mx: number;
-		x2: number; y2: number;
-	}
-
-	interface BracketLayout {
-		matchPositions: MatchPos[];
-		connectors: Connector[];
-		width: number;
-		height: number;
-	}
-
-	function computeLayout(bracket: BracketState, sectionOffsetY = 0): BracketLayout {
-		const allMatches = bracket.matches;
-
-		// Group matches by round
-		const byRound = new Map<number, BracketMatch[]>();
-		for (const m of allMatches) {
-			if (!byRound.has(m.round)) byRound.set(m.round, []);
-			byRound.get(m.round)!.push(m);
-		}
-		for (const [, ms] of byRound) ms.sort((a, b) => a.matchIndex - b.matchIndex);
-
-		const maxRound = Math.max(...allMatches.map((m) => m.round));
-		// GFR is at maxRound if it exists; GF is the round just below it among positive rounds
-		const hasGFR = allMatches.some((m) => m.id.includes('-GFR-'));
-		const gfRound = hasGFR ? maxRound - 1 : maxRound;
-		const gfrRound = hasGFR ? maxRound : null;
-
-		const winRounds = [...byRound.keys()].filter((r) => r > 0 && r < gfRound).sort((a, b) => a - b);
-		const losRounds = [...byRound.keys()].filter((r) => r < 0).sort((a, b) => Math.abs(a) - Math.abs(b));
-
-		const firstWinRound = winRounds[0] ?? 1;
-		const maxMatchesW = byRound.get(firstWinRound)?.length ?? 1;
-		const maxMatchesL = losRounds.length > 0 ? (byRound.get(losRounds[0])?.length ?? 0) : 0;
-
-		const winnersH = Math.max(maxMatchesW * BASE_SLOT_H, CARD_H + 8);
-		const losersH = Math.max(maxMatchesL * BASE_SLOT_H, maxMatchesL > 0 ? CARD_H + 8 : 0);
-		const SECTION_GAP = losersH > 0 ? 48 : 0;
-		const losersSectionY = winnersH + SECTION_GAP;
-
-		const posMap = new Map<string, { x: number; y: number }>();
-
-		// Position winners matches
-		for (let ri = 0; ri < winRounds.length; ri++) {
-			const round = winRounds[ri];
-			const ms = byRound.get(round)!;
-			const numM = ms.length;
-			const slotH = winnersH / numM;
-			const colX = ri * (CARD_W + H_GAP);
-			for (let mi = 0; mi < numM; mi++) {
-				const y = sectionOffsetY + mi * slotH + (slotH - CARD_H) / 2;
-				posMap.set(ms[mi].id, { x: colX, y });
-			}
-		}
-
-		// Position GF
-		const gfMs = byRound.get(gfRound);
-		const gfColX = winRounds.length * (CARD_W + H_GAP);
-		if (gfMs?.length) {
-			posMap.set(gfMs[0].id, { x: gfColX, y: sectionOffsetY + (winnersH - CARD_H) / 2 });
-		}
-
-		// Position GFR (one column to the right of GF)
-		if (gfrRound !== null) {
-			const gfrMs = byRound.get(gfrRound);
-			if (gfrMs?.length) {
-				posMap.set(gfrMs[0].id, { x: gfColX + CARD_W + H_GAP, y: sectionOffsetY + (winnersH - CARD_H) / 2 });
-			}
-		}
-
-		// Position losers matches
-		for (let ri = 0; ri < losRounds.length; ri++) {
-			const round = losRounds[ri];
-			const ms = byRound.get(round)!;
-			const numM = ms.length;
-			const slotH = losersH > 0 ? losersH / numM : BASE_SLOT_H;
-			const colX = ri * (CARD_W + H_GAP);
-			for (let mi = 0; mi < numM; mi++) {
-				const y = sectionOffsetY + losersSectionY + mi * slotH + (slotH - CARD_H) / 2;
-				posMap.set(ms[mi].id, { x: colX, y });
-			}
-		}
-
-		// Build connector lines (winner advancement paths)
-		const connectors: Connector[] = [];
-		for (const match of allMatches) {
-			const from = posMap.get(match.id);
-			if (!from || !match.winnerNextMatchId) continue;
-			const to = posMap.get(match.winnerNextMatchId);
-			if (!to) continue;
-
-			const x1 = from.x + CARD_W;
-			const y1 = from.y + CARD_H / 2;
-			const x2 = to.x;
-			const y2 = to.y + CARD_H / 2;
-			const mx = x1 + H_GAP / 2;
-			connectors.push({ x1, y1, mx, x2, y2 });
-		}
-
-		// GF → GFR connector (GF has no winnerNextMatchId since GFR is created dynamically)
-		if (gfrRound !== null) {
-			const gfPos = gfMs?.length ? posMap.get(gfMs[0].id) : undefined;
-			const gfrMs = byRound.get(gfrRound);
-			const gfrPos = gfrMs?.length ? posMap.get(gfrMs[0].id) : undefined;
-			if (gfPos && gfrPos) {
-				const x1 = gfPos.x + CARD_W;
-				const y1 = gfPos.y + CARD_H / 2;
-				connectors.push({ x1, y1, mx: x1 + H_GAP / 2, x2: gfrPos.x, y2: gfrPos.y + CARD_H / 2 });
-			}
-		}
-
-		// Compute canvas size
-		let maxX = 0, maxY = 0;
-		for (const [, p] of posMap) {
-			maxX = Math.max(maxX, p.x + CARD_W);
-			maxY = Math.max(maxY, p.y + CARD_H);
-		}
-
-		const matchPositions: MatchPos[] = allMatches
-			.map((m) => ({ match: m, ...(posMap.get(m.id) ?? { x: 0, y: 0 }) }))
-			.filter((mp) => posMap.has(mp.match.id));
-
-		return {
-			matchPositions,
-			connectors,
-			width: maxX + 16,
-			height: maxY + 16
-		};
-	}
-
-	function roundLabel(round: number, maxRound: number): string {
-		if (round === maxRound) return 'Grand Final';
-		if (round > 0) {
-			const winRounds = [...new Set([...Array(maxRound - 1)].map((_, i) => i + 1))];
-			const max = winRounds[winRounds.length - 1] ?? round;
-			if (round === max) return "Winners Finals";
-			if (round === max - 1) return "Winners Semis";
-			return `Winners R${round}`;
-		}
-		const absRound = Math.abs(round);
-		return `Losers R${absRound}`;
 	}
 </script>
 
@@ -429,7 +337,7 @@
 				{@const top = getEntrant(reportingMatch.topPlayerId)}
 				{@const bot = getEntrant(reportingMatch.bottomPlayerId)}
 				{@const isTop8 = bracket ? isTop8Match(reportingMatch, bracket) : false}
-				{@const isBo5 = isTop8}
+				{@const isBo5 = activeBracket === 'main' ? isTop8 : (bracket ? isFinalsMatch(reportingMatch, bracket) : false)}
 				{@const showChars = isTop8}
 
 				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -461,7 +369,7 @@
 							{#if isBo5}
 								<div class="mt-3 grid grid-cols-3 gap-2">
 									{#each ['3-0', '3-1', '3-2'] as s}
-										<button onclick={() => reportScore = s}
+										<button onclick={() => setScore(s)}
 											class="rounded-lg py-2 text-sm font-medium transition-colors {reportScore === s ? 'bg-violet-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
 											{s.replace('-', ' – ')}
 										</button>
@@ -470,7 +378,7 @@
 							{:else}
 								<div class="mt-3 flex gap-2">
 									{#each ['2-0', '2-1'] as s}
-										<button onclick={() => reportScore = s}
+										<button onclick={() => setScore(s)}
 											class="flex-1 rounded-lg py-2 text-sm font-medium transition-colors {reportScore === s ? 'bg-violet-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
 											{s.replace('-', ' – ')}
 										</button>
@@ -479,49 +387,68 @@
 							{/if}
 						{/if}
 
-						<!-- Step 3: Characters played (top 8 only, multi-select) -->
-						{#if reportWinnerId && showChars}
-							<div class="mt-3 space-y-3">
-								<div>
-									<p class="text-xs text-gray-400 mb-1.5">
-										{top?.gamerTag}'s characters
-										{#if reportTopChars.length}
-											<span class="text-violet-400">({reportTopChars.join(', ')})</span>
-										{/if}
-									</p>
-									<div class="max-h-28 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800/50 p-2">
-										<div class="flex flex-wrap gap-1">
-											{#each CHARACTERS as char}
-												<button type="button" onclick={() => toggleChar('top', char)}
-													class="rounded px-1.5 py-0.5 text-xs transition-colors {reportTopChars.includes(char) ? 'bg-violet-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}">
-													{char}
-												</button>
-											{/each}
+						<!-- Step 3: Per-game character tracking (top 8 only) -->
+						{#if reportWinnerId && reportScore && showChars}
+							<div class="mt-3">
+								<p class="text-xs font-medium text-gray-400 mb-2">Characters by game</p>
+								<div class="space-y-2 max-h-64 overflow-y-auto">
+								{#each Array.from({length: numGames(reportScore)}, (_, i) => i) as gameIdx}
+									<div class="rounded-lg border border-gray-800 bg-gray-800/50 p-2">
+										<div class="text-xs text-gray-500 mb-1.5">Game {gameIdx + 1}</div>
+										<div class="grid grid-cols-2 gap-2">
+											<div class="relative">
+												{#if gameTopChars[gameIdx]}
+													<div class="flex items-center gap-1 rounded bg-violet-700/30 px-2 py-1 text-xs text-white">
+														<span class="w-2 h-2 rounded-full shrink-0" style="background:{charColor(gameTopChars[gameIdx])}"></span>
+														<span class="flex-1 truncate">{gameTopChars[gameIdx]}</span>
+														<button type="button" onclick={() => clearGameChar('top', gameIdx)} class="text-gray-400 hover:text-white leading-none">×</button>
+													</div>
+												{:else}
+													<input bind:value={gameTopSearch[gameIdx]} placeholder="{top?.gamerTag ?? 'Top'}…"
+														class="w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
+													{#if gameTopSearch[gameIdx]}
+														<div class="absolute z-20 top-full left-0 mt-0.5 w-full rounded-lg border border-gray-700 bg-gray-900 shadow-xl max-h-36 overflow-y-auto">
+															{#each filteredChars(gameTopSearch[gameIdx], []) as char}
+																<button type="button" onclick={() => setGameChar('top', gameIdx, char)}
+																	class="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white hover:bg-gray-700 text-left">
+																	<span class="w-2 h-2 rounded-full shrink-0" style="background:{charColor(char)}"></span>
+																	{char}
+																</button>
+															{:else}<div class="px-2 py-1.5 text-xs text-gray-500">No match</div>{/each}
+														</div>
+													{/if}
+												{/if}
+											</div>
+											<div class="relative">
+												{#if gameBotChars[gameIdx]}
+													<div class="flex items-center gap-1 rounded bg-violet-700/30 px-2 py-1 text-xs text-white">
+														<span class="w-2 h-2 rounded-full shrink-0" style="background:{charColor(gameBotChars[gameIdx])}"></span>
+														<span class="flex-1 truncate">{gameBotChars[gameIdx]}</span>
+														<button type="button" onclick={() => clearGameChar('bot', gameIdx)} class="text-gray-400 hover:text-white leading-none">×</button>
+													</div>
+												{:else}
+													<input bind:value={gameBotSearch[gameIdx]} placeholder="{bot?.gamerTag ?? 'Bot'}…"
+														class="w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
+													{#if gameBotSearch[gameIdx]}
+														<div class="absolute z-20 top-full left-0 mt-0.5 w-full rounded-lg border border-gray-700 bg-gray-900 shadow-xl max-h-36 overflow-y-auto">
+															{#each filteredChars(gameBotSearch[gameIdx], []) as char}
+																<button type="button" onclick={() => setGameChar('bot', gameIdx, char)}
+																	class="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white hover:bg-gray-700 text-left">
+																	<span class="w-2 h-2 rounded-full shrink-0" style="background:{charColor(char)}"></span>
+																	{char}
+																</button>
+															{:else}<div class="px-2 py-1.5 text-xs text-gray-500">No match</div>{/each}
+														</div>
+													{/if}
+												{/if}
+											</div>
 										</div>
 									</div>
-								</div>
-								<div>
-									<p class="text-xs text-gray-400 mb-1.5">
-										{bot?.gamerTag}'s characters
-										{#if reportBotChars.length}
-											<span class="text-violet-400">({reportBotChars.join(', ')})</span>
-										{/if}
-									</p>
-									<div class="max-h-28 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800/50 p-2">
-										<div class="flex flex-wrap gap-1">
-											{#each CHARACTERS as char}
-												<button type="button" onclick={() => toggleChar('bot', char)}
-													class="rounded px-1.5 py-0.5 text-xs transition-colors {reportBotChars.includes(char) ? 'bg-violet-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}">
-													{char}
-												</button>
-											{/each}
-										</div>
-									</div>
+								{/each}
 								</div>
 							</div>
 						{/if}
-
-						<div class="mt-5 flex gap-2">
+												<div class="mt-5 flex gap-2">
 							<button onclick={submitReport} disabled={!reportWinnerId || !reportScore}
 								class="flex-1 rounded-lg bg-violet-600 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50">
 								Submit

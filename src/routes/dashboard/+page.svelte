@@ -90,6 +90,15 @@
 									class="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-500 transition-colors">
 									Manage Brackets
 								</a>
+							{:else if tournament.phase === 'completed'}
+								<a href="/dashboard/tournament/brackets"
+									class="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-500 transition-colors">
+									View / Fix Results
+								</a>
+								<a href="/api/tournament/export?slug={tournament.slug}" target="_blank"
+									class="rounded-lg border border-gray-700 px-3 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-400 transition-colors">
+									Export JSON
+								</a>
 							{/if}
 							<button onclick={deleteTournament}
 								class="rounded-lg border border-gray-700 px-3 py-1.5 text-sm text-gray-400 hover:border-red-700 hover:text-red-400 transition-colors">
