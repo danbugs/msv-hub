@@ -23,6 +23,22 @@
 		updatedAt: 0
 	});
 
+	let pingRunning = $state(false);
+	let pingResult = $state<{ ok: boolean; msg: string } | null>(null);
+
+	async function sendPing() {
+		pingRunning = true;
+		pingResult = null;
+		const res = await fetch('/api/discord/ping', { method: 'POST' });
+		const data = await res.json().catch(() => ({}));
+		if (res.ok) {
+			pingResult = { ok: true, msg: 'Message sent! Check the test channel.' };
+		} else {
+			pingResult = { ok: false, msg: (data as { error?: string }).error ?? `HTTP ${res.status}` };
+		}
+		pingRunning = false;
+	}
+
 	let configLoading = $state(true);
 	let configSaving = $state(false);
 	let configError = $state('');
@@ -192,6 +208,21 @@
 		Lock threads, create forum posts, and announce events — replacing Balrog's
 		<code class="rounded bg-gray-800 px-1 py-0.5 text-xs text-violet-300">!do_pre_tournament_setup</code>.
 	</p>
+
+	<!-- Connectivity test -->
+	<div class="mt-4 flex flex-wrap items-center gap-3">
+		<button
+			type="button"
+			onclick={sendPing}
+			disabled={pingRunning}
+			class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors"
+		>
+			{pingRunning ? 'Sending…' : 'Say Hello'}
+		</button>
+		{#if pingResult}
+			<span class="text-sm {pingResult.ok ? 'text-green-400' : 'text-red-400'}">{pingResult.msg}</span>
+		{/if}
+	</div>
 
 	{#if configLoading}
 		<div class="mt-8 flex items-center gap-2 text-gray-400">
