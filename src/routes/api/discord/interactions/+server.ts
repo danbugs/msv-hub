@@ -11,7 +11,6 @@
  */
 
 import type { RequestHandler } from './$types';
-import { verify } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 import { getDiscordConfig, getActiveTournament } from '$lib/server/store';
 import { getMessages } from '$lib/server/discord';
@@ -34,18 +33,25 @@ const CHANNEL_MESSAGE_WITH_SOURCE = 4;
 // Signature verification
 // ---------------------------------------------------------------------------
 
-function verifyDiscordSignature(
+async function verifyDiscordSignature(
 	publicKey: string,
 	signature: string,
 	timestamp: string,
 	body: string
-): boolean {
+): Promise<boolean> {
 	try {
-		return verify(
-			null, // Ed25519 doesn't use a separate hash algorithm
-			Buffer.from(timestamp + body),
-			{ key: Buffer.from(publicKey, 'hex'), format: 'raw', type: 'public' },
-			Buffer.from(signature, 'hex')
+		const key = await crypto.subtle.importKey(
+			'raw',
+			Buffer.from(publicKey, 'hex'),
+			{ name: 'Ed25519' },
+			false,
+			['verify']
+		);
+		return await crypto.subtle.verify(
+			{ name: 'Ed25519' },
+			key,
+			Buffer.from(signature, 'hex'),
+			Buffer.from(timestamp + body)
 		);
 	} catch {
 		return false;
@@ -264,7 +270,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const signature = request.headers.get('x-signature-ed25519') ?? '';
 	const timestamp = request.headers.get('x-signature-timestamp') ?? '';
 
-	if (!verifyDiscordSignature(publicKey, signature, timestamp, rawBody)) {
+	if (!(await verifyDiscordSignature(publicKey, signature, timestamp, rawBody))) {
 		return new Response('Invalid request signature', { status: 401 });
 	}
 
