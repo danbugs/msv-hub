@@ -18,13 +18,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		attendeeCap,
 		registrationDay,
 		registrationHour,
-		registrationMinute
+		registrationMinute,
+		announcementTemplate
 	} = body as {
 		eventSlug?: string;
 		attendeeCap?: 32 | 64;
 		registrationDay?: string;
 		registrationHour?: number;
 		registrationMinute?: number;
+		announcementTemplate?: string;
 	};
 
 	// Validate attendeeCap if provided
@@ -51,7 +53,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		...(attendeeCap !== undefined && { attendeeCap }),
 		...(registrationDay !== undefined && { registrationDay }),
 		...(registrationHour !== undefined && { registrationHour }),
-		...(registrationMinute !== undefined && { registrationMinute })
+		...(registrationMinute !== undefined && { registrationMinute }),
+		...(announcementTemplate !== undefined && { announcementTemplate })
 	});
 
 	return Response.json(updated);

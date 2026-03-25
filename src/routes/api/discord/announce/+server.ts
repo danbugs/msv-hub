@@ -17,27 +17,17 @@ function channelId(envKey: string, fallback: string): string {
 	return (env as Record<string, string | undefined>)[envKey] ?? fallback;
 }
 
-export const POST: RequestHandler = async ({ request, locals }) => {
-	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
-	const body = (await request.json().catch(() => ({}))) as { test?: boolean };
-	const isTest = body.test === true;
-
-	const config = await getDiscordConfig();
-	if (!config.eventSlug) {
-		return Response.json(
-			{ error: 'No event slug configured — set it in Discord Setup first.' },
-			{ status: 400 }
-		);
+/**
+ * Build the announcement message from config.
+ * If a custom template is set, replace {{slug}} and {{cap}}.
+ * Otherwise use the hardcoded default.
+ */
+export function buildAnnouncementMessage(slug: string, cap: 32 | 64, template?: string): string {
+	if (template && template.trim()) {
+		return template
+			.replace(/\{\{slug\}\}/g, slug)
+			.replace(/\{\{cap\}\}/g, String(cap));
 	}
-
-	// Channel selection — test mode uses a dedicated test channel.
-	const announceChannelId = isTest
-		? channelId('DISCORD_CHANNEL_TEST_ANNOUNCE', '1317322763043864616')
-		: channelId('DISCORD_CHANNEL_ANNOUNCE', '1066863301885173800');
-
-	const slug = config.eventSlug;
-	const cap = config.attendeeCap;
 
 	let message =
 		`@everyone ~ registration for next week's event is open!\n\n` +
@@ -59,6 +49,34 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		`PS If you can't bring a full setup, but would still like to contribute, _please bring your GCC adapter_. ` +
 		`There are some people that can bring full setups but only play w/ pro cons., so it's always best to have extras.\n\n` +
 		`https://start.gg/${slug}`;
+
+	return message;
+}
+
+export const POST: RequestHandler = async ({ request, locals }) => {
+	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+	const body = (await request.json().catch(() => ({}))) as { test?: boolean };
+	const isTest = body.test === true;
+
+	const config = await getDiscordConfig();
+	if (!config.eventSlug) {
+		return Response.json(
+			{ error: 'No event slug configured — set it in Discord Setup first.' },
+			{ status: 400 }
+		);
+	}
+
+	// Channel selection — test mode uses a dedicated test channel.
+	const announceChannelId = isTest
+		? channelId('DISCORD_CHANNEL_TEST_ANNOUNCE', '1317322763043864616')
+		: channelId('DISCORD_CHANNEL_ANNOUNCE', '1066863301885173800');
+
+	const message = buildAnnouncementMessage(
+		config.eventSlug,
+		config.attendeeCap,
+		config.announcementTemplate
+	);
 
 	try {
 		await sendMessage(announceChannelId, message);
