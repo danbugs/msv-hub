@@ -30,9 +30,9 @@
 	});
 
 	const SEND_CHANNELS = [
-		{ value: 'general',       label: '#general' },
-		{ value: 'announcements', label: '#announcements' },
-		{ value: 'test',          label: '#test' }
+		{ value: 'general',          label: '#general' },
+		{ value: 'announcements',    label: '#announcements' },
+		{ value: 'talk-to-balrog',   label: '#talk-to-balrog' }
 	];
 
 	let pingRunning = $state(false);

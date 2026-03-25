@@ -9,9 +9,9 @@ import type { RequestHandler } from './$types';
 import { sendMessage } from '$lib/server/discord';
 
 const CHANNELS: Record<string, string> = {
-	general:       '1066863005591162961',
-	announcements: '1066863301885173800',
-	test:          '1317322917129879562'
+	general:          '1066863005591162961',
+	announcements:    '1066863301885173800',
+	'talk-to-balrog': '1317322917129879562'
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
