@@ -262,6 +262,7 @@ async function handleBracket(): Promise<string> {
 export const POST: RequestHandler = async ({ request }) => {
 	const publicKey = env.DISCORD_PUBLIC_KEY;
 	if (!publicKey) {
+		console.error('[interactions] DISCORD_PUBLIC_KEY is not set');
 		return Response.json({ error: 'DISCORD_PUBLIC_KEY not configured' }, { status: 500 });
 	}
 
@@ -270,7 +271,13 @@ export const POST: RequestHandler = async ({ request }) => {
 	const signature = request.headers.get('x-signature-ed25519') ?? '';
 	const timestamp = request.headers.get('x-signature-timestamp') ?? '';
 
-	if (!(await verifyDiscordSignature(publicKey, signature, timestamp, rawBody))) {
+	console.log('[interactions] publicKey length:', publicKey.trim().length, '| sig length:', signature.length, '| ts:', timestamp);
+
+	const valid = await verifyDiscordSignature(publicKey.trim(), signature, timestamp, rawBody);
+	console.log('[interactions] sig valid:', valid, '| body type:', JSON.parse(rawBody)?.type);
+
+	if (!valid) {
+		console.error('[interactions] signature verification failed');
 		return new Response('Invalid request signature', { status: 401 });
 	}
 
