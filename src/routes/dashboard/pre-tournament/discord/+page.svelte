@@ -29,8 +29,15 @@
 		updatedAt: 0
 	});
 
+	const SEND_CHANNELS = [
+		{ value: 'general',       label: '#general' },
+		{ value: 'announcements', label: '#announcements' },
+		{ value: 'test',          label: '#test' }
+	];
+
 	let pingRunning = $state(false);
 	let pingMessage = $state('');
+	let pingChannel = $state('general');
 	let pingResult = $state<{ ok: boolean; msg: string } | null>(null);
 
 	async function sendPing() {
@@ -40,11 +47,12 @@
 		const res = await fetch('/api/discord/ping', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ message: pingMessage.trim() })
+			body: JSON.stringify({ message: pingMessage.trim(), channel: pingChannel })
 		});
 		const data = await res.json().catch(() => ({}));
 		if (res.ok) {
-			pingResult = { ok: true, msg: 'Sent to #general.' };
+			const label = SEND_CHANNELS.find(c => c.value === pingChannel)?.label ?? pingChannel;
+			pingResult = { ok: true, msg: `Sent to ${label}.` };
 			pingMessage = '';
 		} else {
 			pingResult = { ok: false, msg: (data as { error?: string }).error ?? `HTTP ${res.status}` };
@@ -298,13 +306,21 @@
 		<code class="rounded bg-gray-800 px-1 py-0.5 text-xs text-violet-300">!do_pre_tournament_setup</code>.
 	</p>
 
-	<!-- Send to #general -->
+	<!-- Send to channel -->
 	<div class="mt-4">
 		<div class="flex gap-2">
+			<select
+				bind:value={pingChannel}
+				class="rounded-lg border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-300 focus:border-violet-500 focus:outline-none"
+			>
+				{#each SEND_CHANNELS as ch}
+					<option value={ch.value}>{ch.label}</option>
+				{/each}
+			</select>
 			<input
 				type="text"
 				bind:value={pingMessage}
-				placeholder="Send a message to #general…"
+				placeholder="Send a message…"
 				onkeydown={(e) => e.key === 'Enter' && sendPing()}
 				class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none"
 			/>
