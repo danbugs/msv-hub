@@ -11,6 +11,7 @@
 		registrationDay: string;
 		registrationHour: number;
 		registrationMinute: number;
+		announcementTemplate: string;
 		updatedAt: number;
 	}
 
@@ -20,6 +21,7 @@
 		registrationDay: 'wed',
 		registrationHour: 8,
 		registrationMinute: 30,
+		announcementTemplate: '',
 		updatedAt: 0
 	});
 
@@ -57,6 +59,7 @@
 	let regDayInput = $state('wed');
 	let regHourInput = $state(8);
 	let regMinuteInput = $state(30);
+	let announcementTemplateInput = $state('');
 
 	async function loadConfig() {
 		configLoading = true;
@@ -69,6 +72,7 @@
 			regDayInput = config.registrationDay;
 			regHourInput = config.registrationHour;
 			regMinuteInput = config.registrationMinute;
+			announcementTemplateInput = config.announcementTemplate ?? '';
 		} else {
 			configError = 'Failed to load config.';
 		}
@@ -87,7 +91,8 @@
 				attendeeCap: attendeeCapInput,
 				registrationDay: regDayInput,
 				registrationHour: Number(regHourInput),
-				registrationMinute: Number(regMinuteInput)
+				registrationMinute: Number(regMinuteInput),
+				announcementTemplate: announcementTemplateInput
 			})
 		});
 		if (res.ok) {
@@ -152,24 +157,22 @@
 	}
 
 	// ---------------------------------------------------------------------------
-	// Announcement
+	// Announcement (manual override)
 	// ---------------------------------------------------------------------------
 
 	let announceRunning = $state(false);
 	let announceError = $state('');
 	let announceDone = $state(false);
-	let announcedTest = $state(false);
 
-	async function sendAnnouncement(test: boolean) {
+	async function sendAnnouncementNow() {
 		announceRunning = true;
 		announceError = '';
 		announceDone = false;
-		announcedTest = test;
 
 		const res = await fetch('/api/discord/announce', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ test })
+			body: JSON.stringify({ test: false })
 		});
 		const data = await res.json().catch(() => ({}));
 
@@ -191,6 +194,29 @@
 		if (parts.length >= 4) return `${parts[1]}/${parts[3]}`;
 		return s || '—';
 	});
+
+	/** Compute the next scheduled announcement as a human-readable string. */
+	let nextAnnouncement = $derived.by(() => {
+		const dayLabels: Record<string, string> = {
+			mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday',
+			thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday'
+		};
+		const day = dayLabels[config.registrationDay] ?? config.registrationDay;
+		const h = String(config.registrationHour).padStart(2, '0');
+		const m = String(config.registrationMinute).padStart(2, '0');
+		return `${day} at ${h}:${m} PST`;
+	});
+
+	const DEFAULT_TEMPLATE =
+		`@everyone ~ registration for next week's event is open!\n\n` +
+		`- {{cap}} player cap.\n` +
+		`- for venue access, see: #how-to-get-to-the-venue .\n` +
+		`- **:warning: BRING YOUR NINTENDO SWITCHES (DOCK, CONSOLE, POWER CABLE, AND HDMI) WITH GAME CUBE ADAPTERS :warning:**\n` +
+		`- if you are trying to register, but we've already reached the cap, please drop your StartGG tag ` +
+		`(and say if you can bring a setup) at #add-me-to-the-waitlist once it opens. ` +
+		`Are you from out-of-region? If so, you have priority in the waitlist!\n\n` +
+		`PS If you can't bring a full setup, but would still like to contribute, _please bring your GCC adapter_.\n\n` +
+		`https://start.gg/{{slug}}`;
 
 	const inputClass =
 		'mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500';
@@ -351,6 +377,30 @@
 				</div>
 			</div>
 
+			<!-- Announcement template -->
+			<div>
+				<label for="announce-template" class="block text-sm font-medium text-gray-300">
+					Announcement message template
+				</label>
+				<p class="mt-0.5 text-xs text-gray-500">
+					Leave blank to use the default message.
+					<code class="text-gray-400">&#123;&#123;slug&#125;&#125;</code> and
+					<code class="text-gray-400">&#123;&#123;cap&#125;&#125;</code> will be replaced.
+				</p>
+				<textarea
+					id="announce-template"
+					bind:value={announcementTemplateInput}
+					rows={8}
+					placeholder={DEFAULT_TEMPLATE}
+					class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 font-mono text-sm text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+				></textarea>
+				{#if announcementTemplateInput.trim()}
+					<p class="mt-1 text-xs text-amber-500">Custom template active — default message will not be used.</p>
+				{:else}
+					<p class="mt-1 text-xs text-gray-600">Using default hardcoded message.</p>
+				{/if}
+			</div>
+
 			{#if configError}
 				<div class="rounded-lg border border-red-800 bg-red-900/30 p-3 text-sm text-red-400">
 					{configError}
@@ -474,11 +524,16 @@
 	     ========================================================= -->
 	<section class="mt-10">
 		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Registration Announcement</h2>
-		<p class="mt-1 text-xs text-gray-500">
-			Posts the registration-open message to the announcement channel. Normally sent automatically
-			on {days.find((d) => d.value === config.registrationDay)?.label ?? config.registrationDay}
-			at {String(config.registrationHour).padStart(2, '0')}:{String(config.registrationMinute).padStart(2, '0')} PST —
-			use this to send it manually or to test.
+
+		<!-- Next announcement indicator -->
+		<div class="mt-2 flex items-center gap-2 text-xs text-gray-500">
+			<span class="inline-block h-1.5 w-1.5 rounded-full bg-violet-500"></span>
+			Next scheduled: <span class="text-gray-300">{nextAnnouncement}</span>
+			<span class="text-gray-600">(sent automatically by cron every 30 min check)</span>
+		</div>
+
+		<p class="mt-2 text-xs text-gray-500">
+			The cron fires this automatically. Use the button below only for emergency manual sends.
 		</p>
 
 		{#if !config.eventSlug}
@@ -486,24 +541,16 @@
 				Set and save an event slug above before sending an announcement.
 			</div>
 		{:else}
-			<div class="mt-4 flex flex-wrap gap-3">
+			<div class="mt-4">
 				<button
 					type="button"
-					onclick={() => sendAnnouncement(false)}
+					onclick={sendAnnouncementNow}
 					disabled={announceRunning}
-					class="rounded-lg bg-violet-600 px-5 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50 transition-colors"
+					class="rounded-lg border border-amber-700 bg-amber-900/20 px-5 py-2 text-sm font-medium text-amber-300 hover:border-amber-600 hover:bg-amber-900/30 disabled:opacity-50 transition-colors"
 				>
-					{announceRunning && !announcedTest ? 'Sending…' : 'Send Announcement'}
+					{announceRunning ? 'Sending…' : 'Send Now (manual override)'}
 				</button>
-
-				<button
-					type="button"
-					onclick={() => sendAnnouncement(true)}
-					disabled={announceRunning}
-					class="rounded-lg border border-gray-700 px-5 py-2 text-sm text-gray-300 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors"
-				>
-					{announceRunning && announcedTest ? 'Sending…' : 'Send to Test Channel'}
-				</button>
+				<p class="mt-1 text-xs text-gray-600">Posts directly to the announcement channel — use sparingly.</p>
 			</div>
 		{/if}
 
@@ -515,7 +562,7 @@
 
 		{#if announceDone}
 			<div class="mt-4 rounded-lg border border-green-700 bg-green-900/20 p-3 text-sm text-green-400">
-				Announcement sent{announcedTest ? ' to test channel' : ''}.
+				Announcement sent to the announcement channel.
 			</div>
 		{/if}
 
@@ -525,19 +572,26 @@
 				<summary class="cursor-pointer px-4 py-2 text-sm text-gray-400 hover:text-gray-300">
 					Preview announcement message
 				</summary>
-				<pre class="whitespace-pre-wrap px-4 py-3 text-xs text-gray-400 leading-relaxed"
-					>@everyone ~ registration for next week's event is open!
+				{#if announcementTemplateInput.trim()}
+					<pre class="whitespace-pre-wrap px-4 py-3 text-xs text-gray-400 leading-relaxed"
+						>{announcementTemplateInput
+							.replace(/\{\{slug\}\}/g, config.eventSlug)
+							.replace(/\{\{cap\}\}/g, String(config.attendeeCap))}</pre>
+				{:else}
+					<pre class="whitespace-pre-wrap px-4 py-3 text-xs text-gray-400 leading-relaxed"
+						>@everyone ~ registration for next week's event is open!
 
 - {config.attendeeCap} player cap.
 - for venue access, see: #how-to-get-to-the-venue .
 - **⚠️ BRING YOUR NINTENDO SWITCHES (DOCK, CONSOLE, POWER CABLE, AND HDMI) WITH GAME CUBE ADAPTERS ⚠️**{config.attendeeCap === 32
-						? ' (running Swiss is dependent on having at least 20 setups; otherwise, we\'ll do normal Redemption). We\'ve got monitors.'
-						: ''}
+							? ' (running Swiss is dependent on having at least 20 setups; otherwise, we\'ll do normal Redemption). We\'ve got monitors.'
+							: ''}
 - if you are trying to register, but we've already reached the cap, please drop your StartGG tag (and say if you can bring a setup) at #add-me-to-the-waitlist once it opens. Are you from out-of-region? If so, you have priority in the waitlist!
 
 PS If you can't bring a full setup, but would still like to contribute, please bring your GCC adapter. There are some people that can bring full setups but only play w/ pro cons., so it's always best to have extras.
 
 https://start.gg/{config.eventSlug}</pre>
+				{/if}
 			</details>
 		{/if}
 	</section>
