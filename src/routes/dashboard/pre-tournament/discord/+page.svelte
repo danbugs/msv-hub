@@ -76,7 +76,8 @@
 			regDayInput = config.registrationDay;
 			regHourInput = config.registrationHour;
 			regMinuteInput = config.registrationMinute;
-			announcementTemplateInput = config.announcementTemplate ?? '';
+			// Pre-fill with default so the user can edit from a starting point rather than a blank slate.
+		announcementTemplateInput = config.announcementTemplate || DEFAULT_TEMPLATE;
 		} else {
 			configError = 'Failed to load config.';
 		}
@@ -96,7 +97,8 @@
 				registrationDay: regDayInput,
 				registrationHour: Number(regHourInput),
 				registrationMinute: Number(regMinuteInput),
-				announcementTemplate: announcementTemplateInput
+				// Only save a custom template if it differs from the default.
+			announcementTemplate: announcementTemplateInput.trim() === DEFAULT_TEMPLATE.trim() ? '' : announcementTemplateInput
 			})
 		});
 		if (res.ok) {
@@ -608,7 +610,7 @@
 		<div class="mt-2 flex items-center gap-2 text-xs text-gray-500">
 			<span class="inline-block h-1.5 w-1.5 rounded-full bg-violet-500"></span>
 			Next scheduled: <span class="text-gray-300">{nextAnnouncement}</span>
-			<span class="text-gray-600">(sent automatically by cron every 30 min check)</span>
+			<span class="text-gray-600">(sent automatically by cron)</span>
 		</div>
 
 		<p class="mt-2 text-xs text-gray-500">
@@ -645,34 +647,6 @@
 			</div>
 		{/if}
 
-		<!-- Message preview -->
-		{#if config.eventSlug}
-			<details class="mt-6 rounded-lg border border-gray-800 bg-gray-900">
-				<summary class="cursor-pointer px-4 py-2 text-sm text-gray-400 hover:text-gray-300">
-					Preview announcement message
-				</summary>
-				{#if announcementTemplateInput.trim()}
-					<pre class="whitespace-pre-wrap px-4 py-3 text-xs text-gray-400 leading-relaxed"
-						>{announcementTemplateInput
-							.replace(/\{\{slug\}\}/g, config.eventSlug)
-							.replace(/\{\{cap\}\}/g, String(config.attendeeCap))}</pre>
-				{:else}
-					<pre class="whitespace-pre-wrap px-4 py-3 text-xs text-gray-400 leading-relaxed"
-						>@everyone ~ registration for next week's event is open!
-
-- {config.attendeeCap} player cap.
-- for venue access, see: #how-to-get-to-the-venue .
-- **⚠️ BRING YOUR NINTENDO SWITCHES (DOCK, CONSOLE, POWER CABLE, AND HDMI) WITH GAME CUBE ADAPTERS ⚠️**{config.attendeeCap === 32
-							? ' (running Swiss is dependent on having at least 20 setups; otherwise, we\'ll do normal Redemption). We\'ve got monitors.'
-							: ''}
-- if you are trying to register, but we've already reached the cap, please drop your StartGG tag (and say if you can bring a setup) at #add-me-to-the-waitlist once it opens. Are you from out-of-region? If so, you have priority in the waitlist!
-
-PS If you can't bring a full setup, but would still like to contribute, please bring your GCC adapter. There are some people that can bring full setups but only play w/ pro cons., so it's always best to have extras.
-
-https://start.gg/{config.eventSlug}</pre>
-				{/if}
-			</details>
-		{/if}
 	</section>
 
 	<!-- =========================================================
