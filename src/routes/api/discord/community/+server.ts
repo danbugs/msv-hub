@@ -3,7 +3,7 @@
  *
  * Handles fun/community Discord actions triggered manually from the hub.
  *
- * Body: { action: 'motivational' | 'dice' | 'yes_or_no' | 'goat' | 'quote', messages?: string[] }
+ * Body: { action: 'motivational' | 'dice' | 'yes_or_no' | 'goat' | 'quote' | 'thanks', messages?: string[] }
  *
  * All actions post to #general (1066863005591162961).
  */
@@ -18,7 +18,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const body = (await request.json().catch(() => ({}))) as {
-		action: 'motivational' | 'dice' | 'yes_or_no' | 'goat' | 'quote' | 'save_messages';
+		action: 'motivational' | 'dice' | 'yes_or_no' | 'goat' | 'quote' | 'thanks' | 'save_messages';
 		messages?: string[];
 	};
 
@@ -84,6 +84,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				const quoteText = `> ${picked.content}\n— ${picked.author.username}`;
 				await sendMessage(GENERAL_CHANNEL_ID, quoteText);
 				return Response.json({ ok: true, quoted: picked.content, author: picked.author.username });
+			}
+
+			case 'thanks': {
+				const responses = ['No worries!', "You're welcome!", 'Anytime 😎', 'All good!', 'You got it!', 'np 👍'];
+				const reply = responses[Math.floor(Math.random() * responses.length)];
+				await sendMessage(GENERAL_CHANNEL_ID, reply);
+				return Response.json({ ok: true, sent: reply });
 			}
 
 			default:
