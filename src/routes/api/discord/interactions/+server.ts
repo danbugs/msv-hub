@@ -14,6 +14,7 @@ import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { getDiscordConfig, getActiveTournament } from '$lib/server/store';
 import { getMessages } from '$lib/server/discord';
+import nacl from 'tweetnacl';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -33,27 +34,20 @@ const CHANNEL_MESSAGE_WITH_SOURCE = 4;
 // Signature verification
 // ---------------------------------------------------------------------------
 
-async function verifyDiscordSignature(
+function verifyDiscordSignature(
 	publicKey: string,
 	signature: string,
 	timestamp: string,
 	body: string
-): Promise<boolean> {
+): boolean {
 	try {
-		const key = await crypto.subtle.importKey(
-			'raw',
-			Buffer.from(publicKey, 'hex'),
-			{ name: 'Ed25519' },
-			false,
-			['verify']
-		);
-		return await crypto.subtle.verify(
-			{ name: 'Ed25519' },
-			key,
+		return nacl.sign.detached.verify(
+			Buffer.from(timestamp + body),
 			Buffer.from(signature, 'hex'),
-			Buffer.from(timestamp + body)
+			Buffer.from(publicKey, 'hex')
 		);
-	} catch {
+	} catch (e) {
+		console.error('[interactions] verify threw:', e);
 		return false;
 	}
 }
@@ -273,7 +267,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	console.log('[interactions] publicKey length:', publicKey.trim().length, '| sig length:', signature.length, '| ts:', timestamp);
 
-	const valid = await verifyDiscordSignature(publicKey.trim(), signature, timestamp, rawBody);
+	const valid = verifyDiscordSignature(publicKey.trim(), signature, timestamp, rawBody);
 	console.log('[interactions] sig valid:', valid, '| body type:', JSON.parse(rawBody)?.type);
 
 	if (!valid) {
