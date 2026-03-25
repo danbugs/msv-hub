@@ -271,6 +271,22 @@ export function calculateSwissPairings(
 	const pairings: [PlayerEntry, PlayerEntry][] = [];
 	const used = new Set<string>();
 
+	// Round 1: all players are 0-0 — use deterministic seed-order pairing (1 vs N/2+1,
+	// 2 vs N/2+2, …) to match StartGG's seeded-event pairings exactly.
+	if (roundNumber === 1) {
+		const allPlayers = [...standings.entries()].sort((a, b) => a[1].seed - b[1].seed);
+		let byeEntry: PlayerEntry | null = null;
+		const toMatch = [...allPlayers];
+		if (toMatch.length % 2 === 1) {
+			byeEntry = toMatch.pop()!;
+		}
+		const half = toMatch.length / 2;
+		for (let i = 0; i < half; i++) {
+			pairings.push([toMatch[i], toMatch[i + half]]);
+		}
+		return { pairings, bye: byeEntry };
+	}
+
 	for (const [, players] of sortedGroups) {
 		const available = players.filter((p) => !used.has(p[0]));
 		if (available.length < 2) {
@@ -813,13 +829,13 @@ export function generateBracket(
 				if (w1b) { w1b.loserNextMatchId = roundMatches[i].id; w1b.loserNextSlot = 'bottom'; }
 			}
 		} else if (lRound % 2 === 0) {
-			// Even: L(prev) survivors → top; W(lR/2+1) losers → bottom
+			// Even: L(prev) survivors → top; W(lR/2+1) losers → bottom (cross/reversed to match StartGG)
 			const dropWinnersRound = lRound / 2 + 1;
 			const winnersDropMatches = matches.filter((m) => m.round === dropWinnersRound);
 			for (let i = 0; i < numMatches; i++) {
 				const prev = losersPrevMatches[i];
 				if (prev) { prev.winnerNextMatchId = roundMatches[i].id; prev.winnerNextSlot = 'top'; }
-				const wd = winnersDropMatches[i];
+				const wd = winnersDropMatches[numMatches - 1 - i];
 				if (wd) { wd.loserNextMatchId = roundMatches[i].id; wd.loserNextSlot = 'bottom'; }
 			}
 		} else {

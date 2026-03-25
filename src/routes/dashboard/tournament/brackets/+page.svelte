@@ -64,10 +64,10 @@
 
 	function setGameChar(side: 'top' | 'bot', gameIdx: number, char: string) {
 		if (side === 'top') {
-			gameTopChars = gameTopChars.map((v, i) => i === gameIdx ? char : v);
+			gameTopChars = gameTopChars.map((v, i) => i === gameIdx || (i > gameIdx && v === '') ? char : v);
 			gameTopSearch = gameTopSearch.map((v, i) => i === gameIdx ? '' : v);
 		} else {
-			gameBotChars = gameBotChars.map((v, i) => i === gameIdx ? char : v);
+			gameBotChars = gameBotChars.map((v, i) => i === gameIdx || (i > gameIdx && v === '') ? char : v);
 			gameBotSearch = gameBotSearch.map((v, i) => i === gameIdx ? '' : v);
 		}
 	}
