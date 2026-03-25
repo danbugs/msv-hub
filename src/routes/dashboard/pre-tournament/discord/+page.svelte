@@ -76,19 +76,25 @@
 	async function loadConfig() {
 		configLoading = true;
 		configError = '';
-		const res = await fetch('/api/discord/config');
-		if (res.ok) {
-			config = await res.json();
-			eventSlugInput = config.eventSlug;
-			attendeeCapInput = config.attendeeCap;
-			regDayInput = config.registrationDay;
-			regHourInput = config.registrationHour;
-			regMinuteInput = config.registrationMinute;
-			announcementTemplateInput = config.announcementTemplate || DEFAULT_TEMPLATE;
-		} else {
-			configError = 'Failed to load config.';
+		try {
+			const res = await fetch('/api/discord/config');
+			if (res.ok) {
+				config = await res.json();
+				eventSlugInput = config.eventSlug;
+				attendeeCapInput = config.attendeeCap;
+				regDayInput = config.registrationDay;
+				regHourInput = config.registrationHour;
+				regMinuteInput = config.registrationMinute;
+				announcementTemplateInput = config.announcementTemplate || DEFAULT_TEMPLATE;
+			} else {
+				const data = await res.json().catch(() => ({}));
+				configError = (data as { error?: string }).error ?? `HTTP ${res.status}`;
+			}
+		} catch (e) {
+			configError = e instanceof Error ? e.message : 'Failed to load config.';
+		} finally {
+			configLoading = false;
 		}
-		configLoading = false;
 	}
 
 	async function saveConfig() {
