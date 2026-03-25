@@ -73,6 +73,9 @@
 	let quoteResult = $state<FunResult>(null);
 	let quoteRunning = $state(false);
 
+	let thanksResult = $state<FunResult>(null);
+	let thanksRunning = $state(false);
+
 	async function runAction(
 		action: string,
 		setRunning: (v: boolean) => void,
@@ -128,6 +131,15 @@
 			(v) => (quoteRunning = v),
 			(v) => (quoteResult = v),
 			(d) => `Posted quote by ${d['author']}.`
+		);
+	}
+
+	async function postThanks() {
+		await runAction(
+			'thanks',
+			(v) => (thanksRunning = v),
+			(v) => (thanksResult = v),
+			(d) => `Posted: "${d['sent']}"`
 		);
 	}
 
@@ -285,6 +297,25 @@
 				</button>
 				{#if quoteResult}
 					<p class="mt-2 text-xs {quoteResult.ok ? 'text-green-400' : 'text-red-400'}">{quoteResult.msg}</p>
+				{/if}
+			</div>
+
+			<!-- Thanks -->
+			<div class="rounded-lg border border-gray-800 bg-gray-900 p-4">
+				<h3 class="text-sm font-medium text-white">Thanks Response</h3>
+				<p class="mt-0.5 text-xs text-gray-500">
+					Posts a random thanks reply to #general (e.g. "No worries!", "You got it!").
+				</p>
+				<button
+					type="button"
+					onclick={postThanks}
+					disabled={thanksRunning}
+					class="mt-3 {btnClass}"
+				>
+					{thanksRunning ? 'Posting…' : 'Post Thanks Response'}
+				</button>
+				{#if thanksResult}
+					<p class="mt-2 text-xs {thanksResult.ok ? 'text-green-400' : 'text-red-400'}">{thanksResult.msg}</p>
 				{/if}
 			</div>
 

@@ -12,6 +12,8 @@
 		registrationHour: number;
 		registrationMinute: number;
 		announcementTemplate: string;
+		paused: boolean;
+		waitlistCreated: boolean;
 		updatedAt: number;
 	}
 
@@ -22,6 +24,8 @@
 		registrationHour: 8,
 		registrationMinute: 30,
 		announcementTemplate: '',
+		paused: false,
+		waitlistCreated: false,
 		updatedAt: 0
 	});
 
@@ -116,6 +120,56 @@
 	function onSlugInput(e: Event) {
 		const val = (e.target as HTMLInputElement).value;
 		eventSlugInput = normaliseSlug(val);
+	}
+
+	// ---------------------------------------------------------------------------
+	// Pause / Resume bot
+	// ---------------------------------------------------------------------------
+
+	let pauseRunning = $state(false);
+	let pauseError = $state('');
+
+	async function togglePause() {
+		pauseRunning = true;
+		pauseError = '';
+		const res = await fetch('/api/discord/config', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ paused: !config.paused })
+		});
+		if (res.ok) {
+			config = await res.json();
+		} else {
+			const data = await res.json().catch(() => ({}));
+			pauseError = (data as { error?: string }).error ?? 'Failed to toggle pause.';
+		}
+		pauseRunning = false;
+	}
+
+	// ---------------------------------------------------------------------------
+	// Waitlist flag reset
+	// ---------------------------------------------------------------------------
+
+	let resetWaitlistRunning = $state(false);
+	let resetWaitlistResult = $state<{ ok: boolean; msg: string } | null>(null);
+
+	async function resetWaitlistFlag() {
+		resetWaitlistRunning = true;
+		resetWaitlistResult = null;
+		const res = await fetch('/api/discord/config', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ waitlistCreated: false })
+		});
+		if (res.ok) {
+			config = await res.json();
+			resetWaitlistResult = { ok: true, msg: 'Waitlist flag reset — monitoring will resume.' };
+			setTimeout(() => (resetWaitlistResult = null), 4000);
+		} else {
+			const data = await res.json().catch(() => ({}));
+			resetWaitlistResult = { ok: false, msg: (data as { error?: string }).error ?? 'Failed to reset.' };
+		}
+		resetWaitlistRunning = false;
 	}
 
 	// ---------------------------------------------------------------------------
@@ -274,10 +328,19 @@
 	{:else}
 
 	<!-- Current event status card (!check_current_event) -->
-	<div class="mt-6 rounded-xl border {config.eventSlug ? 'border-violet-800 bg-violet-900/10' : 'border-dashed border-gray-700 bg-gray-900/50'} p-4">
+	<div class="mt-6 rounded-xl border {config.paused ? 'border-amber-800 bg-amber-900/10' : config.eventSlug ? 'border-violet-800 bg-violet-900/10' : 'border-dashed border-gray-700 bg-gray-900/50'} p-4">
 		<div class="flex items-start justify-between gap-4">
-			<div class="min-w-0">
-				<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Current Event</p>
+			<div class="min-w-0flex-1">
+				<div class="flex items-center gap-2">
+					<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Current Event</p>
+					{#if config.paused}
+						<span class="rounded-full bg-amber-900/40 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-amber-400 border border-amber-700">PAUSED</span>
+					{:else if config.eventSlug}
+						<span class="flex items-center gap-1 text-xs text-green-400">
+							<span class="inline-block h-1.5 w-1.5 rounded-full bg-green-400"></span>Active
+						</span>
+					{/if}
+				</div>
 				{#if config.eventSlug}
 					<p class="mt-1 font-mono text-sm text-white break-all">{config.eventSlug}</p>
 					<div class="mt-1.5 flex flex-wrap gap-3 text-xs text-gray-400">
@@ -291,14 +354,30 @@
 					<p class="mt-1 text-sm text-gray-500">No event configured yet.</p>
 				{/if}
 			</div>
-			<button
-				type="button"
-				onclick={loadConfig}
-				class="shrink-0 rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-violet-600 hover:text-violet-400 transition-colors"
-			>
-				Refresh
-			</button>
+			<div class="flex shrink-0 flex-col items-end gap-2">
+				<button
+					type="button"
+					onclick={loadConfig}
+					class="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-violet-600 hover:text-violet-400 transition-colors"
+				>
+					Refresh
+				</button>
+				<button
+					type="button"
+					onclick={togglePause}
+					disabled={pauseRunning}
+					class="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50
+						{config.paused
+							? 'border-green-700 bg-green-900/20 text-green-300 hover:border-green-600 hover:bg-green-900/30'
+							: 'border-amber-700 bg-amber-900/20 text-amber-300 hover:border-amber-600 hover:bg-amber-900/30'}"
+				>
+					{pauseRunning ? '…' : config.paused ? 'Resume Bot' : 'Pause Bot'}
+				</button>
+			</div>
 		</div>
+		{#if pauseError}
+			<p class="mt-2 text-xs text-red-400">{pauseError}</p>
+		{/if}
 	</div>
 
 	<!-- =========================================================
@@ -594,6 +673,57 @@ https://start.gg/{config.eventSlug}</pre>
 				{/if}
 			</details>
 		{/if}
+	</section>
+
+	<!-- =========================================================
+	     Section 4: Attendee Monitoring
+	     ========================================================= -->
+	<section class="mt-10">
+		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Attendee Monitoring</h2>
+		<p class="mt-1 text-xs text-gray-500">
+			Checks StartGG every 5 min. When entrants reach the cap, a waitlist thread is auto-created once.
+		</p>
+
+		<div class="mt-4 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+			<div class="flex items-center justify-between gap-4">
+				<div>
+					<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Status</p>
+					{#if !config.eventSlug}
+						<span class="mt-1 inline-flex items-center gap-1.5 text-sm text-gray-500">
+							<span class="inline-block h-2 w-2 rounded-full bg-gray-600"></span>No event set
+						</span>
+					{:else if config.paused}
+						<span class="mt-1 inline-flex items-center gap-1.5 text-sm text-amber-400">
+							<span class="inline-block h-2 w-2 rounded-full bg-amber-500"></span>Paused
+						</span>
+					{:else if config.waitlistCreated}
+						<span class="mt-1 inline-flex items-center gap-1.5 text-sm text-blue-400">
+							<span class="inline-block h-2 w-2 rounded-full bg-blue-500"></span>Waitlist created
+						</span>
+					{:else}
+						<span class="mt-1 inline-flex items-center gap-1.5 text-sm text-green-400">
+							<span class="inline-block h-2 w-2 animate-pulse rounded-full bg-green-500"></span>Monitoring
+						</span>
+					{/if}
+				</div>
+
+				{#if config.eventSlug}
+					<button
+						type="button"
+						onclick={resetWaitlistFlag}
+						disabled={resetWaitlistRunning || !config.waitlistCreated}
+						class="shrink-0 rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-violet-600 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+						title={!config.waitlistCreated ? 'Waitlist flag is not set — nothing to reset' : 'Reset so the monitor will create a new waitlist thread'}
+					>
+						{resetWaitlistRunning ? 'Resetting…' : 'Reset Waitlist Flag'}
+					</button>
+				{/if}
+			</div>
+
+			{#if resetWaitlistResult}
+				<p class="mt-2 text-xs {resetWaitlistResult.ok ? 'text-green-400' : 'text-red-400'}">{resetWaitlistResult.msg}</p>
+			{/if}
+		</div>
 	</section>
 
 	{/if}
