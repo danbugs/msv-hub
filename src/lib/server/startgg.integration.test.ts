@@ -3,11 +3,11 @@
  * Hits the real StartGG API — requires STARTGG_TOKEN in .env.
  *
  * Uses the MSV Hub test event phase group (ID 3251998) which contains
- * test entrants 1Test–18Test created to validate reporting.
+ * 32 test entrants (seeds 1–32) paired as seed N vs seed N+16 in round 1.
  *
- * Pairs in round 1 (seed 1 vs seed N+1 pairing):
- *   preview_3251998_1_0: 1Test  (23025375) vs 17Test (23025423)
- *   preview_3251998_1_1: 2Test  (23025378) vs 18Test (23025426)
+ * TEST ORDER MATTERS: the E2E test (which reports sets) runs before the
+ * targeted reportSet/reportSwissMatch tests so those targeted tests see an
+ * already-settled phase group (real set IDs, not preview).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -15,129 +15,234 @@ import {
 	gql,
 	findSetInPhaseGroup,
 	reportSet,
+	fetchPhaseSeeds,
+	fetchPhaseSeedsWithTags,
+	fetchPhaseGroups,
 	PHASE_GROUP_SETS_QUERY
 } from '$lib/server/startgg';
 import { reportSwissMatch } from '$lib/server/startgg-reporter';
-import type { TournamentState, SwissMatch } from '$lib/types/tournament';
+import type { TournamentState, SwissMatch, Entrant } from '$lib/types/tournament';
 
 // Test phase group from MSV Hub dev event
 const TEST_PHASE_GROUP_ID = 3251998;
 
-// Pair A — used by reportSet test
+// Known entrant IDs for targeted tests
 const ENTRANT_2TEST  = 23025378;
 const ENTRANT_18TEST = 23025426;
-
-// Pair B — used by reportSwissMatch test (kept separate so reportSet doesn't affect it)
 const ENTRANT_1TEST  = 23025375;
 const ENTRANT_17TEST = 23025423;
 
-// Bogus IDs — should never match a real set
 const BOGUS_ID_A = 999_888_001;
 const BOGUS_ID_B = 999_888_002;
 
-// Real API calls can be slow — allow up to 30s per test
 const TIMEOUT = 30_000;
 
-// Helper to log current phase group state
+// ── Helper ───────────────────────────────────────────────────────────────────
+
 async function logPhaseGroupState(label: string) {
 	type Node = { id: unknown; winnerId: unknown; slots: { entrant: { id: unknown } | null }[] };
 	type PGData = { phaseGroup: { sets: { nodes: Node[] } } };
 	const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId: TEST_PHASE_GROUP_ID }, { delay: 0 });
 	console.log(`\n--- Phase group state: ${label} ---`);
 	for (const node of data?.phaseGroup?.sets?.nodes ?? []) {
-		const ids = node.slots.map((s) => `${JSON.stringify(s.entrant?.id)}(${typeof s.entrant?.id})`).join(', ');
-		console.log(`  Set ${node.id}: winnerId=${JSON.stringify(node.winnerId)}, entrants=[${ids}]`);
+		const ids = node.slots.map((s) => `${s.entrant?.id}(${typeof s.entrant?.id})`).join(', ');
+		console.log(`  ${node.id}: winner=${node.winnerId ?? 'none'} | [${ids}]`);
 	}
 }
 
-describe('StartGG API — phase group sets query', () => {
-	it('returns sets with entrant IDs for phase group 3251998', async () => {
+// ── 1. Initial diagnostic ─────────────────────────────────────────────────────
+
+describe('StartGG API — 1. phase group diagnostic', () => {
+	it('shows initial state of phase group 3251998', async () => {
 		await logPhaseGroupState('initial');
 	}, TIMEOUT);
 });
 
-describe('StartGG API — findSetInPhaseGroup', () => {
-	it('finds a set for 2Test (23025378) vs 18Test (23025426) — number IDs', async () => {
+// ── 2. findSetInPhaseGroup ────────────────────────────────────────────────────
+
+describe('StartGG API — 2. findSetInPhaseGroup', () => {
+	it('finds set for 2Test vs 18Test with number IDs', async () => {
 		const setId = await findSetInPhaseGroup(TEST_PHASE_GROUP_ID, ENTRANT_2TEST, ENTRANT_18TEST);
-		console.log(`\nfindSetInPhaseGroup(number ids) result for 2Test vs 18Test: ${setId}`);
+		console.log(`\nfindSetInPhaseGroup(numbers): ${setId}`);
 		expect(setId).not.toBeNull();
 	}, TIMEOUT);
 
-	it('finds a set with STRING entrant IDs — type coercion must work', async () => {
-		// Verifies the Number() coercion fix: if startggEntrantId was stored as a string
-		// (possible from PHASE_SEEDS_QUERY returning string IDs), the lookup must still work.
+	it('finds set for 2Test vs 18Test with STRING IDs — type coercion', async () => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const setId = await findSetInPhaseGroup(TEST_PHASE_GROUP_ID, '23025378' as any, '23025426' as any);
-		console.log(`\nfindSetInPhaseGroup(STRING ids): ${setId}`);
+		console.log(`\nfindSetInPhaseGroup(strings): ${setId}`);
 		expect(setId).not.toBeNull();
 	}, TIMEOUT);
 
-	it('returns null for bogus entrant IDs', async () => {
+	it('returns null for bogus IDs', async () => {
 		const setId = await findSetInPhaseGroup(TEST_PHASE_GROUP_ID, BOGUS_ID_A, BOGUS_ID_B);
 		expect(setId).toBeNull();
 	}, TIMEOUT);
 
-	it('finds sets for all entrant pairs returned by the phase group query', async () => {
-		type Node = { id: string | number; winnerId: number | null; slots: { entrant: { id: number } | null }[] };
+	it('finds sets for all 16 pairs', async () => {
+		type Node = { id: unknown; winnerId: unknown; slots: { entrant: { id: number } | null }[] };
 		type PGData = { phaseGroup: { sets: { nodes: Node[] } } };
-
 		const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId: TEST_PHASE_GROUP_ID }, { delay: 0 });
-		expect(data).not.toBeNull();
-
 		const nodes = data!.phaseGroup.sets.nodes;
-		console.log('\n--- findSetInPhaseGroup for each discovered pair ---');
+		expect(nodes.length).toBeGreaterThan(0);
+		console.log('\n--- findSetInPhaseGroup for all pairs ---');
 		for (const node of nodes) {
-			const ids = node.slots
-				.map((s) => s.entrant?.id)
-				.filter((id): id is number => id !== undefined);
+			const ids = node.slots.map((s) => s.entrant?.id).filter((id): id is number => id != null);
 			if (ids.length < 2) continue;
-
-			const [id1, id2] = ids;
-			const found = await findSetInPhaseGroup(TEST_PHASE_GROUP_ID, id1, id2);
-			console.log(`  entrants [${id1}, ${id2}] => set ${found}`);
+			const found = await findSetInPhaseGroup(TEST_PHASE_GROUP_ID, ids[0], ids[1]);
+			console.log(`  [${ids[0]}, ${ids[1]}] => ${found}`);
 			expect(found).not.toBeNull();
 		}
 	}, TIMEOUT * 3);
 });
 
-describe('StartGG API — reportSet', () => {
-	it('reports pair A (2Test vs 18Test) and returns the real set ID', async () => {
-		const setId = await findSetInPhaseGroup(TEST_PHASE_GROUP_ID, ENTRANT_2TEST, ENTRANT_18TEST);
-		console.log(`\nPair A set ID before report: ${setId}`);
-		expect(setId).not.toBeNull();
+// ── 3. Full end-to-end: load seeds → report all round-1 results ──────────────
+//
+// RUNS BEFORE targeted reportSet/reportSwissMatch so those tests see the
+// settled phase group (real set IDs). Reporting the first preview set triggers
+// a StartGG preview→real conversion; subsequent lookups use the retry logic
+// in findSetInPhaseGroup to wait out the transitional empty state.
 
-		const result = await reportSet(setId!, ENTRANT_2TEST, {
-			loserEntrantId: ENTRANT_18TEST,
-			winnerScore: 2,
-			loserScore: 0
-		});
+describe('StartGG API — 3. full end-to-end: load seeds → report all round-1 results', () => {
+	it('pulls seeds via fetchPhaseSeeds, builds TournamentState, reports top seeds winning 2-0', async () => {
+		// ── Step 1: discover phase ID from the phase group ──
+		const pgInfo = await gql<{ phaseGroup: { phase: { id: number } } }>(
+			'query PhaseParent($id: ID!) { phaseGroup(id: $id) { phase { id } } }',
+			{ id: TEST_PHASE_GROUP_ID },
+			{ delay: 0 }
+		);
+		const phaseId = pgInfo?.phaseGroup?.phase?.id;
+		expect(phaseId).toBeTruthy();
+		console.log(`\nPhase ID: ${phaseId}`);
 
-		console.log(`reportSet(${setId}) result:`, result);
-		// Log what the mutation returned as the real set ID
-		console.log(`reportedSetId from mutation: ${result.reportedSetId ?? '(null — preview sets return null)'}`);
+		// ── Step 2: pull seeds exactly as from-event/+server.ts does ──
+		const [sgSeeds, seedsWithTags, phase1Groups] = await Promise.all([
+			fetchPhaseSeeds(phaseId!),
+			fetchPhaseSeedsWithTags(phaseId!),
+			fetchPhaseGroups(phaseId!)
+		]);
+		console.log(`Loaded ${sgSeeds.length} seeds, ${phase1Groups.length} phase group(s)`);
+		console.log(`Phase groups: ${JSON.stringify(phase1Groups)}`);
 
-		if (!result.ok) {
-			expect(result.error).toMatch(/Cannot report|already|completed|locked/i);
+		// ── Step 3: build seed → entrantId map (same logic as from-event/+server.ts) ──
+		const sgSeedToEntrantId = new Map<number, number>();
+		for (const seed of sgSeeds) {
+			const seedNum  = Number((seed as { seedNum?: unknown }).seedNum);
+			const entrantId = Number((seed as { entrant?: { id?: unknown } }).entrant?.id);
+			if (seedNum && entrantId && !isNaN(seedNum) && !isNaN(entrantId)) {
+				sgSeedToEntrantId.set(seedNum, entrantId);
+			}
 		}
-		expect(result.error ?? '').not.toMatch(/not found|unexpected response shape/i);
-	}, TIMEOUT);
 
-	it('diagnostic: phase group state after reporting pair A', async () => {
-		// This runs right after reportSet — shows what StartGG did to the phase group
-		await logPhaseGroupState('after reporting preview_3251998_1_1 (pair A)');
+		// ── Step 4: build entrants (same as from-event/+server.ts) ──
+		const entrants: Entrant[] = seedsWithTags.map((s, i) => ({
+			id: `e-${i + 1}`,
+			gamerTag: s.gamerTag,
+			initialSeed: s.seedNum,
+			startggEntrantId: sgSeedToEntrantId.get(s.seedNum)
+		}));
+
+		console.log('\nFirst 4 entrants (verifying startggEntrantId is a number):');
+		for (const e of entrants.slice(0, 4)) {
+			console.log(`  seed ${e.initialSeed}: ${e.gamerTag} → ${e.startggEntrantId} (${typeof e.startggEntrantId})`);
+		}
+
+		expect(entrants.length).toBeGreaterThan(0);
+		expect(entrants.every(e => e.startggEntrantId !== undefined)).toBe(true);
+		expect(entrants.every(e => typeof e.startggEntrantId === 'number')).toBe(true);
+
+		// ── Step 5: build tournament state ──
+		const tournament: TournamentState = {
+			slug: 'test-e2e',
+			name: 'MSV Hub E2E Integration Test',
+			phase: 'swiss',
+			createdAt: 0, updatedAt: 0, currentRound: 1,
+			entrants,
+			settings: { numRounds: 5, numStations: 16, streamStation: 16 },
+			rounds: [],
+			startggPhase1Groups: phase1Groups.length ? phase1Groups : undefined
+		};
+
+		// ── Step 6: get all 16 pairs from the phase group and report them ──
+		type Node = { id: unknown; winnerId: unknown; slots: { entrant: { id: number } | null }[] };
+		type PGData = { phaseGroup: { sets: { nodes: Node[] } } };
+		const setsData = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId: TEST_PHASE_GROUP_ID }, { delay: 0 });
+		const sets = setsData!.phaseGroup.sets.nodes;
+
+		console.log(`\nPhase group has ${sets.length} sets (including any already completed)`);
+		expect(sets.length).toBeGreaterThan(0);
+
+		const byEntrantId = new Map(
+			entrants.filter(e => e.startggEntrantId != null).map(e => [e.startggEntrantId!, e])
+		);
+
+		let reported = 0, alreadyDone = 0, failed = 0;
+		console.log('\n--- Reporting all round-1 results (lower seed wins 2-0) ---');
+
+		for (const set of sets) {
+			const slotIds = set.slots.map(s => s.entrant?.id).filter((id): id is number => id != null);
+			if (slotIds.length < 2) { failed++; continue; }
+
+			const e1 = byEntrantId.get(slotIds[0]);
+			const e2 = byEntrantId.get(slotIds[1]);
+			if (!e1 || !e2) {
+				console.log(`  ✗ SKIP: entrant ${slotIds[0]} or ${slotIds[1]} not in loaded entrants`);
+				failed++;
+				continue;
+			}
+
+			const winner = e1.initialSeed < e2.initialSeed ? e1 : e2;
+			const loser  = winner === e1 ? e2 : e1;
+
+			const match: SwissMatch = {
+				id: `m-${e1.id}-${e2.id}`,
+				topPlayerId: e1.id,
+				bottomPlayerId: e2.id,
+				winnerId: winner.id,
+				topScore: winner === e1 ? 2 : 0,
+				bottomScore: winner === e2 ? 2 : 0
+			};
+
+			const result = await reportSwissMatch(tournament, 1, match);
+
+			if (result.ok) {
+				console.log(`  ✓ ${winner.gamerTag} 2-0 ${loser.gamerTag} → cached set ${match.startggSetId}`);
+				reported++;
+			} else if (result.error?.match(/Cannot report|already|completed|locked/i)) {
+				console.log(`  ~ ${winner.gamerTag} vs ${loser.gamerTag} → already reported (expected)`);
+				alreadyDone++;
+			} else {
+				console.log(`  ✗ ${winner.gamerTag} vs ${loser.gamerTag} → ${result.error}`);
+				failed++;
+			}
+		}
+
+		console.log(`\nSummary: ${reported} freshly reported, ${alreadyDone} already done, ${failed} failed`);
+		expect(failed).toBe(0);
+		expect(reported + alreadyDone).toBe(sets.length);
+	}, TIMEOUT * 15); // generous: 16 sequential API calls + retry delays
+});
+
+// ── 4. Targeted tests (run after E2E so phase group has settled) ─────────────
+
+describe('StartGG API — 4. reportSet (targeted)', () => {
+	it('pair A (2Test vs 18Test): reports fresh or surfaces "Cannot report" for already-done', async () => {
+		const setId = await findSetInPhaseGroup(TEST_PHASE_GROUP_ID, ENTRANT_2TEST, ENTRANT_18TEST);
+		console.log(`\nfindSetInPhaseGroup for 2T vs 18T: ${setId}`);
+		expect(setId).not.toBeNull();
+		const result = await reportSet(setId!, ENTRANT_2TEST, {
+			loserEntrantId: ENTRANT_18TEST, winnerScore: 2, loserScore: 0
+		});
+		console.log(`reportSet(${setId}):`, result);
+		if (!result.ok) expect(result.error).toMatch(/Cannot report|already|completed|locked/i);
+		expect(result.error ?? '').not.toMatch(/not found|unexpected response shape/i);
 	}, TIMEOUT);
 });
 
-describe('StartGG API — reportSwissMatch (end-to-end)', () => {
-	it('reports pair B (1Test vs 17Test) via full reportSwissMatch flow', async () => {
-		// Use pair B (fresh, not touched by the reportSet test above)
+describe('StartGG API — 4. reportSwissMatch (targeted)', () => {
+	it('pair B (1Test vs 17Test): reports fresh or surfaces "Cannot report" for already-done', async () => {
 		const tournament: TournamentState = {
-			slug: 'test-event',
-			name: 'MSV Hub Integration Test',
-			phase: 'swiss',
-			createdAt: 0,
-			updatedAt: 0,
-			currentRound: 1,
+			slug: 'test', name: 'Test', phase: 'swiss', createdAt: 0, updatedAt: 0, currentRound: 1,
 			entrants: [
 				{ id: 'e-1',  gamerTag: '1Test',  initialSeed: 1,  startggEntrantId: ENTRANT_1TEST },
 				{ id: 'e-17', gamerTag: '17Test', initialSeed: 17, startggEntrantId: ENTRANT_17TEST }
@@ -146,23 +251,13 @@ describe('StartGG API — reportSwissMatch (end-to-end)', () => {
 			rounds: [],
 			startggPhase1Groups: [{ id: TEST_PHASE_GROUP_ID, displayIdentifier: '1' }]
 		};
-
 		const match: SwissMatch = {
-			id: 'test-match-1-17',
-			topPlayerId: 'e-1',
-			bottomPlayerId: 'e-17',
-			winnerId: 'e-1',
-			topScore: 2,
-			bottomScore: 0
+			id: 'm1', topPlayerId: 'e-1', bottomPlayerId: 'e-17', winnerId: 'e-1', topScore: 2, bottomScore: 0
 		};
-
 		const result = await reportSwissMatch(tournament, 1, match);
 		console.log('\nreportSwissMatch result:', result);
-		console.log('match.startggSetId after report:', match.startggSetId);
-
-		if (!result.ok) {
-			expect(result.error).toMatch(/Cannot report|already|completed|locked/i);
-		}
+		console.log('match.startggSetId:', match.startggSetId);
+		if (!result.ok) expect(result.error).toMatch(/Cannot report|already|completed|locked/i);
 		expect(result.error ?? '').not.toMatch(/Set not found|unexpected response shape/i);
 	}, TIMEOUT);
 });

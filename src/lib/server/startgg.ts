@@ -347,12 +347,24 @@ export async function findSetInPhaseGroup(
 	entrantId1: number,
 	entrantId2: number
 ): Promise<string | null> {
-	const data = await gql<{ phaseGroup: { sets: { nodes: GqlRecord[] } } }>(
-		PHASE_GROUP_SETS_QUERY,
-		{ phaseGroupId },
-		{ delay: 0 }
-	);
-	const nodes = data?.phaseGroup?.sets?.nodes ?? [];
+	const fetchNodes = async () => {
+		const data = await gql<{ phaseGroup: { sets: { nodes: GqlRecord[] } } }>(
+			PHASE_GROUP_SETS_QUERY,
+			{ phaseGroupId },
+			{ delay: 0 }
+		);
+		return data?.phaseGroup?.sets?.nodes ?? [];
+	};
+
+	let nodes = await fetchNodes();
+
+	// If the phase group returned 0 sets, it may be mid-transition from preview sets to
+	// real sets (triggered when the first preview set is reported). Retry up to 3 times
+	// with 2-second gaps before giving up.
+	for (let retry = 0; retry < 3 && nodes.length === 0; retry++) {
+		await new Promise<void>((r) => setTimeout(r, 2000));
+		nodes = await fetchNodes();
+	}
 	// Prefer unreported sets. If only a completed set is found, return it anyway so
 	// reportSet can surface the "Cannot report completed set" error from StartGG rather
 	// than silently returning "set not found".
