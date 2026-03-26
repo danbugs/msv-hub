@@ -200,8 +200,8 @@ mutation UpdatePhaseSeeding($phaseId: ID!, $seedMapping: [UpdatePhaseSeedInfo]!)
 }`;
 
 export const REPORT_BRACKET_SET_MUTATION = `
-mutation ReportBracketSet($setId: ID!, $winnerId: ID!) {
-  reportBracketSet(setId: $setId, winnerId: $winnerId) {
+mutation ReportBracketSet($setId: ID!, $winnerId: ID!, $gameData: [BracketSetGameDataInput]) {
+  reportBracketSet(setId: $setId, winnerId: $winnerId, gameData: $gameData) {
     id
     winnerId
   }
@@ -224,6 +224,19 @@ query PhaseGroupSets($phaseGroupId: ID!) {
         id
         winnerId
         slots { entrant { id } }
+      }
+    }
+  }
+}`;
+
+export const PHASE_GROUP_SEEDS_QUERY = `
+query PhaseGroupSeeds($phaseGroupId: ID!, $page: Int!, $perPage: Int!) {
+  phaseGroup(id: $phaseGroupId) {
+    seeds(query: { page: $page, perPage: $perPage }) {
+      pageInfo { totalPages }
+      nodes {
+        id
+        entrant { id }
       }
     }
   }
@@ -372,19 +385,77 @@ export async function findSetByEntrants(
 }
 
 /**
- * Report a StartGG set result.
- * winnerEntrantId must be the StartGG entrant ID (not the MSV Hub internal ID).
+ * Report a StartGG set result with optional game-by-game data (for score display).
+ * winnerEntrantId/loserEntrantId must be StartGG entrant IDs.
+ * topScore/bottomScore are games won (e.g. 2-0 or 2-1) from MSV Hub's perspective.
  * Uses delay:0 — safe for real-time calls.
  */
 export async function reportSet(
 	setId: string,
-	winnerEntrantId: number
+	winnerEntrantId: number,
+	opts?: { loserEntrantId?: number; winnerScore?: number; loserScore?: number }
 ): Promise<{ ok: boolean; error?: string }> {
-	const data = await gql(
-		REPORT_BRACKET_SET_MUTATION,
-		{ setId, winnerId: String(winnerEntrantId) },
-		{ delay: 0 }
-	);
+	let gameData: { gameNum: number; winnerId: string }[] | undefined;
+	if (opts?.loserEntrantId && opts?.winnerScore && opts?.loserScore !== undefined) {
+		const w = String(winnerEntrantId);
+		const l = String(opts.loserEntrantId);
+		gameData = [];
+		// Reconstruct per-game winners: winner takes first game, loser interrupts in middle for 2-1
+		const totalGames = opts.winnerScore + opts.loserScore;
+		if (totalGames === 2) {
+			gameData = [{ gameNum: 1, winnerId: w }, { gameNum: 2, winnerId: w }];
+		} else if (totalGames === 3) {
+			gameData = [{ gameNum: 1, winnerId: w }, { gameNum: 2, winnerId: l }, { gameNum: 3, winnerId: w }];
+		}
+	}
+	const variables: Record<string, unknown> = { setId, winnerId: String(winnerEntrantId) };
+	if (gameData) variables.gameData = gameData;
+	const data = await gql(REPORT_BRACKET_SET_MUTATION, variables, { delay: 0 });
 	if (!data) return { ok: false, error: 'StartGG mutation returned null — check token/permissions' };
+	return { ok: true };
+}
+
+/**
+ * Re-seed a StartGG phase group to match MSV Hub pairings.
+ * Assigns seedNums 1,2 / 3,4 / ... to each pair so StartGG creates matching sets.
+ * Best-effort — errors are returned but should never block MSV Hub.
+ */
+export async function pushPairingsToPhaseGroup(
+	phaseId: number,
+	phaseGroupId: number,
+	pairings: [number, number][]  // [startggEntrantId1, startggEntrantId2][]
+): Promise<{ ok: boolean; error?: string }> {
+	// Fetch seeds in this phase group to get seedId per entrant
+	const seeds = await fetchAllPages(PHASE_GROUP_SEEDS_QUERY, { phaseGroupId }, (d) => {
+		const pg = d.phaseGroup as GqlRecord | undefined;
+		return pg?.seeds ?? null;
+	}, undefined).catch(() => [] as GqlRecord[]);
+
+	if (!(seeds as GqlRecord[]).length) {
+		return { ok: false, error: 'Phase group has no seeds — add players first' };
+	}
+
+	const entrantToSeedId = new Map<number, string>();
+	for (const seed of seeds as GqlRecord[]) {
+		const entrantId = (seed.entrant as { id?: number } | undefined)?.id;
+		if (entrantId && seed.id) entrantToSeedId.set(entrantId, String(seed.id));
+	}
+
+	const seedMapping: { seedId: string; phaseGroupId: string; seedNum: number }[] = [];
+	pairings.forEach(([e1, e2], i) => {
+		const s1 = entrantToSeedId.get(e1);
+		const s2 = entrantToSeedId.get(e2);
+		if (s1) seedMapping.push({ seedId: s1, phaseGroupId: String(phaseGroupId), seedNum: 2 * i + 1 });
+		if (s2) seedMapping.push({ seedId: s2, phaseGroupId: String(phaseGroupId), seedNum: 2 * i + 2 });
+	});
+
+	if (!seedMapping.length) return { ok: false, error: 'No matching seeds found for pairings' };
+
+	const data = await gql(
+		UPDATE_PHASE_SEEDING_MUTATION,
+		{ phaseId: String(phaseId), seedMapping },
+		{ delay: 0 }
+	).catch(() => null);
+	if (!data) return { ok: false, error: 'updatePhaseSeeding mutation failed' };
 	return { ok: true };
 }

@@ -3,6 +3,7 @@ import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch } from '$lib/server/startgg-reporter';
+import { pushPairingsToPhaseGroup } from '$lib/server/startgg';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -116,6 +117,26 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	tournament.rounds.push(round);
 	tournament.currentRound = nextRound;
 	await saveTournament(tournament);
+
+	// Best-effort: push our custom pairings to StartGG's phase group for this round
+	// so that set lookups match. Round 1 is already seeded at event creation time.
+	if (nextRound > 1 && tournament.startggPhase1Id && tournament.startggPhase1Groups?.[nextRound - 1]) {
+		const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+		const sgPairings = assignedMatches
+			.map((m): [number, number] | null => {
+				const t = entrantMap.get(m.topPlayerId)?.startggEntrantId;
+				const b = entrantMap.get(m.bottomPlayerId)?.startggEntrantId;
+				return t && b ? [t, b] : null;
+			})
+			.filter((p): p is [number, number] => p !== null);
+		if (sgPairings.length) {
+			pushPairingsToPhaseGroup(
+				tournament.startggPhase1Id,
+				tournament.startggPhase1Groups[nextRound - 1].id,
+				sgPairings
+			).catch(() => {}); // best-effort, don't block the response
+		}
+	}
 
 	// Optionally announce the new round to a Discord channel.
 	if (announceChannel) {

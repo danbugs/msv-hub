@@ -10,9 +10,17 @@
 	let apply = $state(false);
 	let showAdvanced = $state(false);
 
-	import { onDestroy } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 
 	import { goto } from '$app/navigation';
+
+	onMount(async () => {
+		const res = await fetch('/api/tournament');
+		if (res.ok) {
+			const t = await res.json();
+			if (t?.startggEventSlug) eventUrl = t.startggEventSlug;
+		}
+	});
 
 	let loading = $state(false);
 	let error = $state('');

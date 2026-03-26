@@ -22,6 +22,10 @@ export interface TournamentState {
 	updatedAt: number;
 	/** StartGG event ID — set when tournament is loaded from a StartGG event */
 	startggEventId?: number;
+	/** Original StartGG event slug (e.g. tournament/foo/event/bar) — used to pre-fill seeder */
+	startggEventSlug?: string;
+	/** StartGG phase ID for the Swiss phase — needed for updatePhaseSeeding */
+	startggPhase1Id?: number;
 	/** Phase groups for the Swiss phase (phase 1), sorted by displayIdentifier */
 	startggPhase1Groups?: { id: number; displayIdentifier: string }[];
 	/** StartGG sync state for bracket reporting */

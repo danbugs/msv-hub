@@ -8,6 +8,7 @@
 
 	let showSetup = $state(false);
 	let fixingMatchId = $state<string | null>(null);
+	let dismissedBanners = $state(new Set<string>());
 	// Score selection: { matchId, winnerId } — waiting for score pick
 	let pendingWinner = $state<{ matchId: string; winnerId: string } | null>(null);
 
@@ -82,6 +83,11 @@
 		});
 		if (res.ok) await loadTournament();
 		else error = 'Failed to reassign stream';
+	}
+
+	async function clearStartggErrors() {
+		await fetch('/api/tournament/startgg-sync', { method: 'DELETE' });
+		await loadTournament();
 	}
 
 	async function deleteTournament() {
@@ -222,29 +228,39 @@
 			</div>
 
 			<!-- StartGG sync banners -->
-			{#if tournament.currentRound === 1 && isRoundComplete() && !isFinalRoundComplete()}
-				<div class="mt-4 rounded-lg border border-blue-800 bg-blue-900/20 px-4 py-3 text-sm text-blue-300">
-					<span class="font-semibold">StartGG:</span> Before starting round 2, add all players to
-					<strong>Swiss rounds 2–{tournament.settings.numRounds} and Final Standings</strong> phase groups on StartGG.
-					This lets result reporting work for all remaining rounds.
+			{#if tournament.currentRound === 1 && isRoundComplete() && !isFinalRoundComplete() && !dismissedBanners.has('round1-done')}
+				<div class="mt-4 flex items-start gap-2 rounded-lg border border-blue-700 bg-blue-950/60 px-4 py-3 text-sm text-blue-200">
+					<span class="flex-1">
+						<span class="font-semibold">StartGG:</span> Before starting round 2, add all players to
+						<strong>Swiss rounds 2–{tournament.settings.numRounds} and Final Standings</strong> phase groups on StartGG.
+						This lets result reporting work for all remaining rounds.
+					</span>
+					<button onclick={() => dismissedBanners = new Set([...dismissedBanners, 'round1-done'])}
+						class="shrink-0 text-blue-400 hover:text-blue-200 text-base leading-none" title="Dismiss">✕</button>
 				</div>
 			{/if}
 
-			{#if isFinalRoundComplete()}
-				<div class="mt-4 rounded-lg border border-amber-800 bg-amber-900/20 px-4 py-3 text-sm text-amber-300">
-					<span class="font-semibold">StartGG:</span> Swiss is complete — go to StartGG and
-					<strong>finalize the standings</strong> phase group before generating the bracket split.
+			{#if isFinalRoundComplete() && !dismissedBanners.has('final-done')}
+				<div class="mt-4 flex items-start gap-2 rounded-lg border border-amber-700 bg-amber-950/60 px-4 py-3 text-sm text-amber-200">
+					<span class="flex-1">
+						<span class="font-semibold">StartGG:</span> Swiss is complete — go to StartGG and
+						<strong>finalize the standings</strong> phase group before generating the bracket split.
+					</span>
+					<button onclick={() => dismissedBanners = new Set([...dismissedBanners, 'final-done'])}
+						class="shrink-0 text-amber-400 hover:text-amber-200 text-base leading-none" title="Dismiss">✕</button>
 				</div>
 			{/if}
 
 			{#if tournament.startggSync?.errors?.length}
 				<div class="mt-4 space-y-1">
 					{#each tournament.startggSync.errors as err}
-						<div class="flex items-start gap-2 rounded-lg border border-red-800 bg-red-900/20 px-3 py-2 text-xs text-red-400">
+						<div class="flex items-start gap-2 rounded-lg border border-red-800 bg-red-950/60 px-3 py-2 text-xs text-red-300">
 							<span class="shrink-0 font-semibold">StartGG error</span>
-							<span class="min-w-0 break-words">{err.message}</span>
+							<span class="min-w-0 flex-1 break-words">{err.message}</span>
 						</div>
 					{/each}
+					<button onclick={clearStartggErrors}
+						class="text-xs text-gray-500 hover:text-gray-300 px-1">Clear errors</button>
 				</div>
 			{/if}
 

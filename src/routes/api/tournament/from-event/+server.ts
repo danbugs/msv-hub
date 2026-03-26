@@ -94,6 +94,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		rounds: [],
 		currentRound: 0,
 		startggEventId: eventId,
+		startggEventSlug: slug,
+		startggPhase1Id: phaseId,
 		startggPhase1Groups: phase1Groups.length ? phase1Groups : undefined,
 		createdAt: Date.now(),
 		updatedAt: Date.now()
