@@ -31,8 +31,9 @@ export interface TournamentState {
 	startggEventSlug?: string;
 	/** StartGG phase ID for the Swiss phase — needed for updatePhaseSeeding */
 	startggPhase1Id?: number;
-	/** Phase groups for the Swiss phase (phase 1), sorted by displayIdentifier */
-	startggPhase1Groups?: { id: number; displayIdentifier: string }[];
+	/** Phase groups for the Swiss rounds — one entry per round, indexed by round-1.
+	 *  Each round may belong to a different StartGG phase (separate phases per round). */
+	startggPhase1Groups?: { id: number; displayIdentifier: string; phaseId?: number }[];
 	/** StartGG sync state for bracket reporting */
 	startggSync?: StartggSyncState;
 }

@@ -121,8 +121,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// For round 2+, push our custom pairings to StartGG's phase group BEFORE triggering
 	// conversion/caching — the phase group must have the correct seeding first.
-	const pgId = tournament.startggPhase1Groups?.[nextRound - 1]?.id;
-	if (nextRound > 1 && tournament.startggPhase1Id && pgId) {
+	const roundGroup = tournament.startggPhase1Groups?.[nextRound - 1];
+	const pgId = roundGroup?.id;
+	const roundPhaseId = roundGroup?.phaseId ?? tournament.startggPhase1Id;
+	if (nextRound > 1 && roundPhaseId && pgId) {
 		const entrantMap2 = new Map(tournament.entrants.map((e) => [e.id, e]));
 		const sgPairings = assignedMatches
 			.map((m): [number, number] | null => {
@@ -132,11 +134,26 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			})
 			.filter((p): p is [number, number] => p !== null);
 		if (sgPairings.length) {
-			await pushPairingsToPhaseGroup(
-				tournament.startggPhase1Id,
+			console.log(`[StartGG] Pushing ${sgPairings.length} pairings to phase group ${pgId} (phase ${roundPhaseId}) for round ${nextRound}`);
+			const seedResult = await pushPairingsToPhaseGroup(
+				roundPhaseId,
 				pgId,
 				sgPairings
-			).catch(() => {});
+			).catch((e) => ({ ok: false as const, error: String(e) }));
+			if (!seedResult.ok) {
+				console.error(`[StartGG] pushPairingsToPhaseGroup failed: ${seedResult.error}`);
+				if (!tournament.startggSync) {
+					tournament.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
+				}
+				tournament.startggSync.errors.push({
+					matchId: `round-${nextRound}-seed`,
+					message: `StartGG re-seed failed for round ${nextRound}: ${seedResult.error}`,
+					ts: Date.now()
+				});
+				await saveTournament(tournament);
+			} else {
+				console.log(`[StartGG] Re-seed successful for round ${nextRound}`);
+			}
 		}
 	}
 

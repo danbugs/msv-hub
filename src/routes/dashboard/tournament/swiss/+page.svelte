@@ -347,11 +347,10 @@
 										<!-- Top player -->
 										<button
 											class="flex-1 min-w-0 truncate text-left rounded px-2 py-1 text-sm transition-colors
-												{isFixing && isPending && pendingWinner?.winnerId === match.topPlayerId ? 'bg-violet-900/40 text-violet-200' :
-												 isFixing && isPending && pendingWinner?.winnerId !== match.topPlayerId ? 'text-gray-500' :
+												{isPending && pendingWinner?.winnerId === match.topPlayerId ? 'bg-violet-900/40 text-violet-200' :
+												 isPending ? 'text-gray-500' :
 												 match.winnerId === match.topPlayerId ? 'bg-green-900/30 text-green-300 font-medium' :
 												 match.winnerId ? 'text-gray-500' :
-												 isPending && pendingWinner?.winnerId === match.topPlayerId ? 'bg-violet-900/40 text-violet-200' :
 												 'text-white hover:bg-gray-800'}
 												{!canInteract ? 'pointer-events-none' : ''}"
 											disabled={!canInteract}
@@ -370,11 +369,10 @@
 										<!-- Bottom player -->
 										<button
 											class="flex-1 min-w-0 truncate text-left rounded px-2 py-1 text-sm transition-colors
-												{isFixing && isPending && pendingWinner?.winnerId === match.bottomPlayerId ? 'bg-violet-900/40 text-violet-200' :
-												 isFixing && isPending && pendingWinner?.winnerId !== match.bottomPlayerId ? 'text-gray-500' :
+												{isPending && pendingWinner?.winnerId === match.bottomPlayerId ? 'bg-violet-900/40 text-violet-200' :
+												 isPending ? 'text-gray-500' :
 												 match.winnerId === match.bottomPlayerId ? 'bg-green-900/30 text-green-300 font-medium' :
 												 match.winnerId ? 'text-gray-500' :
-												 isPending && pendingWinner?.winnerId === match.bottomPlayerId ? 'bg-violet-900/40 text-violet-200' :
 												 'text-white hover:bg-gray-800'}
 												{!canInteract ? 'pointer-events-none' : ''}"
 											disabled={!canInteract}

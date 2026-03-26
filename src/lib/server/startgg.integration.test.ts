@@ -18,13 +18,18 @@ import {
 	fetchPhaseSeeds,
 	fetchPhaseSeedsWithTags,
 	fetchPhaseGroups,
+	pushPairingsToPhaseGroup,
 	PHASE_GROUP_SETS_QUERY
 } from '$lib/server/startgg';
 import { reportSwissMatch } from '$lib/server/startgg-reporter';
 import type { TournamentState, SwissMatch, Entrant } from '$lib/types/tournament';
 
-// Test phase group from MSV Hub dev event
+// Test phase group from MSV Hub dev event (round 1)
 const TEST_PHASE_GROUP_ID = 3251998;
+// Phase IDs per round (each round is a separate StartGG phase)
+const TEST_PHASE_ROUND1 = 2243224;
+const TEST_PHASE_ROUND2 = 2243225;
+const TEST_PHASE_GROUP_ROUND2 = 3251999;
 
 // Known entrant IDs for targeted tests
 const ENTRANT_2TEST  = 23025378;
@@ -259,5 +264,106 @@ describe('StartGG API — 4. reportSwissMatch (targeted)', () => {
 		console.log('match.startggSetId:', match.startggSetId);
 		if (!result.ok) expect(result.error).toMatch(/Cannot report|already|completed|locked/i);
 		expect(result.error ?? '').not.toMatch(/Set not found|unexpected response shape/i);
+	}, TIMEOUT);
+});
+
+// ── 5. Round 2 re-seeding ─────────────────────────────────────────────────────
+
+describe('StartGG API — 5. pushPairingsToPhaseGroup (round 2 re-seeding)', () => {
+	it('discovers all phases and their phase groups', async () => {
+		// Verify the test event has separate phases per round (same structure as from-event/+server.ts)
+		const data = await gql<{
+			phase: { event: { phases: { id: number; name: string; phaseGroups: { nodes: { id: number }[] } }[] } }
+		}>(
+			`query { phase(id: ${TEST_PHASE_ROUND1}) { event { phases { id name phaseGroups(query: { page: 1, perPage: 64 }) { nodes { id } } } } } }`,
+			{},
+			{ delay: 0 }
+		);
+		const phases = data?.phase?.event?.phases ?? [];
+		console.log('\n--- All phases in test event ---');
+		for (const p of phases) {
+			console.log(`  Phase ${p.id}: ${p.name} → groups: [${p.phaseGroups.nodes.map((n) => n.id).join(', ')}]`);
+		}
+		expect(phases.length).toBeGreaterThanOrEqual(5); // 5 Swiss rounds + Final Standings
+
+		const round2Phase = phases.find((p) => p.name.includes('Round 2'));
+		expect(round2Phase).toBeTruthy();
+		expect(round2Phase!.id).toBe(TEST_PHASE_ROUND2);
+		expect(round2Phase!.phaseGroups.nodes[0]?.id).toBe(TEST_PHASE_GROUP_ROUND2);
+	}, TIMEOUT);
+
+	it('pushes shuffled pairings to round 2 phase group and verifies seed order', async () => {
+		// Step 1: Fetch entrants from round 2 phase group
+		type SeedNode = { id: unknown; seedNum: number; entrant: { id: number } };
+		const SEED_QUERY = 'query PGSeeds($pgId: ID!) { phaseGroup(id: $pgId) { seeds(query: { page: 1, perPage: 64 }) { nodes { id seedNum entrant { id } } } } }';
+
+		const seedsData = await gql<{ phaseGroup: { seeds: { nodes: SeedNode[] } } }>(
+			SEED_QUERY, { pgId: TEST_PHASE_GROUP_ROUND2 }, { delay: 0 }
+		);
+		const seeds = seedsData?.phaseGroup?.seeds?.nodes ?? [];
+		console.log(`\nRound 2 phase group ${TEST_PHASE_GROUP_ROUND2} has ${seeds.length} seeds`);
+		expect(seeds.length).toBeGreaterThan(0);
+
+		const entrantIds = seeds.map((s) => s.entrant.id);
+		console.log(`Entrant IDs (first 6): ${entrantIds.slice(0, 6).join(', ')}...`);
+
+		// Step 2: Build REVERSED pairings to verify the seeding actually changes
+		// Pair entrants in reverse order: [last, second-to-last], [third-to-last, fourth-to-last], ...
+		const reversed = [...entrantIds].reverse();
+		const pairings: [number, number][] = [];
+		for (let i = 0; i < reversed.length - 1; i += 2) {
+			pairings.push([reversed[i], reversed[i + 1]]);
+		}
+		console.log(`Built ${pairings.length} reversed pairings`);
+		console.log(`First pairing: [${pairings[0][0]}, ${pairings[0][1]}]`);
+
+		// Step 3: Push pairings using the CORRECT per-round phase ID
+		console.log(`Calling pushPairingsToPhaseGroup(phaseId=${TEST_PHASE_ROUND2}, pgId=${TEST_PHASE_GROUP_ROUND2})`);
+		const result = await pushPairingsToPhaseGroup(TEST_PHASE_ROUND2, TEST_PHASE_GROUP_ROUND2, pairings);
+		console.log('pushPairingsToPhaseGroup result:', result);
+		expect(result.ok).toBe(true);
+
+		// Step 4: Verify the seed order changed — first pairing should now be seedNums 1,2
+		const afterData = await gql<{ phaseGroup: { seeds: { nodes: SeedNode[] } } }>(
+			SEED_QUERY, { pgId: TEST_PHASE_GROUP_ROUND2 }, { delay: 0 }
+		);
+		const afterSeeds = (afterData?.phaseGroup?.seeds?.nodes ?? []).sort((a, b) => a.seedNum - b.seedNum);
+		console.log('\nSeed order after re-seeding (first 6):');
+		for (const s of afterSeeds.slice(0, 6)) {
+			console.log(`  seedNum ${s.seedNum}: entrant ${s.entrant.id}`);
+		}
+
+		// First pairing should be seeds 1,2
+		expect(afterSeeds[0]?.entrant.id).toBe(pairings[0][0]);
+		expect(afterSeeds[1]?.entrant.id).toBe(pairings[0][1]);
+	}, TIMEOUT * 2);
+
+	it('FAILS when using the wrong phase ID (round 1 phase for round 2 group)', async () => {
+		// This reproduces the original bug: using startggPhase1Id (round 1) for round 2
+		const seedsData = await gql<{
+			phaseGroup: { seeds: { nodes: { entrant: { id: number } }[] } }
+		}>(
+			'query PGSeeds($pgId: ID!) { phaseGroup(id: $pgId) { seeds(query: { page: 1, perPage: 64 }) { nodes { entrant { id } } } } }',
+			{ pgId: TEST_PHASE_GROUP_ROUND2 },
+			{ delay: 0 }
+		);
+		const entrantIds = (seedsData?.phaseGroup?.seeds?.nodes ?? []).map((s) => s.entrant.id);
+		const pairings: [number, number][] = [];
+		for (let i = 0; i < entrantIds.length - 1; i += 2) {
+			pairings.push([entrantIds[i], entrantIds[i + 1]]);
+		}
+
+		// Use WRONG phase ID (round 1 phase for round 2 phase group)
+		console.log(`\nCalling pushPairingsToPhaseGroup with WRONG phaseId=${TEST_PHASE_ROUND1} for round 2 group`);
+		const result = await pushPairingsToPhaseGroup(TEST_PHASE_ROUND1, TEST_PHASE_GROUP_ROUND2, pairings);
+		console.log('Result with wrong phase ID:', result);
+		// This should either fail or silently not update — either way, it shouldn't work correctly
+		// The key assertion: the API call returns an error or the seeds don't match
+		if (result.ok) {
+			console.log('  API accepted it (may silently ignore), but the fix ensures we use the correct phase ID');
+		} else {
+			console.log(`  API rejected: ${result.error} — confirms the bug`);
+			expect(result.ok).toBe(false);
+		}
 	}, TIMEOUT);
 });

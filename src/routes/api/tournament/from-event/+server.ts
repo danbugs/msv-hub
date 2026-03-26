@@ -74,8 +74,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	// Fetch phase 1 phase groups (used for per-round set lookup), best-effort.
-	const phase1Groups = await fetchPhaseGroups(phaseId).catch(() => []);
+	// Fetch phase groups for ALL Swiss rounds (each StartGG phase = one round).
+	// Excludes "Final Standings" phase. One entry per round, indexed by round-1.
+	const swissPhases = phases.filter((p) => !p.name.toLowerCase().includes('final'));
+	const allRoundGroups: { id: number; displayIdentifier: string; phaseId: number }[] = [];
+	for (const phase of swissPhases) {
+		const groups = await fetchPhaseGroups(phase.id).catch(() => []);
+		if (groups.length > 0) {
+			allRoundGroups.push({ ...groups[0], phaseId: phase.id });
+		}
+	}
 
 	const tourneySlug = slug.replace(/\//g, '-');
 	const entrants: Entrant[] = seeds.map((s, i) => ({
@@ -100,7 +108,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		startggEventId: eventId,
 		startggEventSlug: slug,
 		startggPhase1Id: phaseId,
-		startggPhase1Groups: phase1Groups.length ? phase1Groups : undefined,
+		startggPhase1Groups: allRoundGroups.length ? allRoundGroups : undefined,
 		createdAt: Date.now(),
 		updatedAt: Date.now()
 	};
