@@ -2,7 +2,7 @@ import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
-import { reportSwissMatch, preCacheRoundSetIds } from '$lib/server/startgg-reporter';
+import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
 import { pushPairingsToPhaseGroup } from '$lib/server/startgg';
 import {
 	calculateStandings,
@@ -119,14 +119,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	await saveTournament(tournament);
 
-	// Fire-and-forget: pre-cache StartGG set IDs for all matches in this round so reporting
-	// is a pure push. Done here when the phase group is in a clean, queryable state.
-	// Runs in the background after the round-start response is returned.
+	// Fire-and-forget: trigger StartGG preview→real conversion and cache real set IDs.
+	// Sets cacheReady=false immediately so the UI shows the "Re-hydrating" banner, then
+	// cacheReady=true once real IDs are populated (~30–60 s for round 1; near-instant for later rounds).
 	const pgId = tournament.startggPhase1Groups?.[nextRound - 1]?.id;
 	if (pgId) {
-		preCacheRoundSetIds(tournament, nextRound, pgId)
-			.then(() => saveTournament(tournament))
-			.catch(() => {});
+		if (!tournament.startggSync) {
+			tournament.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
+		}
+		tournament.startggSync.cacheReady = false;
+		await saveTournament(tournament);
+
+		triggerConversionAndCache(tournament, nextRound, pgId).catch(() => {});
 	}
 
 	// Best-effort: push our custom pairings to StartGG's phase group for this round
@@ -182,12 +186,13 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
 
 	const body = await request.json();
-	const { matchId, winnerId, roundNumber, topScore, bottomScore } = body as {
+	const { matchId, winnerId, roundNumber, topScore, bottomScore, isDQ } = body as {
 		matchId: string;
 		winnerId: string;
 		roundNumber?: number;
 		topScore?: number;
 		bottomScore?: number;
+		isDQ?: boolean;
 	};
 
 	if (!matchId || !winnerId) {
@@ -214,8 +219,8 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	const wasMisreport = match.winnerId !== undefined && match.winnerId !== winnerId;
 	match.winnerId = winnerId;
-	if (topScore !== undefined) match.topScore = topScore;
-	if (bottomScore !== undefined) match.bottomScore = bottomScore;
+	if (isDQ) { match.isDQ = true; match.topScore = undefined; match.bottomScore = undefined; }
+	else { match.isDQ = false; if (topScore !== undefined) match.topScore = topScore; if (bottomScore !== undefined) match.bottomScore = bottomScore; }
 
 	// Report to StartGG (best-effort — errors stored on tournament, never block MSV Hub).
 	const sgResult = await reportSwissMatch(tournament, targetRound.number, match).catch(

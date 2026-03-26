@@ -5,6 +5,11 @@ export interface StartggSyncState {
 	pendingBracketMatchIds: string[];
 	/** Recent StartGG errors — shown in UI, cleared on next successful report */
 	errors: { matchId: string; message: string; ts: number }[];
+	/**
+	 * True once the round's set IDs have been pre-cached from StartGG (real IDs, not preview).
+	 * False while triggerConversionAndCache is running. Undefined = no sync attempted yet.
+	 */
+	cacheReady?: boolean;
 }
 
 /** Core tournament state persisted in Redis */
@@ -53,6 +58,8 @@ export interface SwissMatch {
 	winnerId?: string;
 	topScore?: number;
 	bottomScore?: number;
+	/** True if the loser won by DQ (opponent absent) */
+	isDQ?: boolean;
 	station?: number;
 	isStream?: boolean;
 	/** StartGG set ID — cached after first successful match lookup */
@@ -93,6 +100,8 @@ export interface BracketMatch {
 	loserId?: string;
 	topScore?: number;
 	bottomScore?: number;
+	/** True if the loser won by DQ (opponent absent) */
+	isDQ?: boolean;
 	topCharacters?: string[];
 	bottomCharacters?: string[];
 	/** Where winner advances to */

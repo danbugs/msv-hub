@@ -13,6 +13,25 @@
 	// Score selection: { matchId, winnerId } — waiting for score pick
 	let pendingWinner = $state<{ matchId: string; winnerId: string } | null>(null);
 
+	// StartGG rehydration status
+	let rehydrationJustComplete = $state(false);
+	let prevCacheReady: boolean | undefined;
+	$effect(() => {
+		const current = tournament?.startggSync?.cacheReady;
+		if (prevCacheReady === false && current === true) {
+			rehydrationJustComplete = true;
+			setTimeout(() => { rehydrationJustComplete = false; }, 5000);
+		}
+		prevCacheReady = current;
+	});
+	// Poll every 5 s while rehydration is in progress so the banner auto-dismisses
+	onMount(() => {
+		const interval = setInterval(() => {
+			if (tournament?.startggSync?.cacheReady === false) loadTournament();
+		}, 5000);
+		return () => clearInterval(interval);
+	});
+
 	onMount(loadTournament);
 
 	async function loadTournament() {
@@ -51,19 +70,25 @@
 		loading = false;
 	}
 
-	async function reportMatch(matchId: string, winnerId: string, score: '2-0' | '2-1', roundNumber?: number) {
-		const [topScore, bottomScore] = (() => {
+	async function reportMatch(matchId: string, winnerId: string, score: '2-0' | '2-1' | 'DQ', roundNumber?: number) {
+		let topScore: number | undefined;
+		let bottomScore: number | undefined;
+		let isDQ = false;
+
+		if (score === 'DQ') {
+			isDQ = true;
+		} else {
 			const m = getMatch(matchId);
-			if (!m) return [undefined, undefined];
+			if (!m) return;
 			const winnerIsTop = winnerId === m.topPlayerId;
-			if (score === '2-0') return winnerIsTop ? [2, 0] : [0, 2];
-			return winnerIsTop ? [2, 1] : [1, 2];
-		})();
+			if (score === '2-0') { topScore = winnerIsTop ? 2 : 0; bottomScore = winnerIsTop ? 0 : 2; }
+			else { topScore = winnerIsTop ? 2 : 1; bottomScore = winnerIsTop ? 1 : 2; }
+		}
 
 		const res = await fetch('/api/tournament/round', {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ matchId, winnerId, roundNumber, topScore, bottomScore })
+			body: JSON.stringify({ matchId, winnerId, roundNumber, topScore, bottomScore, isDQ })
 		});
 
 		const data = await res.json();
@@ -228,6 +253,21 @@
 				</button>
 			</div>
 
+			<!-- StartGG rehydration status -->
+			{#if tournament.startggSync?.cacheReady === false && tournament.startggPhase1Groups?.length}
+				<div class="mt-4 flex items-center gap-3 rounded-lg border border-yellow-700 bg-yellow-950/60 px-4 py-3 text-sm text-yellow-200">
+					<svg class="h-4 w-4 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M21 12a9 9 0 1 1-6.219-8.56" />
+					</svg>
+					<span><span class="font-semibold">Re-hydrating StartGG</span> — please hold off reporting matches until this banner disappears.</span>
+				</div>
+			{:else if rehydrationJustComplete}
+				<div class="mt-4 flex items-center gap-2 rounded-lg border border-green-700 bg-green-950/60 px-4 py-3 text-sm text-green-200">
+					<span>✓</span>
+					<span><span class="font-semibold">StartGG rehydration complete</span> — you can now report matches.</span>
+				</div>
+			{/if}
+
 			<!-- StartGG sync banners -->
 			{#if tournament.currentRound === 1 && isRoundComplete() && !isFinalRoundComplete() && !dismissedBanners.has('round1-done')}
 				<div class="mt-4 flex items-start gap-2 rounded-lg border border-blue-700 bg-blue-950/60 px-4 py-3 text-sm text-blue-200">
@@ -316,7 +356,9 @@
 											onclick={() => selectWinner(match.id, match.topPlayerId, isCurrent, isFixing)}>
 											<span class="text-xs text-gray-500 mr-1">#{top?.initialSeed}</span>
 											{top?.gamerTag ?? '?'}
-											{#if match.winnerId === match.topPlayerId && match.topScore !== undefined}
+											{#if match.winnerId === match.topPlayerId && match.isDQ}
+												<span class="ml-1 text-xs text-orange-400">DQ win</span>
+											{:else if match.winnerId === match.topPlayerId && match.topScore !== undefined}
 												<span class="ml-1 text-xs text-gray-400">{match.topScore}-{match.bottomScore}</span>
 											{/if}
 										</button>
@@ -335,7 +377,9 @@
 											onclick={() => selectWinner(match.id, match.bottomPlayerId, isCurrent, isFixing)}>
 											<span class="text-xs text-gray-500 mr-1">#{bot?.initialSeed}</span>
 											{bot?.gamerTag ?? '?'}
-											{#if match.winnerId === match.bottomPlayerId && match.bottomScore !== undefined}
+											{#if match.winnerId === match.bottomPlayerId && match.isDQ}
+												<span class="ml-1 text-xs text-orange-400">DQ win</span>
+											{:else if match.winnerId === match.bottomPlayerId && match.bottomScore !== undefined}
 												<span class="ml-1 text-xs text-gray-400">{match.topScore}-{match.bottomScore}</span>
 											{/if}
 										</button>
@@ -371,6 +415,12 @@
 												onclick={() => reportMatch(match.id, pendingWinner!.winnerId, '2-1', round.number)}
 												class="rounded bg-green-700 px-3 py-1 text-xs font-medium text-white hover:bg-green-600">
 												2 – 1
+											</button>
+											<button
+												onclick={() => reportMatch(match.id, pendingWinner!.winnerId, 'DQ', round.number)}
+												class="rounded bg-orange-700 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600"
+												title="Opponent did not show up (DQ)">
+												DQ
 											</button>
 											<button onclick={() => pendingWinner = null}
 												class="text-xs text-gray-500 hover:text-gray-300 px-2">Cancel</button>

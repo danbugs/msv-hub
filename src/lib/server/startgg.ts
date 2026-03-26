@@ -200,11 +200,16 @@ mutation UpdatePhaseSeeding($phaseId: ID!, $seedMapping: [UpdatePhaseSeedInfo]!)
 }`;
 
 export const REPORT_BRACKET_SET_MUTATION = `
-mutation ReportBracketSet($setId: ID!, $winnerId: ID!, $gameData: [BracketSetGameDataInput]) {
-  reportBracketSet(setId: $setId, winnerId: $winnerId, gameData: $gameData) {
+mutation ReportBracketSet($setId: ID!, $winnerId: ID!, $isDQ: Boolean, $gameData: [BracketSetGameDataInput]) {
+  reportBracketSet(setId: $setId, winnerId: $winnerId, isDQ: $isDQ, gameData: $gameData) {
     id
     winnerId
   }
+}`;
+
+export const RESET_SET_MUTATION = `
+mutation ResetSet($setId: ID!) {
+  resetSet(setId: $setId) { id }
 }`;
 
 export const EVENT_PHASE_GROUPS_QUERY = `
@@ -419,12 +424,12 @@ export async function findSetByEntrants(
 export async function reportSet(
 	setId: string,
 	winnerEntrantId: number,
-	extra?: { loserEntrantId?: number; winnerScore?: number; loserScore?: number }
+	extra?: { loserEntrantId?: number; winnerScore?: number; loserScore?: number; isDQ?: boolean }
 ): Promise<{ ok: boolean; reportedSetId?: string; error?: string }> {
 	const token = getToken();
 
 	let gameData: { winnerId: string; gameNum: number }[] | undefined;
-	if (extra?.loserEntrantId && extra.winnerScore !== undefined && extra.loserScore !== undefined) {
+	if (!extra?.isDQ && extra?.loserEntrantId && extra.winnerScore !== undefined && extra.loserScore !== undefined) {
 		const w = String(winnerEntrantId);
 		const l = String(extra.loserEntrantId);
 		if (extra.loserScore === 0) {
@@ -444,6 +449,7 @@ export async function reportSet(
 	}
 
 	const variables: Record<string, unknown> = { setId, winnerId: String(winnerEntrantId) };
+	if (extra?.isDQ) variables.isDQ = true;
 	if (gameData) variables.gameData = gameData;
 
 	let res: Response;
@@ -489,6 +495,31 @@ export async function reportSet(
 	// The mutation returns that new ID in reportBracketSet.id (or null if already real).
 	const reportedId = json.data?.reportBracketSet?.id;
 	return { ok: true, reportedSetId: reportedId != null ? String(reportedId) : undefined };
+}
+
+/**
+ * Reset a StartGG set back to unreported state.
+ * Used after the fake-report that triggers preview→real ID conversion.
+ */
+export async function resetSet(setId: string): Promise<{ ok: boolean; error?: string }> {
+	const token = getToken();
+	try {
+		const res = await fetch(API_URL, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+			body: JSON.stringify({ query: RESET_SET_MUTATION, variables: { setId } })
+		});
+		if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+		const json = await res.json().catch(() => null);
+		if (!json || json.errors?.length) {
+			const msg = (json?.errors as { message?: string }[] | undefined)
+				?.map((e) => e.message ?? JSON.stringify(e)).join('; ') ?? 'Reset failed';
+			return { ok: false, error: msg };
+		}
+		return { ok: true };
+	} catch (e) {
+		return { ok: false, error: e instanceof Error ? e.message : String(e) };
+	}
 }
 
 /**
