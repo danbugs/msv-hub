@@ -259,7 +259,7 @@
 							<span class="shrink-0 font-semibold">StartGG error</span>
 							<span class="min-w-0 flex-1 break-words">{err.message}</span>
 							<button onclick={() => dismissedErrorTs = new Set([...dismissedErrorTs, err.ts])}
-								class="shrink-0 text-red-500 hover:text-red-300 leading-none" title="Dismiss">✕</button>
+								class="shrink-0 text-red-300 hover:text-white leading-none" title="Dismiss">✕</button>
 						</div>
 					{/each}
 					<button onclick={clearStartggErrors}

@@ -89,9 +89,11 @@
 			} else {
 				const data = await res.json().catch(() => ({}));
 				configError = (data as { error?: string }).error ?? `HTTP ${res.status}`;
+				announcementTemplateInput = DEFAULT_TEMPLATE;
 			}
 		} catch (e) {
 			configError = e instanceof Error ? e.message : 'Failed to load config.';
+			announcementTemplateInput = DEFAULT_TEMPLATE;
 		} finally {
 			configLoading = false;
 		}
