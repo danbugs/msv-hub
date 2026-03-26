@@ -200,8 +200,8 @@ mutation UpdatePhaseSeeding($phaseId: ID!, $seedMapping: [UpdatePhaseSeedInfo]!)
 }`;
 
 export const REPORT_BRACKET_SET_MUTATION = `
-mutation ReportBracketSet($setId: ID!, $winnerId: ID!, $gameData: [BracketSetGameDataInput]) {
-  reportBracketSet(setId: $setId, winnerId: $winnerId, gameData: $gameData) {
+mutation ReportBracketSet($setId: ID!, $winnerId: ID!) {
+  reportBracketSet(setId: $setId, winnerId: $winnerId) {
     id
     winnerId
   }
@@ -394,25 +394,9 @@ export async function findSetByEntrants(
  */
 export async function reportSet(
 	setId: string,
-	winnerEntrantId: number,
-	opts?: { loserEntrantId?: number; winnerScore?: number; loserScore?: number }
+	winnerEntrantId: number
 ): Promise<{ ok: boolean; error?: string }> {
-	let gameData: { gameNum: number; winnerId: string }[] | undefined;
-	if (opts?.loserEntrantId && opts?.winnerScore && opts?.loserScore !== undefined) {
-		const w = String(winnerEntrantId);
-		const l = String(opts.loserEntrantId);
-		gameData = [];
-		// Reconstruct per-game winners: winner takes first game, loser interrupts in middle for 2-1
-		const totalGames = opts.winnerScore + opts.loserScore;
-		if (totalGames === 2) {
-			gameData = [{ gameNum: 1, winnerId: w }, { gameNum: 2, winnerId: w }];
-		} else if (totalGames === 3) {
-			gameData = [{ gameNum: 1, winnerId: w }, { gameNum: 2, winnerId: l }, { gameNum: 3, winnerId: w }];
-		}
-	}
-	const variables: Record<string, unknown> = { setId, winnerId: String(winnerEntrantId) };
-	if (gameData) variables.gameData = gameData;
-	const data = await gql(REPORT_BRACKET_SET_MUTATION, variables, { delay: 0 });
+	const data = await gql(REPORT_BRACKET_SET_MUTATION, { setId, winnerId: String(winnerEntrantId) }, { delay: 0 });
 	if (!data) return { ok: false, error: 'StartGG mutation returned null — check token/permissions' };
 	return { ok: true };
 }

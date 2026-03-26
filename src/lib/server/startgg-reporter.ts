@@ -98,15 +98,7 @@ export async function reportSwissMatch(
 		return { ok: false, error: msg };
 	}
 
-	const loserEntrant = entrantMap.get(match.topPlayerId === match.winnerId ? match.bottomPlayerId : match.topPlayerId);
-	const winnerScore = match.winnerId === match.topPlayerId ? match.topScore : match.bottomScore;
-	const loserScore  = match.winnerId === match.topPlayerId ? match.bottomScore : match.topScore;
-
-	const result = await reportSet(setId, winnerEntrant.startggEntrantId, {
-		loserEntrantId: loserEntrant?.startggEntrantId,
-		winnerScore,
-		loserScore
-	});
+	const result = await reportSet(setId, winnerEntrant.startggEntrantId);
 
 	if (result.ok) {
 		match.startggSetId = setId; // cache for future re-reports
@@ -183,15 +175,7 @@ async function _doReportBracketMatch(
 		return { ok: false, error: msg };
 	}
 
-	const loserBracketEntrant = entrantMap.get(match.topPlayerId === match.winnerId ? match.bottomPlayerId! : match.topPlayerId!);
-	const winnerScore = match.winnerId === match.topPlayerId ? match.topScore : match.bottomScore;
-	const loserScore  = match.winnerId === match.topPlayerId ? match.bottomScore : match.topScore;
-
-	const result = await reportSet(setId, winnerEntrant.startggEntrantId, {
-		loserEntrantId: loserBracketEntrant?.startggEntrantId,
-		winnerScore,
-		loserScore
-	});
+	const result = await reportSet(setId, winnerEntrant.startggEntrantId);
 
 	if (result.ok) {
 		match.startggSetId = setId;

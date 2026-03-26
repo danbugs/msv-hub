@@ -14,6 +14,19 @@
 
 	import { goto } from '$app/navigation';
 
+	let loading = $state(false);
+	let error = $state('');
+	let liveLogs = $state<string[]>([]);
+
+	// Start Swiss setup
+	let startingSwiss = $state(false);
+	let numStations = $state('16');
+	let streamStation = $state('16');
+
+	// Start from existing seeded event
+	let eventUrl = $state('');
+	let loadingEvent = $state(false);
+
 	onMount(async () => {
 		const res = await fetch('/api/tournament');
 		if (res.ok) {
@@ -33,19 +46,6 @@
 			}
 		}
 	});
-
-	let loading = $state(false);
-	let error = $state('');
-	let liveLogs = $state<string[]>([]);
-
-	// Start Swiss setup
-	let startingSwiss = $state(false);
-	let numStations = $state('16');
-	let streamStation = $state('16');
-
-	// Start from existing seeded event
-	let eventUrl = $state('');
-	let loadingEvent = $state(false);
 
 	async function startFromEvent() {
 		if (!eventUrl.trim()) return;
