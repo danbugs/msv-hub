@@ -353,19 +353,20 @@ export async function findSetInPhaseGroup(
 		{ delay: 0 }
 	);
 	const nodes = data?.phaseGroup?.sets?.nodes ?? [];
-	// Only return unreported sets. Completed sets (from previous test runs or prior phases)
-	// would result in "Cannot report completed set via API". Re-reports use the cached
-	// match.startggSetId directly and never go through this lookup.
+	// Prefer unreported sets. If only a completed set is found, return it anyway so
+	// reportSet can surface the "Cannot report completed set" error from StartGG rather
+	// than silently returning "set not found".
+	let completedFallback: string | null = null;
 	for (const set of nodes as GqlRecord[]) {
-		if (set.winnerId) continue;
 		const ids: number[] = (set.slots ?? [])
 			.map((s: GqlRecord) => s.entrant?.id as number | undefined)
 			.filter((id: number | undefined): id is number => id !== undefined);
 		if (ids.includes(entrantId1) && ids.includes(entrantId2)) {
-			return String(set.id);
+			if (!set.winnerId) return String(set.id); // unreported — use immediately
+			completedFallback ??= String(set.id);     // completed — remember as fallback
 		}
 	}
-	return null;
+	return completedFallback;
 }
 
 /**
@@ -379,17 +380,18 @@ export async function findSetByEntrants(
 	entrantId2: number
 ): Promise<string | null> {
 	const sets = await fetchAllSets(eventId, undefined, 0); // delay:0 — real-time call
-	// Only return unreported sets (same reasoning as findSetInPhaseGroup above).
+	// Prefer unreported sets; fall back to completed (same reasoning as findSetInPhaseGroup).
+	let completedFallback: string | null = null;
 	for (const set of sets as GqlRecord[]) {
-		if (set.winnerId) continue;
 		const ids: number[] = (set.slots ?? [])
 			.map((s: GqlRecord) => s.entrant?.id as number | undefined)
 			.filter((id: number | undefined): id is number => id !== undefined);
 		if (ids.includes(entrantId1) && ids.includes(entrantId2)) {
-			return String(set.id);
+			if (!set.winnerId) return String(set.id);
+			completedFallback ??= String(set.id);
 		}
 	}
-	return null;
+	return completedFallback;
 }
 
 /**
@@ -453,16 +455,11 @@ export async function reportSet(
 		return { ok: false, error: `StartGG: ${msg}` };
 	}
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const bracketSet = json.data?.reportBracketSet as { id?: string; winnerId?: string | null } | null | undefined;
-	if (!bracketSet?.id) {
-		return { ok: false, error: `StartGG mutation returned empty result for set ${setId} — set may already be locked` };
-	}
-	if (!bracketSet.winnerId) {
-		// Mutation accepted but winner not recorded. Common causes:
-		// - winnerEntrantId (${winnerEntrantId}) is not a valid entrant in set ${setId}
-		// - gameData has conflicting/invalid winnerId values
-		return { ok: false, error: `StartGG accepted set ${setId} but did not record a winner (entrant ${winnerEntrantId}) — entrant ID may be wrong for this set` };
+	// StartGG returns null for reportBracketSet on preview sets even when the mutation
+	// succeeded. Treat "no errors + data field present" as success regardless of whether
+	// the reportBracketSet body is populated.
+	if (!('data' in json)) {
+		return { ok: false, error: `StartGG returned unexpected response shape for set ${setId}` };
 	}
 
 	return { ok: true };
