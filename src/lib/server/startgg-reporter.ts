@@ -79,7 +79,7 @@ export async function reportSwissMatch(
 	const winnerEntrant = entrantMap.get(match.winnerId);
 
 	if (!topEntrant?.startggEntrantId || !botEntrant?.startggEntrantId || !winnerEntrant?.startggEntrantId) {
-		const msg = 'StartGG entrant IDs not found — was tournament loaded from a StartGG event?';
+		const msg = `StartGG entrant IDs not found for ${topEntrant?.gamerTag ?? match.topPlayerId} (${topEntrant?.startggEntrantId ?? 'missing'}) vs ${botEntrant?.gamerTag ?? match.bottomPlayerId} (${botEntrant?.startggEntrantId ?? 'missing'}) — was tournament loaded from a StartGG event?`;
 		addError(sync, match.id, msg);
 		return { ok: false, error: msg };
 	}
@@ -93,7 +93,8 @@ export async function reportSwissMatch(
 	);
 
 	if (!setId) {
-		const msg = `Set not found on StartGG for ${topEntrant.gamerTag} vs ${botEntrant.gamerTag} (round ${roundNumber}). Add players to round ${roundNumber} phase group first.`;
+		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
+		const msg = `Set not found for ${topEntrant.gamerTag} (entrant ${topEntrant.startggEntrantId}) vs ${botEntrant.gamerTag} (entrant ${botEntrant.startggEntrantId}) in phase group ${pgId ?? 'N/A'} (round ${roundNumber}). Unreported set may be missing — check StartGG phase group setup.`;
 		addError(sync, match.id, msg);
 		return { ok: false, error: msg };
 	}

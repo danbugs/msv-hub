@@ -453,8 +453,16 @@ export async function reportSet(
 		return { ok: false, error: `StartGG: ${msg}` };
 	}
 
-	if (!json.data?.reportBracketSet) {
-		return { ok: false, error: 'StartGG mutation returned empty result — set may already be reported or locked' };
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const bracketSet = json.data?.reportBracketSet as { id?: string; winnerId?: string | null } | null | undefined;
+	if (!bracketSet?.id) {
+		return { ok: false, error: `StartGG mutation returned empty result for set ${setId} — set may already be locked` };
+	}
+	if (!bracketSet.winnerId) {
+		// Mutation accepted but winner not recorded. Common causes:
+		// - winnerEntrantId (${winnerEntrantId}) is not a valid entrant in set ${setId}
+		// - gameData has conflicting/invalid winnerId values
+		return { ok: false, error: `StartGG accepted set ${setId} but did not record a winner (entrant ${winnerEntrantId}) — entrant ID may be wrong for this set` };
 	}
 
 	return { ok: true };
