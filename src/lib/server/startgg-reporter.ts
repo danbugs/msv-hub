@@ -6,7 +6,7 @@
  * without blocking the MSV Hub match flow.
  */
 
-import { findSetInPhaseGroup, findSetByEntrants, reportSet } from '$lib/server/startgg';
+import { findSetInPhaseGroup, findSetByEntrants, reportSet, gql, PHASE_GROUP_SETS_QUERY } from '$lib/server/startgg';
 import { saveTournament } from '$lib/server/store';
 import type { TournamentState, SwissMatch, BracketMatch, StartggSyncState } from '$lib/types/tournament';
 
@@ -26,6 +26,59 @@ function addError(sync: StartggSyncState, matchId: string, message: string) {
 
 function clearErrorsForMatch(sync: StartggSyncState, matchId: string) {
 	sync.errors = sync.errors.filter((e) => e.matchId !== matchId);
+}
+
+/**
+ * After reporting a preview set, StartGG converts the entire phase group from preview IDs
+ * to real integer IDs. During this transition window (can be 10-30s), PHASE_GROUP_SETS_QUERY
+ * returns 0 nodes. This function waits for the transition to complete (retrying up to 5×3s),
+ * then bulk-populates startggSetId for every uncached match in the round from a single query.
+ * Called once per round, on the first preview-set report. Subsequent reports use cached IDs.
+ */
+async function rehydrateRoundSetIds(
+	tournament: TournamentState,
+	roundNumber: number,
+	phaseGroupId: number
+): Promise<void> {
+	const round = tournament.rounds.find((r) => r.number === roundNumber);
+	if (!round) return;
+
+	const uncached = round.matches.filter((m) => !m.startggSetId);
+	if (uncached.length === 0) return;
+
+	const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+
+	// Single batch fetch with retry — waits out the preview→real transition window.
+	type GqlNode = { id: unknown; slots: { entrant: { id: unknown } | null }[] };
+	type PGData = { phaseGroup: { sets: { nodes: GqlNode[] } } };
+
+	let nodes: GqlNode[] = [];
+	for (let retry = 0; retry <= 5; retry++) {
+		if (retry > 0) await new Promise<void>((r) => setTimeout(r, 3000));
+		const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
+		nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
+		if (nodes.length > 0) break;
+	}
+	if (nodes.length === 0) return;
+
+	for (const match of uncached) {
+		const top = entrantMap.get(match.topPlayerId);
+		const bot = entrantMap.get(match.bottomPlayerId);
+		if (!top?.startggEntrantId || !bot?.startggEntrantId) continue;
+
+		const e1 = Number(top.startggEntrantId);
+		const e2 = Number(bot.startggEntrantId);
+
+		for (const node of nodes) {
+			const ids = (node.slots ?? [])
+				.map((s) => Number(s.entrant?.id))
+				.filter((id): id is number => !isNaN(id) && id > 0);
+			if (ids.includes(e1) && ids.includes(e2)) {
+				match.startggSetId = String(node.id);
+				break;
+			}
+		}
+	}
 }
 
 /** Resolve the StartGG set ID for a match, using cached ID when available. */
@@ -116,6 +169,17 @@ export async function reportSwissMatch(
 		// Using result.reportedSetId ensures re-reports hit the real set, not the stale preview ID.
 		match.startggSetId = result.reportedSetId ?? setId;
 		clearErrorsForMatch(sync, match.id);
+
+		// Reporting a preview set triggers a phase group conversion: ALL preview IDs become real
+		// integer IDs. During the transition window (10-30s), subsequent set lookups return 0
+		// nodes and fail with "Set not found". Rehydrate all remaining uncached matches in this
+		// round now (one batch fetch) so they skip findSetInPhaseGroup entirely.
+		if (setId.startsWith('preview_')) {
+			const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
+			if (pgId) {
+				await rehydrateRoundSetIds(tournament, roundNumber, pgId).catch(() => {});
+			}
+		}
 	} else {
 		addError(sync, match.id, result.error ?? 'Unknown StartGG error');
 	}
