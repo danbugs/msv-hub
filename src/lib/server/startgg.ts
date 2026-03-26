@@ -253,12 +253,14 @@ async function fetchAllPages<T>(
 	query: string,
 	variables: Record<string, unknown>,
 	pathToData: (data: Record<string, unknown>) => PagedResult<T> | null,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	delay?: number
 ): Promise<T[]> {
 	const all: T[] = [];
 	let page = 1;
 	while (true) {
-		const data = await gql(query, { ...variables, page, perPage: SETS_PER_PAGE }, signal);
+		const opts = delay !== undefined ? { signal, delay } : signal;
+		const data = await gql(query, { ...variables, page, perPage: SETS_PER_PAGE }, opts);
 		if (!data) break;
 		const paged = pathToData(data as Record<string, unknown>);
 		if (!paged) break;
@@ -272,11 +274,11 @@ async function fetchAllPages<T>(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type GqlRecord = Record<string, any>;
 
-export async function fetchAllSets(eventId: number, signal?: AbortSignal): Promise<GqlRecord[]> {
+export async function fetchAllSets(eventId: number, signal?: AbortSignal, delay?: number): Promise<GqlRecord[]> {
 	return fetchAllPages(EVENT_SETS_QUERY, { eventId }, (d) => {
 		const event = d.event as GqlRecord | undefined;
 		return event?.sets ?? null;
-	}, signal);
+	}, signal, delay);
 }
 
 export async function fetchAllEntrants(eventId: number, signal?: AbortSignal): Promise<GqlRecord[]> {
@@ -355,7 +357,7 @@ export async function findSetInPhaseGroup(
 		const ids: number[] = (set.slots ?? [])
 			.map((s: GqlRecord) => s.entrant?.id as number | undefined)
 			.filter((id: number | undefined): id is number => id !== undefined);
-		if (ids.includes(entrantId1) && ids.includes(entrantId2) && !set.winnerId) {
+		if (ids.includes(entrantId1) && ids.includes(entrantId2)) {
 			return String(set.id);
 		}
 	}
@@ -372,12 +374,12 @@ export async function findSetByEntrants(
 	entrantId1: number,
 	entrantId2: number
 ): Promise<string | null> {
-	const sets = await fetchAllSets(eventId, undefined);
+	const sets = await fetchAllSets(eventId, undefined, 0); // delay:0 — real-time call
 	for (const set of sets as GqlRecord[]) {
 		const ids: number[] = (set.slots ?? [])
 			.map((s: GqlRecord) => s.entrant?.id as number | undefined)
 			.filter((id: number | undefined): id is number => id !== undefined);
-		if (ids.includes(entrantId1) && ids.includes(entrantId2) && !set.winnerId) {
+		if (ids.includes(entrantId1) && ids.includes(entrantId2)) {
 			return String(set.id);
 		}
 	}
@@ -425,11 +427,11 @@ export async function pushPairingsToPhaseGroup(
 	phaseGroupId: number,
 	pairings: [number, number][]  // [startggEntrantId1, startggEntrantId2][]
 ): Promise<{ ok: boolean; error?: string }> {
-	// Fetch seeds in this phase group to get seedId per entrant
+	// Fetch seeds in this phase group to get seedId per entrant (delay:0 — real-time call)
 	const seeds = await fetchAllPages(PHASE_GROUP_SEEDS_QUERY, { phaseGroupId }, (d) => {
 		const pg = d.phaseGroup as GqlRecord | undefined;
 		return pg?.seeds ?? null;
-	}, undefined).catch(() => [] as GqlRecord[]);
+	}, undefined, 0).catch(() => [] as GqlRecord[]);
 
 	if (!(seeds as GqlRecord[]).length) {
 		return { ok: false, error: 'Phase group has no seeds — add players first' };

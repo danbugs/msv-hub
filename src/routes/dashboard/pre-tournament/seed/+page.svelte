@@ -18,7 +18,19 @@
 		const res = await fetch('/api/tournament');
 		if (res.ok) {
 			const t = await res.json();
-			if (t?.startggEventSlug) eventUrl = t.startggEventSlug;
+			if (t?.startggEventSlug) {
+				eventUrl = t.startggEventSlug;
+			} else if (t?.slug) {
+				// Fallback for older tournaments: reconstruct slug from stored slug field.
+				// tournament/foo/event/bar was stored as tournament-foo-event-bar.
+				const s: string = t.slug;
+				const idx = s.indexOf('-event-');
+				if (idx > 0) {
+					const tPart = s.slice(0, idx).replace('-', '/');
+					const ePart = s.slice(idx + 1).replace('-', '/');
+					eventUrl = tPart + '/' + ePart;
+				}
+			}
 		}
 	});
 

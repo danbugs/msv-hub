@@ -9,6 +9,7 @@
 	let showSetup = $state(false);
 	let fixingMatchId = $state<string | null>(null);
 	let dismissedBanners = $state(new Set<string>());
+	let dismissedErrorTs = $state(new Set<number>());
 	// Score selection: { matchId, winnerId } — waiting for score pick
 	let pendingWinner = $state<{ matchId: string; winnerId: string } | null>(null);
 
@@ -251,16 +252,18 @@
 				</div>
 			{/if}
 
-			{#if tournament.startggSync?.errors?.length}
+			{#if tournament.startggSync?.errors?.filter(e => !dismissedErrorTs.has(e.ts)).length}
 				<div class="mt-4 space-y-1">
-					{#each tournament.startggSync.errors as err}
+					{#each tournament.startggSync.errors.filter(e => !dismissedErrorTs.has(e.ts)) as err}
 						<div class="flex items-start gap-2 rounded-lg border border-red-800 bg-red-950/60 px-3 py-2 text-xs text-red-300">
 							<span class="shrink-0 font-semibold">StartGG error</span>
 							<span class="min-w-0 flex-1 break-words">{err.message}</span>
+							<button onclick={() => dismissedErrorTs = new Set([...dismissedErrorTs, err.ts])}
+								class="shrink-0 text-red-500 hover:text-red-300 leading-none" title="Dismiss">✕</button>
 						</div>
 					{/each}
 					<button onclick={clearStartggErrors}
-						class="text-xs text-gray-500 hover:text-gray-300 px-1">Clear errors</button>
+						class="text-xs text-gray-500 hover:text-gray-300 px-1">Clear all</button>
 				</div>
 			{/if}
 
