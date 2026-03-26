@@ -353,7 +353,11 @@ export async function findSetInPhaseGroup(
 		{ delay: 0 }
 	);
 	const nodes = data?.phaseGroup?.sets?.nodes ?? [];
+	// Only return unreported sets. Completed sets (from previous test runs or prior phases)
+	// would result in "Cannot report completed set via API". Re-reports use the cached
+	// match.startggSetId directly and never go through this lookup.
 	for (const set of nodes as GqlRecord[]) {
+		if (set.winnerId) continue;
 		const ids: number[] = (set.slots ?? [])
 			.map((s: GqlRecord) => s.entrant?.id as number | undefined)
 			.filter((id: number | undefined): id is number => id !== undefined);
@@ -375,7 +379,9 @@ export async function findSetByEntrants(
 	entrantId2: number
 ): Promise<string | null> {
 	const sets = await fetchAllSets(eventId, undefined, 0); // delay:0 — real-time call
+	// Only return unreported sets (same reasoning as findSetInPhaseGroup above).
 	for (const set of sets as GqlRecord[]) {
+		if (set.winnerId) continue;
 		const ids: number[] = (set.slots ?? [])
 			.map((s: GqlRecord) => s.entrant?.id as number | undefined)
 			.filter((id: number | undefined): id is number => id !== undefined);

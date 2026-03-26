@@ -30,7 +30,7 @@
 		{ value: 'general',        label: '#general' },
 		{ value: 'announcements',  label: '#announcements' }
 	];
-	let roundAnnounceChannel = $state('talk-to-balrog');
+	let roundAnnounceChannel = $state('announcements');
 
 	async function startNextRound(regenerate = false) {
 		loading = true;

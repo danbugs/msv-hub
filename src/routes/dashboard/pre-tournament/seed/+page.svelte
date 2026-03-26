@@ -28,21 +28,22 @@
 	let loadingEvent = $state(false);
 
 	onMount(async () => {
-		const res = await fetch('/api/tournament');
-		if (res.ok) {
-			const t = await res.json();
+		// 1. Try active tournament first
+		const tourneyRes = await fetch('/api/tournament');
+		if (tourneyRes.ok) {
+			const t = await tourneyRes.json();
 			if (t?.startggEventSlug) {
 				eventUrl = t.startggEventSlug;
-			} else if (t?.slug) {
-				// Fallback for older tournaments: reconstruct slug from stored slug field.
-				// tournament/foo/event/bar was stored as tournament-foo-event-bar.
-				const s: string = t.slug;
-				const idx = s.indexOf('-event-');
-				if (idx > 0) {
-					const tPart = s.slice(0, idx).replace('-', '/');
-					const ePart = s.slice(idx + 1).replace('-', '/');
-					eventUrl = tPart + '/' + ePart;
-				}
+				return;
+			}
+		}
+
+		// 2. Fall back to Discord config event slug (the upcoming event)
+		const cfgRes = await fetch('/api/discord/config');
+		if (cfgRes.ok) {
+			const cfg = await cfgRes.json();
+			if (cfg?.eventSlug) {
+				eventUrl = cfg.eventSlug;
 			}
 		}
 	});
