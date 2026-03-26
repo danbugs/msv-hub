@@ -458,6 +458,12 @@ export async function reportSet(
 		return { ok: false, error: `Network error: ${e instanceof Error ? e.message : String(e)}` };
 	}
 
+	if (res.status === 429) {
+		console.warn('StartGG rate limited on reportSet, waiting 10s...');
+		await new Promise<void>((r) => setTimeout(r, 10_000));
+		return reportSet(setId, winnerEntrantId, extra);
+	}
+
 	if (!res.ok) {
 		const text = await res.text().catch(() => '');
 		return { ok: false, error: `StartGG HTTP ${res.status}: ${text.slice(0, 200)}` };

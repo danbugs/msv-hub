@@ -28,14 +28,20 @@ function clearErrorsForMatch(sync: StartggSyncState, matchId: string) {
 	sync.errors = sync.errors.filter((e) => e.matchId !== matchId);
 }
 
+// ── Batch set-ID caching ─────────────────────────────────────────────────────
+
 /**
- * After reporting a preview set, StartGG converts the entire phase group from preview IDs
- * to real integer IDs. During this transition window (can be 10-30s), PHASE_GROUP_SETS_QUERY
- * returns 0 nodes. This function waits for the transition to complete (retrying up to 5×3s),
- * then bulk-populates startggSetId for every uncached match in the round from a single query.
- * Called once per round, on the first preview-set report. Subsequent reports use cached IDs.
+ * Fetch all sets for a phase group and populate startggSetId on every match in the round
+ * whose entrant pair matches a set in the group. Single batch query — no per-match calls.
+ *
+ * Used in two places:
+ *   1. At round start ("Start Round N" click) — proactively caches IDs before any reporting.
+ *   2. After the first preview set is reported — rehydrates from real IDs once the phase
+ *      group has finished converting from preview→real.
+ *
+ * Retries up to 5×3 s on empty results to handle the preview→real transition window.
  */
-async function rehydrateRoundSetIds(
+export async function preCacheRoundSetIds(
 	tournament: TournamentState,
 	roundNumber: number,
 	phaseGroupId: number
@@ -43,12 +49,8 @@ async function rehydrateRoundSetIds(
 	const round = tournament.rounds.find((r) => r.number === roundNumber);
 	if (!round) return;
 
-	const uncached = round.matches.filter((m) => !m.startggSetId);
-	if (uncached.length === 0) return;
-
 	const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
 
-	// Single batch fetch with retry — waits out the preview→real transition window.
 	type GqlNode = { id: unknown; slots: { entrant: { id: unknown } | null }[] };
 	type PGData = { phaseGroup: { sets: { nodes: GqlNode[] } } };
 
@@ -61,7 +63,7 @@ async function rehydrateRoundSetIds(
 	}
 	if (nodes.length === 0) return;
 
-	for (const match of uncached) {
+	for (const match of round.matches) {
 		const top = entrantMap.get(match.topPlayerId);
 		const bot = entrantMap.get(match.bottomPlayerId);
 		if (!top?.startggEntrantId || !bot?.startggEntrantId) continue;
@@ -80,6 +82,8 @@ async function rehydrateRoundSetIds(
 		}
 	}
 }
+
+// ── Set ID resolution ────────────────────────────────────────────────────────
 
 /** Resolve the StartGG set ID for a match, using cached ID when available. */
 async function resolveSetId(
@@ -118,6 +122,12 @@ async function resolveSetId(
  * Report a Swiss match result to StartGG.
  * Updates tournament in-place (sets startggSetId on match, records errors).
  * Caller must call saveTournament() after this returns.
+ *
+ * If the cached set ID is a preview ID that has since been invalidated (because another
+ * match in the phase group was already reported), the first reportSet call will fail and
+ * this function automatically retries with a fresh lookup. On success it also fires a
+ * background preCacheRoundSetIds so the remaining matches get their real IDs populated
+ * before the next report comes in.
  */
 export async function reportSwissMatch(
 	tournament: TournamentState,
@@ -139,7 +149,7 @@ export async function reportSwissMatch(
 		return { ok: false, error: msg };
 	}
 
-	const setId = await resolveSetId(
+	let setId = await resolveSetId(
 		tournament,
 		topEntrant.startggEntrantId,
 		botEntrant.startggEntrantId,
@@ -158,26 +168,49 @@ export async function reportSwissMatch(
 	const winnerScore = match.winnerId === match.topPlayerId ? match.topScore : match.bottomScore;
 	const loserScore  = match.winnerId === match.topPlayerId ? match.bottomScore : match.topScore;
 
-	const result = await reportSet(setId, winnerEntrant.startggEntrantId, {
+	let result = await reportSet(setId, winnerEntrant.startggEntrantId, {
 		loserEntrantId: loserEntrant.startggEntrantId,
 		winnerScore,
 		loserScore
 	});
 
+	// If we used a cached preview ID and the report failed, the phase group may have already
+	// converted to real IDs (because another match was reported first). Clear the stale preview
+	// ID and retry with a fresh lookup — findSetInPhaseGroup will wait out the transition.
+	if (!result.ok && setId.startsWith('preview_')) {
+		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
+		if (pgId) {
+			match.startggSetId = undefined; // discard stale preview cache
+			const freshId = await findSetInPhaseGroup(
+				pgId,
+				topEntrant.startggEntrantId,
+				botEntrant.startggEntrantId
+			).catch(() => null);
+			if (freshId && freshId !== setId) {
+				setId = freshId;
+				result = await reportSet(setId, winnerEntrant.startggEntrantId, {
+					loserEntrantId: loserEntrant.startggEntrantId,
+					winnerScore,
+					loserScore
+				});
+			}
+		}
+	}
+
 	if (result.ok) {
-		// Cache the real set ID — for preview sets StartGG creates a new integer ID on report.
-		// Using result.reportedSetId ensures re-reports hit the real set, not the stale preview ID.
 		match.startggSetId = result.reportedSetId ?? setId;
 		clearErrorsForMatch(sync, match.id);
 
-		// Reporting a preview set triggers a phase group conversion: ALL preview IDs become real
-		// integer IDs. During the transition window (10-30s), subsequent set lookups return 0
-		// nodes and fail with "Set not found". Rehydrate all remaining uncached matches in this
-		// round now (one batch fetch) so they skip findSetInPhaseGroup entirely.
+		// If we just reported a preview set, StartGG is converting the whole phase group
+		// to real IDs. Fire off a background preCacheRoundSetIds so the remaining matches
+		// get their real set IDs populated before the next report comes in.
+		// Fire-and-forget: doesn't block the current response; saves the tournament when done.
 		if (setId.startsWith('preview_')) {
 			const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
 			if (pgId) {
-				await rehydrateRoundSetIds(tournament, roundNumber, pgId).catch(() => {});
+				preCacheRoundSetIds(tournament, roundNumber, pgId)
+					.then(() => saveTournament(tournament))
+					.catch(() => {});
 			}
 		}
 	} else {
