@@ -8,8 +8,10 @@ export default defineConfig({
 	test: {
 		include: ['src/**/*.test.ts'],
 		environment: 'node',
+		setupFiles: ['src/test-setup.ts'],
 		alias: {
-			'$lib': path.resolve('./src/lib')
+			'$lib': path.resolve('./src/lib'),
+			'$env/dynamic/private': path.resolve('./src/lib/server/__env_shim__.ts')
 		}
 	}
 });
