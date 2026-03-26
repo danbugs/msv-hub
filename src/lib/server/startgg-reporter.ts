@@ -98,7 +98,15 @@ export async function reportSwissMatch(
 		return { ok: false, error: msg };
 	}
 
-	const result = await reportSet(setId, winnerEntrant.startggEntrantId);
+	const loserEntrant = winnerEntrant === topEntrant ? botEntrant : topEntrant;
+	const winnerScore = match.winnerId === match.topPlayerId ? match.topScore : match.bottomScore;
+	const loserScore  = match.winnerId === match.topPlayerId ? match.bottomScore : match.topScore;
+
+	const result = await reportSet(setId, winnerEntrant.startggEntrantId, {
+		loserEntrantId: loserEntrant.startggEntrantId,
+		winnerScore,
+		loserScore
+	});
 
 	if (result.ok) {
 		match.startggSetId = setId; // cache for future re-reports
@@ -175,7 +183,15 @@ async function _doReportBracketMatch(
 		return { ok: false, error: msg };
 	}
 
-	const result = await reportSet(setId, winnerEntrant.startggEntrantId);
+	const loserEntrant = winnerEntrant === topEntrant ? botEntrant : topEntrant;
+	const winnerScore = match.winnerId === match.topPlayerId ? match.topScore : match.bottomScore;
+	const loserScore  = match.winnerId === match.topPlayerId ? match.bottomScore : match.topScore;
+
+	const result = await reportSet(setId, winnerEntrant.startggEntrantId, {
+		loserEntrantId: loserEntrant.startggEntrantId,
+		winnerScore,
+		loserScore
+	});
 
 	if (result.ok) {
 		match.startggSetId = setId;

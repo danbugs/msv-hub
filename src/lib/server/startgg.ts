@@ -200,8 +200,8 @@ mutation UpdatePhaseSeeding($phaseId: ID!, $seedMapping: [UpdatePhaseSeedInfo]!)
 }`;
 
 export const REPORT_BRACKET_SET_MUTATION = `
-mutation ReportBracketSet($setId: ID!, $winnerId: ID!) {
-  reportBracketSet(setId: $setId, winnerId: $winnerId) {
+mutation ReportBracketSet($setId: ID!, $winnerId: ID!, $gameData: [BracketSetGameDataInput]) {
+  reportBracketSet(setId: $setId, winnerId: $winnerId, gameData: $gameData) {
     id
     winnerId
   }
@@ -387,17 +387,70 @@ export async function findSetByEntrants(
 }
 
 /**
- * Report a StartGG set result with optional game-by-game data (for score display).
- * winnerEntrantId/loserEntrantId must be StartGG entrant IDs.
- * topScore/bottomScore are games won (e.g. 2-0 or 2-1) from MSV Hub's perspective.
- * Uses delay:0 — safe for real-time calls.
+ * Report a StartGG set result, optionally with per-game data for 2-0 vs 2-1 display.
+ * Bypasses gql() so the actual GraphQL error message is surfaced on failure.
+ * Uses no delay — safe for real-time calls.
  */
 export async function reportSet(
 	setId: string,
-	winnerEntrantId: number
+	winnerEntrantId: number,
+	extra?: { loserEntrantId?: number; winnerScore?: number; loserScore?: number }
 ): Promise<{ ok: boolean; error?: string }> {
-	const data = await gql(REPORT_BRACKET_SET_MUTATION, { setId, winnerId: String(winnerEntrantId) }, { delay: 0 });
-	if (!data) return { ok: false, error: 'StartGG mutation returned null — check token/permissions' };
+	const token = getToken();
+
+	let gameData: { winnerId: string; gameNum: number }[] | undefined;
+	if (extra?.loserEntrantId && extra.winnerScore !== undefined && extra.loserScore !== undefined) {
+		const w = String(winnerEntrantId);
+		const l = String(extra.loserEntrantId);
+		if (extra.loserScore === 0) {
+			// 2-0
+			gameData = [
+				{ gameNum: 1, winnerId: w },
+				{ gameNum: 2, winnerId: w }
+			];
+		} else {
+			// 2-1: winner takes games 1 & 3, loser takes game 2
+			gameData = [
+				{ gameNum: 1, winnerId: w },
+				{ gameNum: 2, winnerId: l },
+				{ gameNum: 3, winnerId: w }
+			];
+		}
+	}
+
+	const variables: Record<string, unknown> = { setId, winnerId: String(winnerEntrantId) };
+	if (gameData) variables.gameData = gameData;
+
+	let res: Response;
+	try {
+		res = await fetch(API_URL, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+			body: JSON.stringify({ query: REPORT_BRACKET_SET_MUTATION, variables })
+		});
+	} catch (e) {
+		return { ok: false, error: `Network error: ${e instanceof Error ? e.message : String(e)}` };
+	}
+
+	if (!res.ok) {
+		const text = await res.text().catch(() => '');
+		return { ok: false, error: `StartGG HTTP ${res.status}: ${text.slice(0, 200)}` };
+	}
+
+	const json = await res.json().catch(() => null);
+	if (!json) return { ok: false, error: 'StartGG returned non-JSON response' };
+
+	if (json.errors?.length) {
+		const msg = (json.errors as { message?: string }[])
+			.map((e) => e.message ?? JSON.stringify(e))
+			.join('; ');
+		return { ok: false, error: `StartGG: ${msg}` };
+	}
+
+	if (!json.data?.reportBracketSet) {
+		return { ok: false, error: 'StartGG mutation returned empty result — set may already be reported or locked' };
+	}
+
 	return { ok: true };
 }
 
