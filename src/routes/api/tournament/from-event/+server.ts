@@ -6,9 +6,8 @@ import {
 	EVENT_BY_SLUG_QUERY,
 	EVENT_PHASES_QUERY,
 	fetchPhaseSeedsWithTags,
-	fetchAllEntrants,
-	fetchPhaseGroups,
-	extractGamerTag
+	fetchPhaseSeeds,
+	fetchPhaseGroups
 } from '$lib/server/startgg';
 import type { TournamentState, Entrant } from '$lib/types/tournament';
 
@@ -49,8 +48,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 	const phaseId = phases[0].id;
 
-	// Fetch seeds with gamer tags
-	const seeds = await fetchPhaseSeedsWithTags(phaseId);
+	// Fetch seeds (tags for display + raw for entrant IDs) in parallel.
+	const [seeds, sgSeeds] = await Promise.all([
+		fetchPhaseSeedsWithTags(phaseId),
+		fetchPhaseSeeds(phaseId).catch(() => [])
+	]);
 	if (!seeds.length) {
 		return Response.json({ error: 'No seeds found in first phase' }, { status: 404 });
 	}
@@ -60,12 +62,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'Too few stations for this number of players' }, { status: 400 });
 	}
 
-	// Build entrant ID map from StartGG (gamerTag → startggEntrantId), best-effort.
-	const sgEntrants = await fetchAllEntrants(eventId).catch(() => []);
-	const sgEntrantMap = new Map<string, number>();
-	for (const e of sgEntrants) {
-		const tag = extractGamerTag(e).toLowerCase();
-		sgEntrantMap.set(tag, e.id as number);
+	// Build seedNum → startggEntrantId map (exact match by seed number, no fragile gamerTag comparison).
+	const sgSeedToEntrantId = new Map<number, number>();
+	for (const seed of sgSeeds) {
+		const seedNum = seed.seedNum as number | undefined;
+		const entrantId = (seed.entrant as { id?: number } | undefined)?.id;
+		if (seedNum && entrantId) sgSeedToEntrantId.set(seedNum, entrantId);
 	}
 
 	// Fetch phase 1 phase groups (used for per-round set lookup), best-effort.
@@ -76,7 +78,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		id: `e-${i + 1}`,
 		gamerTag: s.gamerTag,
 		initialSeed: s.seedNum,
-		startggEntrantId: sgEntrantMap.get(s.gamerTag.toLowerCase())
+		startggEntrantId: sgSeedToEntrantId.get(s.seedNum)
 	}));
 
 	const state: TournamentState = {
