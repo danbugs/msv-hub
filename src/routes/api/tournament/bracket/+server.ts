@@ -1,6 +1,7 @@
 import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { reportBracketMatch } from '$lib/server/swiss';
+import { reportBracketMatch as reportBracketMatchToStartGG } from '$lib/server/startgg-reporter';
 
 /** PATCH — report a bracket match result */
 export const PATCH: RequestHandler = async ({ request, locals }) => {
@@ -43,6 +44,21 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	if (allComplete) tournament.phase = 'completed';
 
+	// Report to StartGG (queued if split not yet confirmed).
+	const reportedMatch = tournament.brackets[bracketName].matches.find((m) => m.id === matchId)!;
+	const sgResult = await reportBracketMatchToStartGG(tournament, bracketName, reportedMatch).catch(
+		(e) => ({ ok: false, queued: false, error: e instanceof Error ? e.message : String(e) })
+	);
+
 	await saveTournament(tournament);
-	return Response.json({ ok: true, bracket: tournament.brackets[bracketName], tournamentComplete: allComplete });
+	return Response.json({
+		ok: true,
+		bracket: tournament.brackets[bracketName],
+		tournamentComplete: allComplete,
+		startgg: {
+			ok: sgResult.ok,
+			queued: sgResult.queued ?? false,
+			error: sgResult.ok ? undefined : sgResult.error
+		}
+	});
 };

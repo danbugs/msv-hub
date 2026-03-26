@@ -1,7 +1,15 @@
 import type { RequestHandler } from './$types';
 import { saveTournament } from '$lib/server/store';
 import { calculateRecommendedRounds } from '$lib/server/swiss';
-import { gql, EVENT_BY_SLUG_QUERY, EVENT_PHASES_QUERY, fetchPhaseSeedsWithTags } from '$lib/server/startgg';
+import {
+	gql,
+	EVENT_BY_SLUG_QUERY,
+	EVENT_PHASES_QUERY,
+	fetchPhaseSeedsWithTags,
+	fetchAllEntrants,
+	fetchPhaseGroups,
+	extractGamerTag
+} from '$lib/server/startgg';
 import type { TournamentState, Entrant } from '$lib/types/tournament';
 
 /** POST — create a tournament from an existing StartGG event's seedings */
@@ -52,11 +60,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'Too few stations for this number of players' }, { status: 400 });
 	}
 
+	// Build entrant ID map from StartGG (gamerTag → startggEntrantId), best-effort.
+	const sgEntrants = await fetchAllEntrants(eventId).catch(() => []);
+	const sgEntrantMap = new Map<string, number>();
+	for (const e of sgEntrants) {
+		const tag = extractGamerTag(e).toLowerCase();
+		sgEntrantMap.set(tag, e.id as number);
+	}
+
+	// Fetch phase 1 phase groups (used for per-round set lookup), best-effort.
+	const phase1Groups = await fetchPhaseGroups(phaseId).catch(() => []);
+
 	const tourneySlug = slug.replace(/\//g, '-');
 	const entrants: Entrant[] = seeds.map((s, i) => ({
 		id: `e-${i + 1}`,
 		gamerTag: s.gamerTag,
-		initialSeed: s.seedNum
+		initialSeed: s.seedNum,
+		startggEntrantId: sgEntrantMap.get(s.gamerTag.toLowerCase())
 	}));
 
 	const state: TournamentState = {
@@ -71,6 +91,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		},
 		rounds: [],
 		currentRound: 0,
+		startggEventId: eventId,
+		startggPhase1Groups: phase1Groups.length ? phase1Groups : undefined,
 		createdAt: Date.now(),
 		updatedAt: Date.now()
 	};

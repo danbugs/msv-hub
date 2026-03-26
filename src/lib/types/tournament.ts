@@ -1,3 +1,12 @@
+export interface StartggSyncState {
+	/** True once the user confirms the main/redemption split is reflected in StartGG */
+	splitConfirmed: boolean;
+	/** Bracket match IDs (bracketName:matchId) awaiting report once split is confirmed */
+	pendingBracketMatchIds: string[];
+	/** Recent StartGG errors — shown in UI, cleared on next successful report */
+	errors: { matchId: string; message: string; ts: number }[];
+}
+
 /** Core tournament state persisted in Redis */
 export interface TournamentState {
 	slug: string;
@@ -11,12 +20,20 @@ export interface TournamentState {
 	brackets?: { main: BracketState; redemption: BracketState };
 	createdAt: number;
 	updatedAt: number;
+	/** StartGG event ID — set when tournament is loaded from a StartGG event */
+	startggEventId?: number;
+	/** Phase groups for the Swiss phase (phase 1), sorted by displayIdentifier */
+	startggPhase1Groups?: { id: number; displayIdentifier: string }[];
+	/** StartGG sync state for bracket reporting */
+	startggSync?: StartggSyncState;
 }
 
 export interface Entrant {
 	id: string;
 	gamerTag: string;
 	initialSeed: number;
+	/** StartGG entrant ID — populated when tournament is loaded from a StartGG event */
+	startggEntrantId?: number;
 }
 
 export interface TournamentSettings {
@@ -34,6 +51,8 @@ export interface SwissMatch {
 	bottomScore?: number;
 	station?: number;
 	isStream?: boolean;
+	/** StartGG set ID — cached after first successful match lookup */
+	startggSetId?: string;
 }
 
 export interface SwissRound {
@@ -82,6 +101,8 @@ export interface BracketMatch {
 	isStream?: boolean;
 	/** Timestamp (ms) when TO called this match to the station */
 	calledAt?: number;
+	/** StartGG set ID — cached after first successful match lookup */
+	startggSetId?: string;
 }
 
 export interface BracketState {

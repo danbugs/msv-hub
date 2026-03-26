@@ -221,6 +221,33 @@
 				</button>
 			</div>
 
+			<!-- StartGG sync banners -->
+			{#if tournament.currentRound === 1 && isRoundComplete() && !isFinalRoundComplete()}
+				<div class="mt-4 rounded-lg border border-blue-800 bg-blue-900/20 px-4 py-3 text-sm text-blue-300">
+					<span class="font-semibold">StartGG:</span> Before starting round 2, add all players to
+					<strong>Swiss rounds 2–{tournament.settings.numRounds} and Final Standings</strong> phase groups on StartGG.
+					This lets result reporting work for all remaining rounds.
+				</div>
+			{/if}
+
+			{#if isFinalRoundComplete()}
+				<div class="mt-4 rounded-lg border border-amber-800 bg-amber-900/20 px-4 py-3 text-sm text-amber-300">
+					<span class="font-semibold">StartGG:</span> Swiss is complete — go to StartGG and
+					<strong>finalize the standings</strong> phase group before generating the bracket split.
+				</div>
+			{/if}
+
+			{#if tournament.startggSync?.errors?.length}
+				<div class="mt-4 space-y-1">
+					{#each tournament.startggSync.errors as err}
+						<div class="flex items-start gap-2 rounded-lg border border-red-800 bg-red-900/20 px-3 py-2 text-xs text-red-400">
+							<span class="shrink-0 font-semibold">StartGG error</span>
+							<span class="min-w-0 break-words">{err.message}</span>
+						</div>
+					{/each}
+				</div>
+			{/if}
+
 			<!-- Rounds (most recent first) -->
 			{#each [...tournament.rounds].reverse() as round}
 				{@const isCurrent = round.status === 'active'}

@@ -2,6 +2,7 @@ import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
+import { reportSwissMatch } from '$lib/server/startgg-reporter';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -184,12 +185,18 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (topScore !== undefined) match.topScore = topScore;
 	if (bottomScore !== undefined) match.bottomScore = bottomScore;
 
+	// Report to StartGG (best-effort — errors stored on tournament, never block MSV Hub).
+	const sgResult = await reportSwissMatch(tournament, targetRound.number, match).catch(
+		(e) => ({ ok: false, error: e instanceof Error ? e.message : String(e) })
+	);
+
 	await saveTournament(tournament);
 
 	return Response.json({
 		ok: true,
 		match,
 		wasMisreport,
-		roundComplete: targetRound.matches.every((m) => m.winnerId)
+		roundComplete: targetRound.matches.every((m) => m.winnerId),
+		startgg: { ok: sgResult.ok, error: sgResult.ok ? undefined : sgResult.error }
 	});
 };

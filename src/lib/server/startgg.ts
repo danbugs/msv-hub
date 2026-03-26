@@ -24,9 +24,17 @@ async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 export async function gql<T = Record<string, unknown>>(
 	query: string,
 	variables: Record<string, unknown>,
-	signal?: AbortSignal
+	signalOrOptions?: AbortSignal | { signal?: AbortSignal; delay?: number }
 ): Promise<T | null> {
-	await sleep(API_DELAY, signal);
+	let signal: AbortSignal | undefined;
+	let delay = API_DELAY;
+	if (signalOrOptions instanceof AbortSignal) {
+		signal = signalOrOptions;
+	} else if (signalOrOptions) {
+		signal = signalOrOptions.signal;
+		delay = signalOrOptions.delay ?? API_DELAY;
+	}
+	await sleep(delay, signal);
 	const token = getToken();
 	const res = await fetch(API_URL, {
 		method: 'POST',
@@ -191,6 +199,36 @@ mutation UpdatePhaseSeeding($phaseId: ID!, $seedMapping: [UpdatePhaseSeedInfo]!)
   updatePhaseSeeding(phaseId: $phaseId, seedMapping: $seedMapping) { id }
 }`;
 
+export const REPORT_BRACKET_SET_MUTATION = `
+mutation ReportBracketSet($setId: ID!, $winnerId: ID!) {
+  reportBracketSet(setId: $setId, winnerId: $winnerId) {
+    id
+    winnerId
+  }
+}`;
+
+export const EVENT_PHASE_GROUPS_QUERY = `
+query EventPhaseGroups($phaseId: ID!) {
+  phase(id: $phaseId) {
+    phaseGroups(query: { page: 1, perPage: 64 }) {
+      nodes { id displayIdentifier }
+    }
+  }
+}`;
+
+export const PHASE_GROUP_SETS_QUERY = `
+query PhaseGroupSets($phaseGroupId: ID!) {
+  phaseGroup(id: $phaseGroupId) {
+    sets(page: 1, perPage: 64, sortType: STANDARD) {
+      nodes {
+        id
+        winnerId
+        slots { entrant { id } }
+      }
+    }
+  }
+}`;
+
 // ── Paginated fetchers ──────────────────────────────────────────────────
 
 interface PagedResult<T> {
@@ -269,4 +307,84 @@ export function extractGamerTag(entrant: GqlRecord): string {
 		if (p.player?.gamerTag) return p.player.gamerTag;
 	}
 	return entrant.name ?? 'Unknown';
+}
+
+export async function fetchPhaseGroups(
+	phaseId: number
+): Promise<{ id: number; displayIdentifier: string }[]> {
+	const data = await gql<{ phase: { phaseGroups: { nodes: GqlRecord[] } } }>(
+		EVENT_PHASE_GROUPS_QUERY,
+		{ phaseId }
+	);
+	const nodes = data?.phase?.phaseGroups?.nodes ?? [];
+	return (nodes as GqlRecord[])
+		.map((n) => ({ id: n.id as number, displayIdentifier: String(n.displayIdentifier ?? '') }))
+		.sort((a, b) => a.displayIdentifier.localeCompare(b.displayIdentifier));
+}
+
+/**
+ * Find the StartGG set ID for two entrants within a specific phase group.
+ * Returns null if no unreported set is found.
+ * Uses delay:0 — suitable for real-time per-match calls.
+ */
+export async function findSetInPhaseGroup(
+	phaseGroupId: number,
+	entrantId1: number,
+	entrantId2: number
+): Promise<string | null> {
+	const data = await gql<{ phaseGroup: { sets: { nodes: GqlRecord[] } } }>(
+		PHASE_GROUP_SETS_QUERY,
+		{ phaseGroupId },
+		{ delay: 0 }
+	);
+	const nodes = data?.phaseGroup?.sets?.nodes ?? [];
+	for (const set of nodes as GqlRecord[]) {
+		const ids: number[] = (set.slots ?? [])
+			.map((s: GqlRecord) => s.entrant?.id as number | undefined)
+			.filter((id: number | undefined): id is number => id !== undefined);
+		if (ids.includes(entrantId1) && ids.includes(entrantId2) && !set.winnerId) {
+			return String(set.id);
+		}
+	}
+	return null;
+}
+
+/**
+ * Find the StartGG set ID by scanning all event sets.
+ * Fallback when no phase group ID is known.
+ * Uses delay:0 for real-time use.
+ */
+export async function findSetByEntrants(
+	eventId: number,
+	entrantId1: number,
+	entrantId2: number
+): Promise<string | null> {
+	const sets = await fetchAllSets(eventId, undefined);
+	for (const set of sets as GqlRecord[]) {
+		const ids: number[] = (set.slots ?? [])
+			.map((s: GqlRecord) => s.entrant?.id as number | undefined)
+			.filter((id: number | undefined): id is number => id !== undefined);
+		if (ids.includes(entrantId1) && ids.includes(entrantId2) && !set.winnerId) {
+			return String(set.id);
+		}
+	}
+	return null;
+}
+
+/**
+ * Report a StartGG set result.
+ * winnerEntrantId must be the StartGG entrant ID (not the MSV Hub internal ID).
+ * Uses delay:0 — safe for real-time calls.
+ */
+export async function reportSet(
+	setId: string,
+	winnerEntrantId: number
+): Promise<{ ok: boolean; error?: string }> {
+	const data = await gql(
+		REPORT_BRACKET_SET_MUTATION,
+		{ setId, winnerId: String(winnerEntrantId) },
+		{ delay: 0 }
+	);
+	if (!data) return { ok: false, error: 'StartGG mutation returned null — check token/permissions' };
+	return { ok: true };
 }

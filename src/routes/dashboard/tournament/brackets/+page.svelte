@@ -154,6 +154,25 @@
 		await loadTournament();
 	}
 
+	let splitConfirming = $state(false);
+	let splitResult = $state<{ reported: number; failed: number } | null>(null);
+
+	async function confirmSplit() {
+		splitConfirming = true;
+		splitResult = null;
+		const res = await fetch('/api/tournament/startgg-sync', { method: 'POST' });
+		const data = await res.json().catch(() => ({}));
+		if (res.ok) splitResult = { reported: data.reported, failed: data.failed };
+		else error = (data as { error?: string }).error ?? 'Failed to confirm split';
+		splitConfirming = false;
+		await loadTournament();
+	}
+
+	async function clearStartggErrors() {
+		await fetch('/api/tournament/startgg-sync', { method: 'DELETE' });
+		await loadTournament();
+	}
+
 	async function submitReport() {
 		if (!reportingMatch || !reportWinnerId || !reportScore) return;
 		error = '';
@@ -203,6 +222,44 @@
 
 	{#if error}
 		<div class="mt-4 rounded-lg border border-red-800 bg-red-900/30 p-4 text-sm text-red-400">{error}</div>
+	{/if}
+
+	<!-- StartGG split confirmation -->
+	{#if tournament && !tournament.startggSync?.splitConfirmed}
+		<div class="mt-4 rounded-lg border border-amber-800 bg-amber-900/20 px-4 py-3">
+			<p class="text-sm text-amber-300">
+				<span class="font-semibold">StartGG:</span> Correct the main/redemption bracket split in StartGG&#8217;s phase 2 before
+				confirming. Match results reported here are <strong>queued</strong> until you click Split Done.
+			</p>
+			<div class="mt-2 flex items-center gap-3">
+				<button
+					onclick={confirmSplit}
+					disabled={splitConfirming}
+					class="rounded-lg bg-amber-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
+				>
+					{splitConfirming ? 'Flushing...' : 'Split Done'}
+				</button>
+				{#if splitResult}
+					<span class="text-xs text-gray-400">
+						Flushed {splitResult.reported} match(es)
+						{#if splitResult.failed > 0}<span class="text-red-400">, {splitResult.failed} failed (see errors below)</span>{/if}
+					</span>
+				{/if}
+			</div>
+		</div>
+	{/if}
+
+	<!-- StartGG errors -->
+	{#if tournament?.startggSync?.errors?.length}
+		<div class="mt-3 space-y-1">
+			{#each tournament.startggSync.errors as err}
+				<div class="flex items-start gap-2 rounded-lg border border-red-800 bg-red-900/20 px-3 py-2 text-xs text-red-400">
+					<span class="shrink-0 font-semibold">StartGG error</span>
+					<span class="min-w-0 break-words">{err.message}</span>
+				</div>
+			{/each}
+			<button onclick={clearStartggErrors} class="text-xs text-gray-600 hover:text-gray-400 transition-colors">Clear errors</button>
+		</div>
 	{/if}
 
 	{#if !tournament?.brackets}
