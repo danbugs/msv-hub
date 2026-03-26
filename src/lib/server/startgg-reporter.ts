@@ -112,7 +112,9 @@ export async function reportSwissMatch(
 	});
 
 	if (result.ok) {
-		match.startggSetId = setId; // cache for future re-reports
+		// Cache the real set ID — for preview sets StartGG creates a new integer ID on report.
+		// Using result.reportedSetId ensures re-reports hit the real set, not the stale preview ID.
+		match.startggSetId = result.reportedSetId ?? setId;
 		clearErrorsForMatch(sync, match.id);
 	} else {
 		addError(sync, match.id, result.error ?? 'Unknown StartGG error');
@@ -197,7 +199,7 @@ async function _doReportBracketMatch(
 	});
 
 	if (result.ok) {
-		match.startggSetId = setId;
+		match.startggSetId = result.reportedSetId ?? setId;
 		clearErrorsForMatch(sync, match.id);
 		// Remove from pending queue if it was there
 		sync.pendingBracketMatchIds = sync.pendingBracketMatchIds.filter((id) => id !== pendingKey);

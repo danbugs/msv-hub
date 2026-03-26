@@ -356,12 +356,16 @@ export async function findSetInPhaseGroup(
 	// Prefer unreported sets. If only a completed set is found, return it anyway so
 	// reportSet can surface the "Cannot report completed set" error from StartGG rather
 	// than silently returning "set not found".
+	// Coerce to numbers — StartGG returns IDs as numbers but they may be stored as strings
+	// if the tournament was loaded when the API returned a string type.
+	const e1 = Number(entrantId1);
+	const e2 = Number(entrantId2);
 	let completedFallback: string | null = null;
 	for (const set of nodes as GqlRecord[]) {
-		const ids: number[] = (set.slots ?? [])
-			.map((s: GqlRecord) => s.entrant?.id as number | undefined)
-			.filter((id: number | undefined): id is number => id !== undefined);
-		if (ids.includes(entrantId1) && ids.includes(entrantId2)) {
+		const ids = (set.slots ?? [])
+			.map((s: GqlRecord) => Number(s.entrant?.id))
+			.filter((id): id is number => !isNaN(id) && id > 0);
+		if (ids.includes(e1) && ids.includes(e2)) {
 			if (!set.winnerId) return String(set.id); // unreported — use immediately
 			completedFallback ??= String(set.id);     // completed — remember as fallback
 		}
@@ -381,12 +385,14 @@ export async function findSetByEntrants(
 ): Promise<string | null> {
 	const sets = await fetchAllSets(eventId, undefined, 0); // delay:0 — real-time call
 	// Prefer unreported sets; fall back to completed (same reasoning as findSetInPhaseGroup).
+	const e1 = Number(entrantId1);
+	const e2 = Number(entrantId2);
 	let completedFallback: string | null = null;
 	for (const set of sets as GqlRecord[]) {
-		const ids: number[] = (set.slots ?? [])
-			.map((s: GqlRecord) => s.entrant?.id as number | undefined)
-			.filter((id: number | undefined): id is number => id !== undefined);
-		if (ids.includes(entrantId1) && ids.includes(entrantId2)) {
+		const ids = (set.slots ?? [])
+			.map((s: GqlRecord) => Number(s.entrant?.id))
+			.filter((id): id is number => !isNaN(id) && id > 0);
+		if (ids.includes(e1) && ids.includes(e2)) {
 			if (!set.winnerId) return String(set.id);
 			completedFallback ??= String(set.id);
 		}
@@ -403,7 +409,7 @@ export async function reportSet(
 	setId: string,
 	winnerEntrantId: number,
 	extra?: { loserEntrantId?: number; winnerScore?: number; loserScore?: number }
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; reportedSetId?: string; error?: string }> {
 	const token = getToken();
 
 	let gameData: { winnerId: string; gameNum: number }[] | undefined;
@@ -462,7 +468,10 @@ export async function reportSet(
 		return { ok: false, error: `StartGG returned unexpected response shape for set ${setId}` };
 	}
 
-	return { ok: true };
+	// When reporting a preview set, StartGG creates a real set with a new integer ID.
+	// The mutation returns that new ID in reportBracketSet.id (or null if already real).
+	const reportedId = json.data?.reportBracketSet?.id;
+	return { ok: true, reportedSetId: reportedId != null ? String(reportedId) : undefined };
 }
 
 /**

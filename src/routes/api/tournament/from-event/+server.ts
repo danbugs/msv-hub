@@ -63,11 +63,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Build seedNum → startggEntrantId map (exact match by seed number, no fragile gamerTag comparison).
+	// Use Number() to ensure the ID is stored as a number regardless of what the API returns —
+	// the GraphQL ID scalar can be serialized as either a string or integer.
 	const sgSeedToEntrantId = new Map<number, number>();
 	for (const seed of sgSeeds) {
-		const seedNum = seed.seedNum as number | undefined;
-		const entrantId = (seed.entrant as { id?: number } | undefined)?.id;
-		if (seedNum && entrantId) sgSeedToEntrantId.set(seedNum, entrantId);
+		const seedNum = Number((seed as { seedNum?: unknown }).seedNum);
+		const entrantId = Number((seed as { entrant?: { id?: unknown } }).entrant?.id);
+		if (seedNum && entrantId && !isNaN(seedNum) && !isNaN(entrantId)) {
+			sgSeedToEntrantId.set(seedNum, entrantId);
+		}
 	}
 
 	// Fetch phase 1 phase groups (used for per-round set lookup), best-effort.
