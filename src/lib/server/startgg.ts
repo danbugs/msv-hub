@@ -359,9 +359,9 @@ export async function findSetInPhaseGroup(
 	let nodes = await fetchNodes();
 
 	// If the phase group returned 0 sets, it may be mid-transition from preview sets to
-	// real sets (triggered when the first preview set is reported). Retry up to 5 times
-	// with 3-second gaps before giving up.
-	for (let retry = 0; retry < 5 && nodes.length === 0; retry++) {
+	// real sets (triggered when the first preview set is reported). Retry up to 20 times
+	// with 3-second gaps (60 s total) — StartGG's conversion can take 30–60 s.
+	for (let retry = 0; retry < 20 && nodes.length === 0; retry++) {
 		await new Promise<void>((r) => setTimeout(r, 3000));
 		nodes = await fetchNodes();
 	}

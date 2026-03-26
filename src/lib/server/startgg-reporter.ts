@@ -54,8 +54,9 @@ export async function preCacheRoundSetIds(
 	type GqlNode = { id: unknown; slots: { entrant: { id: unknown } | null }[] };
 	type PGData = { phaseGroup: { sets: { nodes: GqlNode[] } } };
 
+	// Retry up to 20×3 s (60 s total) — StartGG's preview→real conversion can take 30–60 s.
 	let nodes: GqlNode[] = [];
-	for (let retry = 0; retry <= 5; retry++) {
+	for (let retry = 0; retry <= 20; retry++) {
 		if (retry > 0) await new Promise<void>((r) => setTimeout(r, 3000));
 		const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
 		nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
@@ -174,19 +175,16 @@ export async function reportSwissMatch(
 		loserScore
 	});
 
-	// If we used a cached preview ID and the report failed, the phase group may have already
-	// converted to real IDs (because another match was reported first). Clear the stale preview
-	// ID and retry with a fresh lookup — findSetInPhaseGroup will wait out the transition.
+	// If we used a cached preview ID and the report failed, the phase group has already
+	// converted to real IDs (triggered by a prior report). Call preCacheRoundSetIds to
+	// wait out the transition (up to 60 s), then retry with the fresh real set ID.
 	if (!result.ok && setId.startsWith('preview_')) {
 		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
 		if (pgId) {
 			match.startggSetId = undefined; // discard stale preview cache
-			const freshId = await findSetInPhaseGroup(
-				pgId,
-				topEntrant.startggEntrantId,
-				botEntrant.startggEntrantId
-			).catch(() => null);
-			if (freshId && freshId !== setId) {
+			await preCacheRoundSetIds(tournament, roundNumber, pgId).catch(() => {});
+			const freshId = match.startggSetId; // populated by preCacheRoundSetIds if found
+			if (freshId && !freshId.startsWith('preview_')) {
 				setId = freshId;
 				result = await reportSet(setId, winnerEntrant.startggEntrantId, {
 					loserEntrantId: loserEntrant.startggEntrantId,
@@ -202,15 +200,14 @@ export async function reportSwissMatch(
 		clearErrorsForMatch(sync, match.id);
 
 		// If we just reported a preview set, StartGG is converting the whole phase group
-		// to real IDs. Fire off a background preCacheRoundSetIds so the remaining matches
-		// get their real set IDs populated before the next report comes in.
-		// Fire-and-forget: doesn't block the current response; saves the tournament when done.
+		// to real IDs. Await the rehydration now so all remaining matches get their real
+		// set IDs before the user reports the next match. This blocks the current response
+		// (one-time cost on the first preview-set report), but every subsequent report is
+		// instant because the real IDs are already cached.
 		if (setId.startsWith('preview_')) {
 			const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
 			if (pgId) {
-				preCacheRoundSetIds(tournament, roundNumber, pgId)
-					.then(() => saveTournament(tournament))
-					.catch(() => {});
+				await preCacheRoundSetIds(tournament, roundNumber, pgId).catch(() => {});
 			}
 		}
 	} else {
