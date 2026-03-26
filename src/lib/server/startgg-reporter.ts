@@ -176,14 +176,19 @@ export async function reportSwissMatch(
 	});
 
 	// If we used a cached preview ID and the report failed, the phase group has already
-	// converted to real IDs (triggered by a prior report). Call preCacheRoundSetIds to
-	// wait out the transition (up to 60 s), then retry with the fresh real set ID.
+	// converted to real IDs (another match triggered the conversion first). Do a short
+	// inline retry with findSetInPhaseGroup (3×2 s = 6 s max) to get the real ID.
+	// If still not found, fail fast — the match is saved in MSV Hub regardless, and the
+	// background preCacheRoundSetIds will populate the real ID for the next retry.
 	if (!result.ok && setId.startsWith('preview_')) {
 		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
 		if (pgId) {
 			match.startggSetId = undefined; // discard stale preview cache
-			await preCacheRoundSetIds(tournament, roundNumber, pgId).catch(() => {});
-			const freshId = match.startggSetId; // populated by preCacheRoundSetIds if found
+			const freshId = await findSetInPhaseGroup(
+				pgId,
+				topEntrant.startggEntrantId,
+				botEntrant.startggEntrantId
+			).catch(() => null);
 			if (freshId && !freshId.startsWith('preview_')) {
 				setId = freshId;
 				result = await reportSet(setId, winnerEntrant.startggEntrantId, {
@@ -200,14 +205,15 @@ export async function reportSwissMatch(
 		clearErrorsForMatch(sync, match.id);
 
 		// If we just reported a preview set, StartGG is converting the whole phase group
-		// to real IDs. Await the rehydration now so all remaining matches get their real
-		// set IDs before the user reports the next match. This blocks the current response
-		// (one-time cost on the first preview-set report), but every subsequent report is
-		// instant because the real IDs are already cached.
+		// to real IDs. Fire off a background preCacheRoundSetIds (up to 60 s of retries)
+		// so remaining matches get their real set IDs before the user reports them.
+		// Fire-and-forget: does not block the current response.
 		if (setId.startsWith('preview_')) {
 			const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
 			if (pgId) {
-				await preCacheRoundSetIds(tournament, roundNumber, pgId).catch(() => {});
+				preCacheRoundSetIds(tournament, roundNumber, pgId)
+					.then(() => saveTournament(tournament))
+					.catch(() => {});
 			}
 		}
 	} else {

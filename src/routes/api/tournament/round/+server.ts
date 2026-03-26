@@ -117,16 +117,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	tournament.rounds.push(round);
 	tournament.currentRound = nextRound;
 
-	// Pre-cache StartGG set IDs for all matches in this round so reporting is a pure push.
-	// Done here (at round start) when the phase group is in a clean, queryable state.
-	// For round 1 this gets preview IDs; for round 2+ it gets the real IDs from
-	// the previous round's phase group that has already been seeded with our pairings.
+	await saveTournament(tournament);
+
+	// Fire-and-forget: pre-cache StartGG set IDs for all matches in this round so reporting
+	// is a pure push. Done here when the phase group is in a clean, queryable state.
+	// Runs in the background after the round-start response is returned.
 	const pgId = tournament.startggPhase1Groups?.[nextRound - 1]?.id;
 	if (pgId) {
-		await preCacheRoundSetIds(tournament, nextRound, pgId).catch(() => {});
+		preCacheRoundSetIds(tournament, nextRound, pgId)
+			.then(() => saveTournament(tournament))
+			.catch(() => {});
 	}
-
-	await saveTournament(tournament);
 
 	// Best-effort: push our custom pairings to StartGG's phase group for this round
 	// so that set lookups match. Round 1 is already seeded at event creation time.
