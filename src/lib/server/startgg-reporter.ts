@@ -38,18 +38,20 @@ async function resolveSetId(
 ): Promise<string | null> {
 	if (cachedSetId) return cachedSetId;
 
-	// Try phase-group-scoped lookup first (faster, less noise)
+	// Try phase-group-scoped lookup. If we have phase group info for this round,
+	// trust it exclusively — a full event scan risks finding a set in a different
+	// phase (brackets, final standings) and silently reporting to the wrong place.
 	const groups = tournament.startggPhase1Groups;
 	if (groups && groups[roundNumber - 1]) {
-		const id = await findSetInPhaseGroup(
+		return findSetInPhaseGroup(
 			groups[roundNumber - 1].id,
 			entrantId1,
 			entrantId2
 		).catch(() => null);
-		if (id) return id;
 	}
 
-	// Fall back to full event scan
+	// No phase group info — fall back to full event scan (only safe path when
+	// startggPhase1Groups is not populated, e.g. older tournaments).
 	if (tournament.startggEventId) {
 		return findSetByEntrants(tournament.startggEventId, entrantId1, entrantId2).catch(() => null);
 	}
