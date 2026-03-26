@@ -260,22 +260,22 @@ export async function reportSwissMatch(
 	const winnerScore = match.winnerId === match.topPlayerId ? match.topScore : match.bottomScore;
 	const loserScore  = match.winnerId === match.topPlayerId ? match.bottomScore : match.topScore;
 
-	let result = await reportSet(setId, winnerEntrant.startggEntrantId, {
+	const reportExtra = {
 		loserEntrantId: loserEntrant.startggEntrantId,
 		winnerScore,
 		loserScore,
 		isDQ: match.isDQ
-	});
+	};
+
+	let result = await reportSet(setId, winnerEntrant.startggEntrantId, reportExtra);
 
 	// If we used a cached preview ID and the report failed, the phase group has already
 	// converted to real IDs (another match triggered the conversion first). Do a short
 	// inline retry with findSetInPhaseGroup (3×2 s = 6 s max) to get the real ID.
-	// If still not found, fail fast — the match is saved in MSV Hub regardless, and the
-	// background preCacheRoundSetIds will populate the real ID for the next retry.
 	if (!result.ok && setId.startsWith('preview_')) {
 		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
 		if (pgId) {
-			match.startggSetId = undefined; // discard stale preview cache
+			match.startggSetId = undefined;
 			const freshId = await findSetInPhaseGroup(
 				pgId,
 				topEntrant.startggEntrantId,
@@ -283,12 +283,16 @@ export async function reportSwissMatch(
 			).catch(() => null);
 			if (freshId && !freshId.startsWith('preview_')) {
 				setId = freshId;
-				result = await reportSet(setId, winnerEntrant.startggEntrantId, {
-					loserEntrantId: loserEntrant.startggEntrantId,
-					winnerScore,
-					loserScore
-				});
+				result = await reportSet(setId, winnerEntrant.startggEntrantId, reportExtra);
 			}
+		}
+	}
+
+	// If the set is already completed (misreport fix), reset it first then re-report.
+	if (!result.ok && result.error?.includes('Cannot report completed set')) {
+		const resetResult = await resetSet(setId);
+		if (resetResult.ok) {
+			result = await reportSet(setId, winnerEntrant.startggEntrantId, reportExtra);
 		}
 	}
 

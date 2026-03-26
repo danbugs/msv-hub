@@ -119,10 +119,30 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	await saveTournament(tournament);
 
+	// For round 2+, push our custom pairings to StartGG's phase group BEFORE triggering
+	// conversion/caching — the phase group must have the correct seeding first.
+	const pgId = tournament.startggPhase1Groups?.[nextRound - 1]?.id;
+	if (nextRound > 1 && tournament.startggPhase1Id && pgId) {
+		const entrantMap2 = new Map(tournament.entrants.map((e) => [e.id, e]));
+		const sgPairings = assignedMatches
+			.map((m): [number, number] | null => {
+				const t = entrantMap2.get(m.topPlayerId)?.startggEntrantId;
+				const b = entrantMap2.get(m.bottomPlayerId)?.startggEntrantId;
+				return t && b ? [t, b] : null;
+			})
+			.filter((p): p is [number, number] => p !== null);
+		if (sgPairings.length) {
+			await pushPairingsToPhaseGroup(
+				tournament.startggPhase1Id,
+				pgId,
+				sgPairings
+			).catch(() => {});
+		}
+	}
+
 	// Fire-and-forget: trigger StartGG preview→real conversion and cache real set IDs.
 	// Sets cacheReady=false immediately so the UI shows the "Re-hydrating" banner, then
 	// cacheReady=true once real IDs are populated (~30–60 s for round 1; near-instant for later rounds).
-	const pgId = tournament.startggPhase1Groups?.[nextRound - 1]?.id;
 	if (pgId) {
 		if (!tournament.startggSync) {
 			tournament.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
@@ -131,26 +151,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await saveTournament(tournament);
 
 		triggerConversionAndCache(tournament, nextRound, pgId).catch(() => {});
-	}
-
-	// Best-effort: push our custom pairings to StartGG's phase group for this round
-	// so that set lookups match. Round 1 is already seeded at event creation time.
-	if (nextRound > 1 && tournament.startggPhase1Id && tournament.startggPhase1Groups?.[nextRound - 1]) {
-		const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
-		const sgPairings = assignedMatches
-			.map((m): [number, number] | null => {
-				const t = entrantMap.get(m.topPlayerId)?.startggEntrantId;
-				const b = entrantMap.get(m.bottomPlayerId)?.startggEntrantId;
-				return t && b ? [t, b] : null;
-			})
-			.filter((p): p is [number, number] => p !== null);
-		if (sgPairings.length) {
-			pushPairingsToPhaseGroup(
-				tournament.startggPhase1Id,
-				tournament.startggPhase1Groups[nextRound - 1].id,
-				sgPairings
-			).catch(() => {}); // best-effort, don't block the response
-		}
 	}
 
 	// Optionally announce the new round to a Discord channel.
