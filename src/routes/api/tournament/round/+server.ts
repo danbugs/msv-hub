@@ -245,11 +245,23 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	await saveTournament(tournament);
 
 	const roundComplete = targetRound.matches.every((m) => m.winnerId);
+	const roundNum = targetRound.number;
 
 	// Fire StartGG report in the background — never block the UI.
-	// Errors are stored on tournament.startggSync.errors and surfaced on next poll.
-	reportSwissMatch(tournament, targetRound.number, match)
-		.then(() => saveTournament(tournament))
+	// After reporting, re-load the latest tournament and merge only StartGG fields
+	// to avoid overwriting concurrent match reports.
+	reportSwissMatch(tournament, roundNum, match)
+		.then(async () => {
+			const fresh = await getActiveTournament();
+			if (!fresh) return;
+			// Merge startggSetId onto the match in the fresh state
+			const freshRound = fresh.rounds.find((r) => r.number === roundNum);
+			const freshMatch = freshRound?.matches.find((m) => m.id === matchId);
+			if (freshMatch) freshMatch.startggSetId = match.startggSetId;
+			// Merge StartGG sync state (errors, cacheReady, etc.)
+			if (tournament.startggSync) fresh.startggSync = tournament.startggSync;
+			await saveTournament(fresh);
+		})
 		.catch(() => {});
 
 	return Response.json({
@@ -257,6 +269,6 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		match,
 		wasMisreport,
 		roundComplete,
-		startgg: { ok: true }
+		startgg: { ok: true, background: true }
 	});
 };
