@@ -292,7 +292,7 @@ describe('StartGG API — 5. pushPairingsToPhaseGroup (round 2 re-seeding)', () 
 		expect(round2Phase!.phaseGroups.nodes[0]?.id).toBe(TEST_PHASE_GROUP_ROUND2);
 	}, TIMEOUT);
 
-	it('pushes shuffled pairings to round 2 phase group and verifies seed order', async () => {
+	it('pushes fold-based pairings and verifies StartGG SETS match intended pairings', async () => {
 		// Step 1: Fetch entrants from round 2 phase group
 		type SeedNode = { id: unknown; seedNum: number; entrant: { id: number } };
 		const SEED_QUERY = 'query PGSeeds($pgId: ID!) { phaseGroup(id: $pgId) { seeds(query: { page: 1, perPage: 64 }) { nodes { id seedNum entrant { id } } } } }';
@@ -305,38 +305,78 @@ describe('StartGG API — 5. pushPairingsToPhaseGroup (round 2 re-seeding)', () 
 		expect(seeds.length).toBeGreaterThan(0);
 
 		const entrantIds = seeds.map((s) => s.entrant.id);
-		console.log(`Entrant IDs (first 6): ${entrantIds.slice(0, 6).join(', ')}...`);
 
 		// Step 2: Build REVERSED pairings to verify the seeding actually changes
-		// Pair entrants in reverse order: [last, second-to-last], [third-to-last, fourth-to-last], ...
 		const reversed = [...entrantIds].reverse();
 		const pairings: [number, number][] = [];
 		for (let i = 0; i < reversed.length - 1; i += 2) {
 			pairings.push([reversed[i], reversed[i + 1]]);
 		}
-		console.log(`Built ${pairings.length} reversed pairings`);
-		console.log(`First pairing: [${pairings[0][0]}, ${pairings[0][1]}]`);
+		console.log(`Built ${pairings.length} reversed pairings (fold-based seeding)`);
+		console.log(`Intended pair 0: [${pairings[0][0]}, ${pairings[0][1]}]`);
+		console.log(`Intended pair 1: [${pairings[1][0]}, ${pairings[1][1]}]`);
 
-		// Step 3: Push pairings using the CORRECT per-round phase ID
-		console.log(`Calling pushPairingsToPhaseGroup(phaseId=${TEST_PHASE_ROUND2}, pgId=${TEST_PHASE_GROUP_ROUND2})`);
+		// Step 3: Push pairings using fold-based seeding
+		console.log(`\nCalling pushPairingsToPhaseGroup(phaseId=${TEST_PHASE_ROUND2}, pgId=${TEST_PHASE_GROUP_ROUND2})`);
 		const result = await pushPairingsToPhaseGroup(TEST_PHASE_ROUND2, TEST_PHASE_GROUP_ROUND2, pairings);
 		console.log('pushPairingsToPhaseGroup result:', result);
 		expect(result.ok).toBe(true);
 
-		// Step 4: Verify the seed order changed — first pairing should now be seedNums 1,2
+		// Step 4: Verify seed assignment uses fold pattern (pair i → seeds i+1 and K+i+1)
+		const K = pairings.length;
 		const afterData = await gql<{ phaseGroup: { seeds: { nodes: SeedNode[] } } }>(
 			SEED_QUERY, { pgId: TEST_PHASE_GROUP_ROUND2 }, { delay: 0 }
 		);
 		const afterSeeds = (afterData?.phaseGroup?.seeds?.nodes ?? []).sort((a, b) => a.seedNum - b.seedNum);
-		console.log('\nSeed order after re-seeding (first 6):');
-		for (const s of afterSeeds.slice(0, 6)) {
+		console.log(`\nSeed layout after fold seeding (K=${K}):`);
+		for (const s of afterSeeds.slice(0, 4)) {
+			console.log(`  seedNum ${s.seedNum}: entrant ${s.entrant.id}`);
+		}
+		console.log('  ...');
+		for (const s of afterSeeds.slice(K, K + 2)) {
 			console.log(`  seedNum ${s.seedNum}: entrant ${s.entrant.id}`);
 		}
 
-		// First pairing should be seeds 1,2
+		// Pair 0: first player at seed 1, second player at seed K+1
 		expect(afterSeeds[0]?.entrant.id).toBe(pairings[0][0]);
-		expect(afterSeeds[1]?.entrant.id).toBe(pairings[0][1]);
-	}, TIMEOUT * 2);
+		expect(afterSeeds[K]?.entrant.id).toBe(pairings[0][1]);
+
+		// Step 5: THE REAL TEST — verify the SETS on StartGG match our intended pairings.
+		// StartGG Swiss pairs seed i vs seed K+i (fold). After our fold-based seeding,
+		// the sets should exactly match the pairings we pushed.
+		type SetNode = { id: unknown; slots: { entrant: { id: number } | null }[] };
+		const setsData = await gql<{ phaseGroup: { sets: { nodes: SetNode[] } } }>(
+			PHASE_GROUP_SETS_QUERY, { phaseGroupId: TEST_PHASE_GROUP_ROUND2 }, { delay: 0 }
+		);
+		const sets = setsData?.phaseGroup?.sets?.nodes ?? [];
+		console.log(`\n--- Sets after fold seeding: ${sets.length} sets ---`);
+
+		// Build a set of intended pairings as "min-max" entrant ID strings for easy lookup
+		const intendedPairs = new Set(
+			pairings.map(([a, b]) => [Math.min(a, b), Math.max(a, b)].join('-'))
+		);
+
+		let matched = 0;
+		let mismatched = 0;
+		for (const set of sets) {
+			const ids = set.slots
+				.map((s) => s.entrant?.id)
+				.filter((id): id is number => id != null && id > 0)
+				.sort((a, b) => a - b);
+			if (ids.length !== 2) continue;
+			const key = ids.join('-');
+			if (intendedPairs.has(key)) {
+				matched++;
+			} else {
+				mismatched++;
+				console.log(`  MISMATCH: set ${set.id} has entrants [${ids[0]}, ${ids[1]}] — not in our pairings`);
+			}
+		}
+		console.log(`\nMatched: ${matched}/${pairings.length} pairings, Mismatched: ${mismatched}`);
+		// All sets should match our intended pairings
+		expect(matched).toBe(pairings.length);
+		expect(mismatched).toBe(0);
+	}, TIMEOUT * 3);
 
 	it('FAILS when using the wrong phase ID (round 1 phase for round 2 group)', async () => {
 		// This reproduces the original bug: using startggPhase1Id (round 1) for round 2

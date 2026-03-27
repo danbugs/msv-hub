@@ -134,11 +134,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			})
 			.filter((p): p is [number, number] => p !== null);
 		if (sgPairings.length) {
+			const byeEntrantId = bye ? entrantMap2.get(bye[0])?.startggEntrantId : undefined;
 			console.log(`[StartGG] Pushing ${sgPairings.length} pairings to phase group ${pgId} (phase ${roundPhaseId}) for round ${nextRound}`);
 			const seedResult = await pushPairingsToPhaseGroup(
 				roundPhaseId,
 				pgId,
-				sgPairings
+				sgPairings,
+				byeEntrantId
 			).catch((e) => ({ ok: false as const, error: String(e) }));
 			if (!seedResult.ok) {
 				console.error(`[StartGG] pushPairingsToPhaseGroup failed: ${seedResult.error}`);

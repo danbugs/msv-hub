@@ -99,15 +99,19 @@ export async function triggerConversionAndCache(
 	if (!round) return;
 
 	const sync = ensureSync(tournament);
-	const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
-
-	const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
-	const nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
-	if (nodes.length === 0) return;
-
-	applyNodesToRound(nodes, round, entrantMap);
-	sync.cacheReady = true;
-	await saveTournament(tournament);
+	try {
+		const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+		const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
+		const nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
+		if (nodes.length > 0) {
+			applyNodesToRound(nodes, round, entrantMap);
+		}
+	} finally {
+		// Always mark cache as ready — even if 0 nodes (preview sets not yet created)
+		// or on error. The stale-preview retry in reportSwissMatch handles misses.
+		sync.cacheReady = true;
+		await saveTournament(tournament);
+	}
 }
 
 // ── Set ID resolution ────────────────────────────────────────────────────────

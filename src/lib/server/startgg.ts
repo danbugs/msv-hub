@@ -524,13 +524,19 @@ export async function resetSet(setId: string): Promise<{ ok: boolean; error?: st
 
 /**
  * Re-seed a StartGG phase group to match MSV Hub pairings.
- * Assigns seedNums 1,2 / 3,4 / ... to each pair so StartGG creates matching sets.
+ *
+ * StartGG Swiss uses a fold pattern: seed i vs seed K+i (where K = number of pairings).
+ * For example, with 32 entrants (K=16): seed 1 vs seed 17, seed 2 vs seed 18, etc.
+ * We assign seedNums so that each pair lands on opposite halves of the fold:
+ *   pair[0] → seeds 1, K+1   pair[1] → seeds 2, K+2   etc.
+ *
  * Best-effort — errors are returned but should never block MSV Hub.
  */
 export async function pushPairingsToPhaseGroup(
 	phaseId: number,
 	phaseGroupId: number,
-	pairings: [number, number][]  // [startggEntrantId1, startggEntrantId2][]
+	pairings: [number, number][],  // [startggEntrantId1, startggEntrantId2][]
+	byeEntrantId?: number
 ): Promise<{ ok: boolean; error?: string }> {
 	// Fetch seeds in this phase group to get seedId per entrant (delay:0 — real-time call)
 	const seeds = await fetchAllPages(PHASE_GROUP_SEEDS_QUERY, { phaseGroupId }, (d) => {
@@ -548,15 +554,26 @@ export async function pushPairingsToPhaseGroup(
 		if (entrantId && seed.id) entrantToSeedId.set(entrantId, String(seed.id));
 	}
 
+	// Fold pattern: pair i's players go to seeds (i+1) and (K+i+1)
+	const K = pairings.length;
 	const seedMapping: { seedId: string; phaseGroupId: string; seedNum: number }[] = [];
 	pairings.forEach(([e1, e2], i) => {
 		const s1 = entrantToSeedId.get(e1);
 		const s2 = entrantToSeedId.get(e2);
-		if (s1) seedMapping.push({ seedId: s1, phaseGroupId: String(phaseGroupId), seedNum: 2 * i + 1 });
-		if (s2) seedMapping.push({ seedId: s2, phaseGroupId: String(phaseGroupId), seedNum: 2 * i + 2 });
+		if (s1) seedMapping.push({ seedId: s1, phaseGroupId: String(phaseGroupId), seedNum: i + 1 });
+		if (s2) seedMapping.push({ seedId: s2, phaseGroupId: String(phaseGroupId), seedNum: K + i + 1 });
 	});
 
+	// Bye player goes to the last seed so they don't interfere with fold pairings
+	if (byeEntrantId) {
+		const s = entrantToSeedId.get(byeEntrantId);
+		if (s) seedMapping.push({ seedId: s, phaseGroupId: String(phaseGroupId), seedNum: 2 * K + 1 });
+	}
+
 	if (!seedMapping.length) return { ok: false, error: 'No matching seeds found for pairings' };
+
+	// StartGG requires seedMapping sorted by seedNum in increasing order
+	seedMapping.sort((a, b) => a.seedNum - b.seedNum);
 
 	const data = await gql(
 		UPDATE_PHASE_SEEDING_MUTATION,
