@@ -180,13 +180,21 @@ export async function reportSwissMatch(
 		return { ok: false, error: msg };
 	}
 
-	let setId = await resolveSetId(
-		tournament,
-		topEntrant.startggEntrantId,
-		botEntrant.startggEntrantId,
-		roundNumber,
-		match.startggSetId
-	);
+	let setId: string | null = null;
+
+	// Try up to 3 times (with 2s gaps) — the background triggerConversionAndCache may be
+	// hitting the API at the same time, causing rate-limit/empty responses on the first try.
+	for (let attempt = 0; attempt < 3; attempt++) {
+		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 2000));
+		setId = await resolveSetId(
+			tournament,
+			topEntrant.startggEntrantId,
+			botEntrant.startggEntrantId,
+			roundNumber,
+			match.startggSetId
+		);
+		if (setId) break;
+	}
 
 	if (!setId) {
 		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;

@@ -241,18 +241,22 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (isDQ) { match.isDQ = true; match.topScore = undefined; match.bottomScore = undefined; }
 	else { match.isDQ = false; if (topScore !== undefined) match.topScore = topScore; if (bottomScore !== undefined) match.bottomScore = bottomScore; }
 
-	// Report to StartGG (best-effort — errors stored on tournament, never block MSV Hub).
-	const sgResult = await reportSwissMatch(tournament, targetRound.number, match).catch(
-		(e) => ({ ok: false, error: e instanceof Error ? e.message : String(e) })
-	);
-
+	// Save MSV Hub state immediately so the UI gets an instant response.
 	await saveTournament(tournament);
+
+	const roundComplete = targetRound.matches.every((m) => m.winnerId);
+
+	// Fire StartGG report in the background — never block the UI.
+	// Errors are stored on tournament.startggSync.errors and surfaced on next poll.
+	reportSwissMatch(tournament, targetRound.number, match)
+		.then(() => saveTournament(tournament))
+		.catch(() => {});
 
 	return Response.json({
 		ok: true,
 		match,
 		wasMisreport,
-		roundComplete: targetRound.matches.every((m) => m.winnerId),
-		startgg: { ok: sgResult.ok, error: sgResult.ok ? undefined : sgResult.error }
+		roundComplete,
+		startgg: { ok: true }
 	});
 };
