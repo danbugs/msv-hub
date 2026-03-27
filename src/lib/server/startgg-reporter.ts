@@ -7,6 +7,7 @@
  */
 
 import { findSetInPhaseGroup, findSetByEntrants, reportSet, resetSet, gql, PHASE_GROUP_SETS_QUERY } from '$lib/server/startgg';
+// resetSet kept in import for use in reportSwissMatch's completed-set retry
 import { saveTournament } from '$lib/server/store';
 import type { TournamentState, SwissMatch, BracketMatch, StartggSyncState } from '$lib/types/tournament';
 
@@ -83,16 +84,11 @@ export async function preCacheRoundSetIds(
 }
 
 /**
- * Proactively trigger the StartGG preview→real conversion at round start, then cache real IDs.
+ * Fetch set IDs from StartGG for this round's phase group and cache them on every match.
+ * Sets cacheReady = true when done. Preview IDs are fine — they work for reporting, and
+ * the stale-preview retry in reportSwissMatch handles the conversion window automatically.
  *
- * Flow:
- *   1. Fetch preview set IDs from the phase group and cache them (best-effort first reports).
- *   2. If all IDs are already real (rounds 2+, or previously converted), set cacheReady and return.
- *   3. Otherwise report one preview set (triggers conversion) then immediately reset it.
- *   4. Poll until real IDs appear (up to 60 s), then cache them and set cacheReady = true.
- *
- * Caller must set startggSync.cacheReady = false and save before calling this, so the UI
- * shows the "Re-hydrating" banner immediately. This function saves when done.
+ * Caller must set startggSync.cacheReady = false and save before calling.
  */
 export async function triggerConversionAndCache(
 	tournament: TournamentState,
@@ -105,72 +101,11 @@ export async function triggerConversionAndCache(
 	const sync = ensureSync(tournament);
 	const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
 
-	// Step 1: fetch current nodes (may be preview or real)
 	const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
 	const nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
-	if (nodes.length === 0) {
-		// Phase group empty — can't proceed, leave cacheReady as-is
-		return;
-	}
+	if (nodes.length === 0) return;
 
-	// Cache whatever IDs we have now (preview or real) so first reports can proceed immediately
 	applyNodesToRound(nodes, round, entrantMap);
-	await saveTournament(tournament);
-
-	// Step 2: if already real IDs, we're done
-	const allReal = nodes.every((n) => !String(n.id).startsWith('preview_'));
-	if (allReal) {
-		sync.cacheReady = true;
-		await saveTournament(tournament);
-		return;
-	}
-
-	// Step 3: fake-report one preview set to trigger the preview→real conversion.
-	// We remember the entrant pair so we can find and reset it after conversion.
-	let fakeReportEntrants: [number, number] | null = null;
-	const previewNode = nodes.find((n) => String(n.id).startsWith('preview_') && !n.winnerId);
-	if (!previewNode) {
-		// All preview sets already have results — skip fake-report, just poll
-	} else {
-		const setId = String(previewNode.id);
-		const slotIds = (previewNode.slots ?? [])
-			.map((s) => Number(s.entrant?.id))
-			.filter((id): id is number => !isNaN(id) && id > 0);
-
-		if (slotIds.length >= 2) {
-			const reportResult = await reportSet(setId, slotIds[0]);
-			if (reportResult.ok) {
-				fakeReportEntrants = [slotIds[0], slotIds[1]];
-			}
-		}
-	}
-
-	// Step 4: poll for real IDs (up to 60 s) — waits for the conversion to finish
-	await preCacheRoundSetIds(tournament, roundNumber, phaseGroupId);
-
-	// Step 5: find the fake-reported set by its entrant pair (now has a real integer ID)
-	// and reset it so the TO can report the real result later.
-	if (fakeReportEntrants) {
-		const freshData = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
-		const freshNodes = (freshData?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
-		for (const node of freshNodes) {
-			if (!node.winnerId) continue; // not the one we reported
-			const ids = (node.slots ?? [])
-				.map((s) => Number(s.entrant?.id))
-				.filter((id): id is number => !isNaN(id) && id > 0);
-			if (ids.includes(fakeReportEntrants[0]) && ids.includes(fakeReportEntrants[1])) {
-				const realSetId = String(node.id);
-				for (let attempt = 0; attempt < 3; attempt++) {
-					const resetResult = await resetSet(realSetId);
-					if (resetResult.ok) break;
-					if (attempt < 2) await new Promise<void>((r) => setTimeout(r, 1000));
-					else addError(sync, 'cache-init', `StartGG set ${realSetId} could not be reset after fake report — please manually reset it on StartGG before reporting that match.`);
-				}
-				break;
-			}
-		}
-	}
-
 	sync.cacheReady = true;
 	await saveTournament(tournament);
 }

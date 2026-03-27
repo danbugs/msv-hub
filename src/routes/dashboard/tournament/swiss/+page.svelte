@@ -13,22 +13,11 @@
 	// Score selection: { matchId, winnerId } — waiting for score pick
 	let pendingWinner = $state<{ matchId: string; winnerId: string } | null>(null);
 
-	// StartGG rehydration status
-	let rehydrationJustComplete = $state(false);
-	let prevCacheReady: boolean | undefined;
-	$effect(() => {
-		const current = tournament?.startggSync?.cacheReady;
-		if (prevCacheReady === false && current === true) {
-			rehydrationJustComplete = true;
-			setTimeout(() => { rehydrationJustComplete = false; }, 5000);
-		}
-		prevCacheReady = current;
-	});
-	// Poll every 5 s while rehydration is in progress so the banner auto-dismisses
+	// Poll briefly while StartGG set IDs are being cached (typically completes in ~1-2s)
 	onMount(() => {
 		const interval = setInterval(() => {
 			if (tournament?.startggSync?.cacheReady === false) loadTournament();
-		}, 5000);
+		}, 2000);
 		return () => clearInterval(interval);
 	});
 
@@ -253,18 +242,13 @@
 				</button>
 			</div>
 
-			<!-- StartGG rehydration status -->
+			<!-- StartGG sync status -->
 			{#if tournament.startggSync?.cacheReady === false && tournament.startggPhase1Groups?.length}
-				<div class="mt-4 flex items-center gap-3 rounded-lg border border-yellow-700 bg-yellow-950/60 px-4 py-3 text-sm text-yellow-200">
-					<svg class="h-4 w-4 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<div class="mt-4 flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800/60 px-4 py-3 text-xs text-gray-400">
+					<svg class="h-3 w-3 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M21 12a9 9 0 1 1-6.219-8.56" />
 					</svg>
-					<span><span class="font-semibold">Re-hydrating StartGG</span> — please hold off reporting matches until this banner disappears.</span>
-				</div>
-			{:else if rehydrationJustComplete}
-				<div class="mt-4 flex items-center gap-2 rounded-lg border border-green-700 bg-green-950/60 px-4 py-3 text-sm text-green-200">
-					<span>✓</span>
-					<span><span class="font-semibold">StartGG rehydration complete</span> — you can now report matches.</span>
+					<span>Syncing set IDs from StartGG...</span>
 				</div>
 			{/if}
 
@@ -351,8 +335,8 @@
 												 isPending ? 'text-gray-500' :
 												 match.winnerId === match.topPlayerId ? 'bg-green-900/30 text-green-300 font-medium' :
 												 match.winnerId ? 'text-gray-500' :
-												 'text-white hover:bg-gray-800'}
-												{!canInteract ? 'pointer-events-none' : ''}"
+												 'text-white'}
+												{canInteract ? 'hover:bg-gray-800 cursor-pointer' : 'pointer-events-none'}"
 											disabled={!canInteract}
 											onclick={() => selectWinner(match.id, match.topPlayerId, isCurrent, isFixing)}>
 											<span class="text-xs text-gray-500 mr-1">#{top?.initialSeed}</span>
@@ -373,8 +357,8 @@
 												 isPending ? 'text-gray-500' :
 												 match.winnerId === match.bottomPlayerId ? 'bg-green-900/30 text-green-300 font-medium' :
 												 match.winnerId ? 'text-gray-500' :
-												 'text-white hover:bg-gray-800'}
-												{!canInteract ? 'pointer-events-none' : ''}"
+												 'text-white'}
+												{canInteract ? 'hover:bg-gray-800 cursor-pointer' : 'pointer-events-none'}"
 											disabled={!canInteract}
 											onclick={() => selectWinner(match.id, match.bottomPlayerId, isCurrent, isFixing)}>
 											<span class="text-xs text-gray-500 mr-1">#{bot?.initialSeed}</span>
