@@ -8,7 +8,7 @@
 
 import { findSetInPhaseGroup, findSetByEntrants, reportSet, resetSet, gql, PHASE_GROUP_SETS_QUERY } from '$lib/server/startgg';
 // resetSet kept in import for use in reportSwissMatch's completed-set retry
-import { saveTournament } from '$lib/server/store';
+import { saveTournament, getActiveTournament } from '$lib/server/store';
 import type { TournamentState, SwissMatch, BracketMatch, StartggSyncState } from '$lib/types/tournament';
 
 // ── Internal helpers ────────────────────────────────────────────────────
@@ -91,27 +91,30 @@ export async function preCacheRoundSetIds(
  * Caller must set startggSync.cacheReady = false and save before calling.
  */
 export async function triggerConversionAndCache(
-	tournament: TournamentState,
+	_stale: TournamentState,
 	roundNumber: number,
 	phaseGroupId: number
 ): Promise<void> {
-	const round = tournament.rounds.find((r) => r.number === roundNumber);
-	if (!round) return;
-
-	const sync = ensureSync(tournament);
+	// Fetch set IDs from StartGG
+	let nodes: GqlNode[] = [];
 	try {
-		const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
 		const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
-		const nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
-		if (nodes.length > 0) {
-			applyNodesToRound(nodes, round, entrantMap);
-		}
-	} finally {
-		// Always mark cache as ready — even if 0 nodes (preview sets not yet created)
-		// or on error. The stale-preview retry in reportSwissMatch handles misses.
-		sync.cacheReady = true;
-		await saveTournament(tournament);
+		nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
+	} catch { /* best effort */ }
+
+	// Safe merge: re-load latest state so we never overwrite concurrent match results
+	const fresh = await getActiveTournament();
+	if (!fresh) return;
+
+	const round = fresh.rounds.find((r) => r.number === roundNumber);
+	if (round && nodes.length > 0) {
+		const entrantMap = new Map(fresh.entrants.map((e) => [e.id, e]));
+		applyNodesToRound(nodes, round, entrantMap);
 	}
+
+	const sync = ensureSync(fresh);
+	sync.cacheReady = true;
+	await saveTournament(fresh);
 }
 
 // ── Set ID resolution ────────────────────────────────────────────────────────
@@ -248,15 +251,27 @@ export async function reportSwissMatch(
 		clearErrorsForMatch(sync, match.id);
 
 		// If we just reported a preview set, StartGG is converting the whole phase group
-		// to real IDs. Fire off a background preCacheRoundSetIds (up to 60 s of retries)
-		// so remaining matches get their real set IDs before the user reports them.
-		// Fire-and-forget: does not block the current response.
+		// to real IDs. Fire off a background preCacheRoundSetIds so remaining matches get
+		// their real set IDs. Uses safe merge — re-loads latest state before saving.
 		if (setId.startsWith('preview_')) {
 			const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
 			if (pgId) {
-				preCacheRoundSetIds(tournament, roundNumber, pgId)
-					.then(() => saveTournament(tournament))
-					.catch(() => {});
+				(async () => {
+					try {
+						// Build a temp tournament just for the cache operation
+						const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId: pgId }, { delay: 0 });
+						const nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
+						if (nodes.length === 0) return;
+						// Safe merge: re-load latest state
+						const fresh = await getActiveTournament();
+						if (!fresh) return;
+						const freshRound = fresh.rounds.find((r) => r.number === roundNumber);
+						if (!freshRound) return;
+						const entrantMap = new Map(fresh.entrants.map((e) => [e.id, e]));
+						applyNodesToRound(nodes, freshRound, entrantMap);
+						await saveTournament(fresh);
+					} catch { /* best effort */ }
+				})();
 			}
 		}
 	} else {

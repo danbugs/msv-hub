@@ -86,11 +86,11 @@
 		} else {
 			fixingMatchId = null;
 			pendingWinner = null;
-			await loadTournament();
-			// StartGG reports in the background — reload after a few seconds to surface any errors
-			if (data.startgg?.background) {
-				setTimeout(loadTournament, 4000);
+			// Show StartGG errors inline (non-blocking — match was saved regardless)
+			if (data.startgg && !data.startgg.ok) {
+				error = `StartGG: ${data.startgg.error}`;
 			}
+			await loadTournament();
 		}
 	}
 

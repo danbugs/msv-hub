@@ -241,34 +241,20 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (isDQ) { match.isDQ = true; match.topScore = undefined; match.bottomScore = undefined; }
 	else { match.isDQ = false; if (topScore !== undefined) match.topScore = topScore; if (bottomScore !== undefined) match.bottomScore = bottomScore; }
 
-	// Save MSV Hub state immediately so the UI gets an instant response.
+	// Report to StartGG synchronously — correctness requires we save once at the end.
+	const sgResult = await reportSwissMatch(tournament, targetRound.number, match).catch(
+		(e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) })
+	);
+
 	await saveTournament(tournament);
 
 	const roundComplete = targetRound.matches.every((m) => m.winnerId);
-	const roundNum = targetRound.number;
-
-	// Fire StartGG report in the background — never block the UI.
-	// After reporting, re-load the latest tournament and merge only StartGG fields
-	// to avoid overwriting concurrent match reports.
-	reportSwissMatch(tournament, roundNum, match)
-		.then(async () => {
-			const fresh = await getActiveTournament();
-			if (!fresh) return;
-			// Merge startggSetId onto the match in the fresh state
-			const freshRound = fresh.rounds.find((r) => r.number === roundNum);
-			const freshMatch = freshRound?.matches.find((m) => m.id === matchId);
-			if (freshMatch) freshMatch.startggSetId = match.startggSetId;
-			// Merge StartGG sync state (errors, cacheReady, etc.)
-			if (tournament.startggSync) fresh.startggSync = tournament.startggSync;
-			await saveTournament(fresh);
-		})
-		.catch(() => {});
 
 	return Response.json({
 		ok: true,
 		match,
 		wasMisreport,
 		roundComplete,
-		startgg: { ok: true, background: true }
+		startgg: { ok: sgResult.ok, error: sgResult.ok ? undefined : sgResult.error }
 	});
 };
