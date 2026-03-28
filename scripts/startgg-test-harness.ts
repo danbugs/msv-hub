@@ -3,14 +3,11 @@
  * Interactive StartGG test harness.
  *
  * Usage:
- *   npx tsx scripts/startgg-test-harness.ts <phaseGroupId>
+ *   npx tsx scripts/startgg-test-harness.ts <event-url-or-slug>
  *
- * Steps:
- *   1. Pulls all set IDs + entrant names in the phase group
- *   2. Lets you pick a set and report it
- *   3. Tries to report the same set again (should fail)
- *   4. Pulls all set IDs again (shows updated state)
- *   5. Tries to report again
+ * Example:
+ *   npx tsx scripts/startgg-test-harness.ts https://www.start.gg/tournament/micro-132/event/ultimate-singles
+ *   npx tsx scripts/startgg-test-harness.ts tournament/micro-132/event/ultimate-singles
  *
  * Requires STARTGG_TOKEN in ../.env
  */
@@ -54,6 +51,27 @@ async function gql<T = Record<string, unknown>>(query: string, variables: Record
 
 // ── Queries ──
 
+const EVENT_BY_SLUG = `
+query EventBySlug($slug: String!) {
+  event(slug: $slug) { id name }
+}`;
+
+const EVENT_PHASES = `
+query EventPhases($eventId: ID!) {
+  event(id: $eventId) {
+    phases { id name numSeeds }
+  }
+}`;
+
+const PHASE_GROUPS = `
+query PhaseGroups($phaseId: ID!) {
+  phase(id: $phaseId) {
+    phaseGroups(query: { page: 1, perPage: 64 }) {
+      nodes { id displayIdentifier }
+    }
+  }
+}`;
+
 const SETS_QUERY = `
 query PhaseGroupSets($pgId: ID!) {
   phaseGroup(id: $pgId) {
@@ -85,6 +103,8 @@ mutation ResetSet($setId: ID!) {
 
 // ── Types ──
 
+interface Phase { id: number; name: string; numSeeds: number }
+interface PhaseGroup { id: number; displayIdentifier: string }
 interface SetNode {
 	id: number | string;
 	fullRoundText: string | null;
@@ -97,7 +117,13 @@ interface SetNode {
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const ask = (q: string): Promise<string> => new Promise(r => rl.question(q, r));
 
-// ── Main ──
+// ── Helpers ──
+
+function normalizeSlug(input: string): string {
+	return input
+		.replace(/^https?:\/\/[^/]+\//i, '')
+		.replace(/^\/+|\/+$/g, '');
+}
 
 async function fetchSets(pgId: number): Promise<SetNode[]> {
 	const data = await gql<{ phaseGroup: { sets: { nodes: SetNode[] } } }>(SETS_QUERY, { pgId });
@@ -105,9 +131,9 @@ async function fetchSets(pgId: number): Promise<SetNode[]> {
 }
 
 function printSets(sets: SetNode[]) {
-	console.log(`\n${'─'.repeat(80)}`);
+	console.log(`\n${'─'.repeat(90)}`);
 	console.log(`  #  │ Set ID            │ Status     │ Match`);
-	console.log(`${'─'.repeat(80)}`);
+	console.log(`${'─'.repeat(90)}`);
 	for (let i = 0; i < sets.length; i++) {
 		const s = sets[i];
 		const p1 = s.slots[0]?.entrant?.name ?? '???';
@@ -118,20 +144,26 @@ function printSets(sets: SetNode[]) {
 			: '';
 		console.log(`  ${String(i + 1).padStart(2)} │ ${String(s.id).padStart(17)} │ ${status} │ ${p1} vs ${p2}${winner}`);
 	}
-	console.log(`${'─'.repeat(80)}\n`);
+	console.log(`${'─'.repeat(90)}\n`);
 }
 
-async function reportSet(setId: string | number, winnerId: number, winnerScore: number, loserScore: number): Promise<boolean> {
+async function reportSet(setId: string | number, winnerId: number, loserEntrantId: number, winnerScore: number, loserScore: number): Promise<boolean> {
 	console.log(`\n→ Reporting set ${setId}: winner=${winnerId}, score=${winnerScore}-${loserScore}`);
+
+	const w = String(winnerId);
+	const l = String(loserEntrantId);
+	let gameData;
+	if (loserScore === 0) {
+		gameData = [{ winnerId: w, gameNum: 1 }, { winnerId: w, gameNum: 2 }];
+	} else {
+		gameData = [{ winnerId: w, gameNum: 1 }, { winnerId: l, gameNum: 2 }, { winnerId: w, gameNum: 3 }];
+	}
+
 	const data = await gql(REPORT_MUTATION, {
 		setId: String(setId),
 		winnerId,
 		isDQ: false,
-		gameData: [
-			{ winnerId, gameNum: 1 },
-			{ winnerId, gameNum: 2 },
-			...(loserScore >= 1 ? [{ winnerId, gameNum: 3 }] : [])
-		]
+		gameData
 	});
 	if (data) {
 		console.log('  ✓ Report succeeded:', JSON.stringify(data));
@@ -152,90 +184,163 @@ async function resetSet(setId: string | number): Promise<boolean> {
 	return false;
 }
 
+// ── Main ──
+
 async function main() {
-	const pgId = Number(process.argv[2]);
-	if (!pgId) {
-		console.error('Usage: npx tsx scripts/startgg-test-harness.ts <phaseGroupId>');
-		console.error('  e.g. npx tsx scripts/startgg-test-harness.ts 3251998');
+	const input = process.argv.slice(2).join(' ').trim();
+	if (!input) {
+		console.error('Usage: npx tsx scripts/startgg-test-harness.ts <event-url-or-slug>');
+		console.error('  e.g. npx tsx scripts/startgg-test-harness.ts https://www.start.gg/tournament/micro-132/event/ultimate-singles');
 		process.exit(1);
 	}
 
-	console.log(`\n╔══════════════════════════════════════════════════╗`);
-	console.log(`║  StartGG Test Harness — Phase Group ${pgId}  ║`);
-	console.log(`╚══════════════════════════════════════════════════╝`);
+	const slug = normalizeSlug(input);
+	console.log(`\n╔══════════════════════════════════════════════════════════╗`);
+	console.log(`║  StartGG Test Harness                                   ║`);
+	console.log(`╚══════════════════════════════════════════════════════════╝`);
+	console.log(`  Event slug: ${slug}`);
 
-	// ── Step 1: Pull all sets ──
-	console.log('\n[Step 1] Fetching all sets...');
-	let sets = await fetchSets(pgId);
-	if (!sets.length) { console.error('No sets found!'); process.exit(1); }
-	printSets(sets);
+	// ── Step 1: Resolve event ──
+	console.log('\n[Step 1] Resolving event...');
+	const eventData = await gql<{ event: { id: number; name: string } }>(EVENT_BY_SLUG, { slug });
+	if (!eventData?.event) { console.error('Event not found!'); process.exit(1); }
+	const { id: eventId, name: eventName } = eventData.event;
+	console.log(`  ✓ ${eventName} (ID: ${eventId})`);
 
-	// ── Step 2: Pick a set to report ──
-	const openSets = sets.filter(s => !s.winnerId);
-	if (openSets.length === 0) {
-		console.log('All sets are already reported. Pick one to reset first?');
-		const resetIdx = await ask('Enter set # to reset (or "skip"): ');
-		if (resetIdx !== 'skip') {
-			const idx = Number(resetIdx) - 1;
-			if (sets[idx]) {
-				await resetSet(sets[idx].id);
-				sets = await fetchSets(pgId);
-				printSets(sets);
+	// ── Step 2: List phases ──
+	console.log('\n[Step 2] Fetching phases...');
+	const phaseData = await gql<{ event: { phases: Phase[] } }>(EVENT_PHASES, { eventId });
+	const phases = phaseData?.event?.phases ?? [];
+	if (!phases.length) { console.error('No phases found!'); process.exit(1); }
+
+	console.log('');
+	for (let i = 0; i < phases.length; i++) {
+		console.log(`  [${i + 1}] ${phases[i].name} (ID: ${phases[i].id}, ${phases[i].numSeeds} seeds)`);
+	}
+
+	const phaseChoice = await ask('\nPick a phase #: ');
+	const phase = phases[Number(phaseChoice) - 1];
+	if (!phase) { console.error('Invalid phase #'); rl.close(); return; }
+
+	// ── Step 3: List phase groups ──
+	console.log(`\n[Step 3] Fetching phase groups for "${phase.name}"...`);
+	const pgData = await gql<{ phase: { phaseGroups: { nodes: PhaseGroup[] } } }>(PHASE_GROUPS, { phaseId: phase.id });
+	const groups = pgData?.phase?.phaseGroups?.nodes ?? [];
+	if (!groups.length) { console.error('No phase groups found!'); rl.close(); return; }
+
+	let pgId: number;
+	if (groups.length === 1) {
+		pgId = groups[0].id;
+		console.log(`  Using phase group ${pgId}`);
+	} else {
+		console.log('');
+		for (let i = 0; i < groups.length; i++) {
+			console.log(`  [${i + 1}] Pool ${groups[i].displayIdentifier} (ID: ${groups[i].id})`);
+		}
+		const pgChoice = await ask('\nPick a phase group #: ');
+		const pg = groups[Number(pgChoice) - 1];
+		if (!pg) { console.error('Invalid #'); rl.close(); return; }
+		pgId = pg.id;
+	}
+
+	// ── Interactive loop ──
+	while (true) {
+		console.log('\n[Fetching sets...]');
+		let sets = await fetchSets(pgId);
+		if (!sets.length) { console.log('No sets found in this phase group.'); break; }
+		printSets(sets);
+
+		console.log('Commands:');
+		console.log('  <#>        — report that set');
+		console.log('  r <#>      — reset that set');
+		console.log('  refresh    — re-fetch sets');
+		console.log('  phase      — switch phase');
+		console.log('  q          — quit');
+
+		const cmd = (await ask('\n> ')).trim().toLowerCase();
+		if (cmd === 'q') break;
+		if (cmd === 'refresh') continue;
+		if (cmd === 'phase') {
+			// Re-pick phase
+			console.log('');
+			for (let i = 0; i < phases.length; i++) {
+				console.log(`  [${i + 1}] ${phases[i].name} (ID: ${phases[i].id})`);
+			}
+			const pc = await ask('\nPick a phase #: ');
+			const p = phases[Number(pc) - 1];
+			if (!p) { console.log('Invalid'); continue; }
+			const pgd = await gql<{ phase: { phaseGroups: { nodes: PhaseGroup[] } } }>(PHASE_GROUPS, { phaseId: p.id });
+			const gs = pgd?.phase?.phaseGroups?.nodes ?? [];
+			if (!gs.length) { console.log('No phase groups'); continue; }
+			if (gs.length === 1) { pgId = gs[0].id; }
+			else {
+				for (let i = 0; i < gs.length; i++) console.log(`  [${i + 1}] Pool ${gs[i].displayIdentifier} (ID: ${gs[i].id})`);
+				const gc = await ask('Pick a phase group #: ');
+				const g = gs[Number(gc) - 1];
+				if (!g) { console.log('Invalid'); continue; }
+				pgId = g.id;
+			}
+			continue;
+		}
+
+		// Reset command: "r 3"
+		const resetMatch = cmd.match(/^r\s+(\d+)$/);
+		if (resetMatch) {
+			const idx = Number(resetMatch[1]) - 1;
+			if (sets[idx]) await resetSet(sets[idx].id);
+			else console.log('Invalid set #');
+			continue;
+		}
+
+		// Report command: just a number
+		const setIdx = Number(cmd) - 1;
+		if (isNaN(setIdx) || !sets[setIdx]) { console.log('Unknown command or invalid set #'); continue; }
+
+		const targetSet = sets[setIdx];
+		const p1 = targetSet.slots[0]?.entrant;
+		const p2 = targetSet.slots[1]?.entrant;
+		if (!p1 || !p2) { console.log('Set has missing entrants'); continue; }
+
+		console.log(`\n  ${p1.name} (entrant ${p1.id}) vs ${p2.name} (entrant ${p2.id})`);
+		if (targetSet.winnerId) {
+			const winnerName = targetSet.slots.find(sl => sl.entrant?.id === targetSet.winnerId)?.entrant?.name ?? '?';
+			console.log(`  Already reported: ${winnerName} won`);
+			const proceed = await ask('  Report anyway (overwrite)? [y/n]: ');
+			if (proceed !== 'y') continue;
+		}
+
+		const winnerPick = await ask(`  Who wins? [1] ${p1.name}  [2] ${p2.name}: `);
+		const winner = winnerPick === '2' ? p2 : p1;
+		const loser = winnerPick === '2' ? p1 : p2;
+
+		const scorePick = await ask('  Score? [1] 2-0  [2] 2-1: ');
+		const loserScore = scorePick === '2' ? 1 : 0;
+
+		console.log(`\n  Reporting: ${winner.name} wins 2-${loserScore}`);
+		await reportSet(targetSet.id, winner.id, loser.id, 2, loserScore);
+
+		// Ask about re-report test
+		const retest = await ask('\n  Try re-reporting same set (test idempotency)? [y/n]: ');
+		if (retest === 'y') {
+			console.log('\n  [Re-report attempt with original set ID...]');
+			const ok2 = await reportSet(targetSet.id, winner.id, loser.id, 2, loserScore);
+			console.log(ok2 ? '  ⚠ Unexpectedly succeeded!' : '  ✓ Correctly rejected re-report');
+
+			// Check if set ID changed (preview → real)
+			console.log('\n  [Fetching sets to check for ID changes...]');
+			sets = await fetchSets(pgId);
+			const updatedSet = sets.find(s => {
+				const ids = s.slots.map(sl => sl.entrant?.id).filter(Boolean);
+				return ids.includes(p1.id) && ids.includes(p2.id);
+			});
+			const currentSetId = updatedSet?.id ?? targetSet.id;
+			if (String(currentSetId) !== String(targetSet.id)) {
+				console.log(`  ℹ Set ID changed: ${targetSet.id} → ${currentSetId} (preview → real)`);
+				console.log('\n  [Re-report attempt with new set ID...]');
+				const ok3 = await reportSet(currentSetId, winner.id, loser.id, 2, loserScore);
+				console.log(ok3 ? '  ⚠ Unexpectedly succeeded!' : '  ✓ Correctly rejected re-report');
 			}
 		}
-	}
-
-	const pickIdx = await ask('Enter set # to report (or "q" to quit): ');
-	if (pickIdx === 'q') { rl.close(); return; }
-	const setIdx = Number(pickIdx) - 1;
-	const targetSet = sets[setIdx];
-	if (!targetSet) { console.error('Invalid set #'); rl.close(); return; }
-
-	const p1 = targetSet.slots[0]?.entrant;
-	const p2 = targetSet.slots[1]?.entrant;
-	if (!p1 || !p2) { console.error('Set has missing entrants'); rl.close(); return; }
-
-	console.log(`\nSelected: ${p1.name} (${p1.id}) vs ${p2.name} (${p2.id})`);
-	const winnerPick = await ask(`Who wins? [1] ${p1.name}  [2] ${p2.name}: `);
-	const winner = winnerPick === '2' ? p2 : p1;
-	const scorePick = await ask('Score? [1] 2-0  [2] 2-1: ');
-	const loserScore = scorePick === '2' ? 1 : 0;
-
-	// ── Step 2b: Report ──
-	console.log(`\n[Step 2] Reporting: ${winner.name} wins 2-${loserScore}`);
-	const ok1 = await reportSet(targetSet.id, winner.id, 2, loserScore);
-
-	// ── Step 3: Try to report again (should fail) ──
-	console.log(`\n[Step 3] Trying to report same set again (should fail)...`);
-	const ok2 = await reportSet(targetSet.id, winner.id, 2, loserScore);
-	console.log(ok2 ? '  ⚠ Unexpectedly succeeded!' : '  ✓ Correctly rejected re-report');
-
-	// ── Step 4: Pull sets again ──
-	console.log(`\n[Step 4] Fetching sets again (check updated state)...`);
-	sets = await fetchSets(pgId);
-	printSets(sets);
-
-	// Note the set ID might have changed (preview → real)
-	const updatedSet = sets.find(s => {
-		const ids = s.slots.map(sl => sl.entrant?.id).filter(Boolean);
-		return ids.includes(p1.id) && ids.includes(p2.id);
-	});
-	const currentSetId = updatedSet?.id ?? targetSet.id;
-	if (String(currentSetId) !== String(targetSet.id)) {
-		console.log(`  ℹ Set ID changed: ${targetSet.id} → ${currentSetId} (preview → real conversion)`);
-	}
-
-	// ── Step 5: Try to report again using current set ID ──
-	console.log(`\n[Step 5] Trying to report again with current set ID ${currentSetId}...`);
-	const ok3 = await reportSet(currentSetId, winner.id, 2, loserScore);
-	console.log(ok3 ? '  ⚠ Unexpectedly succeeded!' : '  ✓ Correctly rejected re-report');
-
-	// ── Optional: Reset ──
-	const doReset = await ask('\nReset this set? [y/n]: ');
-	if (doReset === 'y') {
-		await resetSet(currentSetId);
-		console.log('\nFinal state:');
-		printSets(await fetchSets(pgId));
 	}
 
 	console.log('\nDone!');
