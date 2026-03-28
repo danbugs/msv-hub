@@ -583,3 +583,53 @@ export async function pushPairingsToPhaseGroup(
 	if (!data) return { ok: false, error: 'updatePhaseSeeding mutation failed' };
 	return { ok: true };
 }
+
+/**
+ * Push final Swiss standings to the "Final Standings" phase on StartGG.
+ *
+ * This re-seeds the phase group so that seed 1 = 1st place, seed 2 = 2nd place, etc.
+ * The TO then just needs to finalize placements on StartGG.
+ *
+ * @param rankedEntrantIds - StartGG entrant IDs in final standing order (index 0 = 1st place)
+ */
+export async function pushFinalStandingsSeeding(
+	phaseId: number,
+	phaseGroupId: number,
+	rankedEntrantIds: number[]
+): Promise<{ ok: boolean; error?: string }> {
+	// Fetch seeds in this phase group to get seedId per entrant
+	const seeds = await fetchAllPages(PHASE_GROUP_SEEDS_QUERY, { phaseGroupId }, (d) => {
+		const pg = d.phaseGroup as GqlRecord | undefined;
+		return pg?.seeds ?? null;
+	}, undefined, 0).catch(() => [] as GqlRecord[]);
+
+	if (!(seeds as GqlRecord[]).length) {
+		return { ok: false, error: 'Final Standings phase group has no seeds' };
+	}
+
+	const entrantToSeedId = new Map<number, string>();
+	for (const seed of seeds as GqlRecord[]) {
+		const entrantId = (seed.entrant as { id?: number } | undefined)?.id;
+		if (entrantId && seed.id) entrantToSeedId.set(entrantId, String(seed.id));
+	}
+
+	const seedMapping: { seedId: string; phaseGroupId: string; seedNum: number }[] = [];
+	rankedEntrantIds.forEach((entrantId, i) => {
+		const seedId = entrantToSeedId.get(entrantId);
+		if (seedId) {
+			seedMapping.push({ seedId, phaseGroupId: String(phaseGroupId), seedNum: i + 1 });
+		}
+	});
+
+	if (!seedMapping.length) return { ok: false, error: 'No matching seeds found for final standings' };
+
+	seedMapping.sort((a, b) => a.seedNum - b.seedNum);
+
+	const data = await gql(
+		UPDATE_PHASE_SEEDING_MUTATION,
+		{ phaseId: String(phaseId), seedMapping },
+		{ delay: 0 }
+	).catch(() => null);
+	if (!data) return { ok: false, error: 'updatePhaseSeeding for Final Standings failed' };
+	return { ok: true };
+}

@@ -75,14 +75,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Fetch phase groups for ALL Swiss rounds (each StartGG phase = one round).
-	// Excludes "Final Standings" phase. One entry per round, indexed by round-1.
+	// Separate "Final Standings" phase from Swiss round phases.
 	const swissPhases = phases.filter((p) => !p.name.toLowerCase().includes('final'));
+	const finalStandingsPhase = phases.find((p) => p.name.toLowerCase().includes('final'));
 	const allRoundGroups: { id: number; displayIdentifier: string; phaseId: number }[] = [];
 	for (const phase of swissPhases) {
 		const groups = await fetchPhaseGroups(phase.id).catch(() => []);
 		if (groups.length > 0) {
 			allRoundGroups.push({ ...groups[0], phaseId: phase.id });
 		}
+	}
+	// Fetch phase group for Final Standings phase (used to push Swiss standings after bracket split)
+	let finalStandingsPhaseGroupId: number | undefined;
+	if (finalStandingsPhase) {
+		const groups = await fetchPhaseGroups(finalStandingsPhase.id).catch(() => []);
+		if (groups.length > 0) finalStandingsPhaseGroupId = groups[0].id;
 	}
 
 	const tourneySlug = slug.replace(/\//g, '-');
@@ -109,6 +116,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		startggEventSlug: slug,
 		startggPhase1Id: phaseId,
 		startggPhase1Groups: allRoundGroups.length ? allRoundGroups : undefined,
+		startggFinalStandingsPhaseId: finalStandingsPhase?.id,
+		startggFinalStandingsPhaseGroupId: finalStandingsPhaseGroupId,
 		createdAt: Date.now(),
 		updatedAt: Date.now()
 	};

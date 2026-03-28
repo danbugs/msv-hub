@@ -3,7 +3,7 @@ import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
-import { pushPairingsToPhaseGroup } from '$lib/server/startgg';
+import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding } from '$lib/server/startgg';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -64,8 +64,31 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		};
 		tournament.phase = 'brackets';
 
+		// Push final Swiss standings to the "Final Standings" phase on StartGG
+		let finalStandingsSynced = false;
+		if (tournament.startggFinalStandingsPhaseId && tournament.startggFinalStandingsPhaseGroupId) {
+			const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+			const rankedEntrantIds = finalStandings
+				.map((s) => entrantMap.get(s.entrantId)?.startggEntrantId)
+				.filter((id): id is number => id !== undefined);
+			if (rankedEntrantIds.length) {
+				const result = await pushFinalStandingsSeeding(
+					tournament.startggFinalStandingsPhaseId,
+					tournament.startggFinalStandingsPhaseGroupId,
+					rankedEntrantIds
+				).catch((e) => ({ ok: false as const, error: String(e) }));
+				finalStandingsSynced = result.ok;
+				if (!result.ok) {
+					console.error(`[StartGG] pushFinalStandingsSeeding failed: ${result.error}`);
+				}
+			}
+		}
+
 		await saveTournament(tournament);
-		return Response.json({ phase: 'brackets', finalStandings, brackets: tournament.brackets });
+		return Response.json({
+			phase: 'brackets', finalStandings, brackets: tournament.brackets,
+			startggFinalStandingsSynced: finalStandingsSynced
+		});
 	}
 
 	// Generate pairings for next round

@@ -34,6 +34,10 @@ export interface TournamentState {
 	/** Phase groups for the Swiss rounds — one entry per round, indexed by round-1.
 	 *  Each round may belong to a different StartGG phase (separate phases per round). */
 	startggPhase1Groups?: { id: number; displayIdentifier: string; phaseId?: number }[];
+	/** StartGG phase ID for the "Final Standings" phase — used to push Swiss standings after bracket split */
+	startggFinalStandingsPhaseId?: number;
+	/** StartGG phase group ID inside the Final Standings phase */
+	startggFinalStandingsPhaseGroupId?: number;
 	/** StartGG sync state for bracket reporting */
 	startggSync?: StartggSyncState;
 }
