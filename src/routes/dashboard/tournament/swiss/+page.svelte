@@ -201,7 +201,10 @@
 	<h1 class="mt-4 text-2xl font-bold text-white">Run Swiss</h1>
 
 	{#if error}
-		<div class="mt-4 rounded-lg border border-red-800 bg-red-900/30 p-4 text-sm text-red-400">{error}</div>
+		<div class="mt-4 flex items-start gap-2 rounded-lg border border-red-800 bg-red-900/30 px-4 py-3 text-sm text-red-400">
+			<span class="min-w-0 flex-1">{error}</span>
+			<button onclick={() => error = ''} class="shrink-0 text-red-400 hover:text-white leading-none" title="Dismiss">✕</button>
+		</div>
 	{/if}
 
 	{#if showSetup && !tournament}
@@ -272,8 +275,8 @@
 			{#if isFinalRoundComplete() && !dismissedBanners.has('final-done')}
 				<div class="mt-4 flex items-start gap-2 rounded-lg border border-amber-700 bg-amber-950/60 px-4 py-3 text-sm text-amber-200">
 					<span class="flex-1">
-						<span class="font-semibold">StartGG:</span> Swiss is complete — go to StartGG and
-						<strong>finalize the standings</strong> phase group before generating the bracket split.
+						<span class="font-semibold">StartGG:</span> Swiss is complete — standings have been synced to the "Final Standings" phase on StartGG.
+						Go to StartGG and <strong>finalize placements</strong> there, then generate the bracket split here.
 					</span>
 					<button onclick={() => dismissedBanners = new Set([...dismissedBanners, 'final-done'])}
 						class="shrink-0 text-amber-400 hover:text-amber-200 text-base leading-none" title="Dismiss">✕</button>
