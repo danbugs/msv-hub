@@ -165,29 +165,68 @@ function printSets(sets: SetNode[]) {
 	console.log(`${'─'.repeat(90)}\n`);
 }
 
-async function reportSet(setId: string | number, winnerId: number, loserEntrantId: number, winnerScore: number, loserScore: number): Promise<boolean> {
-	console.log(`\n→ Reporting set ${setId}: winner=${winnerId}, score=${winnerScore}-${loserScore}`);
-
+/** Returns { ok, error? } so callers can inspect failure reason. */
+async function reportSetRaw(setId: string | number, winnerId: number, loserEntrantId: number, loserScore: number, isDQ: boolean): Promise<{ ok: boolean; error?: string; data?: unknown }> {
 	const w = String(winnerId);
 	const l = String(loserEntrantId);
-	let gameData;
-	if (loserScore === 0) {
-		gameData = [{ winnerId: w, gameNum: 1 }, { winnerId: w, gameNum: 2 }];
-	} else {
-		gameData = [{ winnerId: w, gameNum: 1 }, { winnerId: l, gameNum: 2 }, { winnerId: w, gameNum: 3 }];
-	}
 
-	const data = await gql(REPORT_MUTATION, {
+	const variables: Record<string, unknown> = {
 		setId: String(setId),
 		winnerId: String(winnerId),
-		isDQ: false,
-		gameData
+		isDQ
+	};
+
+	if (!isDQ) {
+		let gameData;
+		if (loserScore === 0) {
+			gameData = [{ winnerId: w, gameNum: 1 }, { winnerId: w, gameNum: 2 }];
+		} else {
+			gameData = [{ winnerId: w, gameNum: 1 }, { winnerId: l, gameNum: 2 }, { winnerId: w, gameNum: 3 }];
+		}
+		variables.gameData = gameData;
+	}
+
+	// Bypass gql() to get the raw error message
+	const res = await fetch(API, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+		body: JSON.stringify({ query: REPORT_MUTATION, variables })
 	});
-	if (data) {
-		console.log('  ✓ Report succeeded:', JSON.stringify(data));
+
+	if (res.status === 429) {
+		console.log('  ⚠ Rate limited, waiting 10s...');
+		await new Promise(r => setTimeout(r, 10000));
+		return reportSetRaw(setId, winnerId, loserEntrantId, loserScore, isDQ);
+	}
+
+	const json = await res.json();
+	if (json.errors?.length) {
+		const msg = json.errors.map((e: { message: string }) => e.message).join('; ');
+		return { ok: false, error: msg };
+	}
+	return { ok: true, data: json.data };
+}
+
+async function doReport(setId: string | number, winnerId: number, loserEntrantId: number, loserScore: number, isDQ: boolean): Promise<boolean> {
+	const label = isDQ ? 'DQ' : `2-${loserScore}`;
+	console.log(`\n→ Reporting set ${setId}: winner=${winnerId}, ${label}`);
+
+	let result = await reportSetRaw(setId, winnerId, loserEntrantId, loserScore, isDQ);
+
+	// If set is already completed, auto-reset and re-report (mirrors app behavior)
+	if (!result.ok && result.error?.includes('Cannot report completed set')) {
+		console.log('  ⚠ Set already completed — resetting first...');
+		const resetOk = await resetSet(setId);
+		if (resetOk) {
+			result = await reportSetRaw(setId, winnerId, loserEntrantId, loserScore, isDQ);
+		}
+	}
+
+	if (result.ok) {
+		console.log('  ✓ Report succeeded:', JSON.stringify(result.data));
 		return true;
 	}
-	console.log('  ✗ Report FAILED (see errors above)');
+	console.log(`  ✗ Report FAILED: ${result.error}`);
 	return false;
 }
 
@@ -323,42 +362,20 @@ async function main() {
 		if (targetSet.winnerId) {
 			const winnerName = targetSet.slots.find(sl => sl.entrant?.id === targetSet.winnerId)?.entrant?.name ?? '?';
 			console.log(`  Already reported: ${winnerName} won`);
-			const proceed = await ask('  Report anyway (overwrite)? [y/n]: ');
-			if (proceed !== 'y') continue;
+			console.log(`  (will auto-reset before re-reporting)`);
 		}
 
 		const winnerPick = await ask(`  Who wins? [1] ${p1.name}  [2] ${p2.name}: `);
 		const winner = winnerPick === '2' ? p2 : p1;
 		const loser = winnerPick === '2' ? p1 : p2;
 
-		const scorePick = await ask('  Score? [1] 2-0  [2] 2-1: ');
+		const scorePick = await ask('  Score? [1] 2-0  [2] 2-1  [3] DQ: ');
+		const isDQ = scorePick === '3';
 		const loserScore = scorePick === '2' ? 1 : 0;
 
-		console.log(`\n  Reporting: ${winner.name} wins 2-${loserScore}`);
-		await reportSet(targetSet.id, winner.id, loser.id, 2, loserScore);
-
-		// Ask about re-report test
-		const retest = await ask('\n  Try re-reporting same set (test idempotency)? [y/n]: ');
-		if (retest === 'y') {
-			console.log('\n  [Re-report attempt with original set ID...]');
-			const ok2 = await reportSet(targetSet.id, winner.id, loser.id, 2, loserScore);
-			console.log(ok2 ? '  ⚠ Unexpectedly succeeded!' : '  ✓ Correctly rejected re-report');
-
-			// Check if set ID changed (preview → real)
-			console.log('\n  [Fetching sets to check for ID changes...]');
-			sets = await fetchSets(pgId);
-			const updatedSet = sets.find(s => {
-				const ids = s.slots.map(sl => sl.entrant?.id).filter(Boolean);
-				return ids.includes(p1.id) && ids.includes(p2.id);
-			});
-			const currentSetId = updatedSet?.id ?? targetSet.id;
-			if (String(currentSetId) !== String(targetSet.id)) {
-				console.log(`  ℹ Set ID changed: ${targetSet.id} → ${currentSetId} (preview → real)`);
-				console.log('\n  [Re-report attempt with new set ID...]');
-				const ok3 = await reportSet(currentSetId, winner.id, loser.id, 2, loserScore);
-				console.log(ok3 ? '  ⚠ Unexpectedly succeeded!' : '  ✓ Correctly rejected re-report');
-			}
-		}
+		const label = isDQ ? 'DQ' : `2-${loserScore}`;
+		console.log(`\n  Reporting: ${winner.name} wins ${label}`);
+		await doReport(targetSet.id, winner.id, loser.id, loserScore, isDQ);
 	}
 
 	console.log('\nDone!');
