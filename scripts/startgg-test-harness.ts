@@ -89,7 +89,7 @@ query PhaseGroupSets($pgId: ID!) {
 }`;
 
 const REPORT_MUTATION = `
-mutation ReportSet($setId: ID!, $winnerId: Int!, $isDQ: Boolean, $gameData: [BracketSetGameDataInput]) {
+mutation ReportSet($setId: ID!, $winnerId: ID!, $isDQ: Boolean, $gameData: [BracketSetGameDataInput]) {
   reportBracketSet(setId: $setId, winnerId: $winnerId, isDQ: $isDQ, gameData: $gameData) {
     id
     state
@@ -161,7 +161,7 @@ async function reportSet(setId: string | number, winnerId: number, loserEntrantI
 
 	const data = await gql(REPORT_MUTATION, {
 		setId: String(setId),
-		winnerId,
+		winnerId: String(winnerId),
 		isDQ: false,
 		gameData
 	});
