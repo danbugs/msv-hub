@@ -125,9 +125,27 @@ function normalizeSlug(input: string): string {
 		.replace(/^\/+|\/+$/g, '');
 }
 
-async function fetchSets(pgId: number): Promise<SetNode[]> {
+async function fetchSets(pgId: number, retryOnEmpty = true): Promise<SetNode[]> {
 	const data = await gql<{ phaseGroup: { sets: { nodes: SetNode[] } } }>(SETS_QUERY, { pgId });
-	return data?.phaseGroup?.sets?.nodes ?? [];
+	let nodes = data?.phaseGroup?.sets?.nodes ?? [];
+
+	// After the first preview set is reported, StartGG converts all preview sets to real IDs.
+	// During this conversion (~5-30s) the API returns 0 sets. Retry with back-off.
+	if (nodes.length === 0 && retryOnEmpty) {
+		for (let attempt = 1; attempt <= 6; attempt++) {
+			const waitSec = attempt * 5;
+			process.stdout.write(`  ⏳ No sets returned (preview→real conversion in progress), retrying in ${waitSec}s... (${attempt}/6)\r`);
+			await new Promise(r => setTimeout(r, waitSec * 1000));
+			const retry = await gql<{ phaseGroup: { sets: { nodes: SetNode[] } } }>(SETS_QUERY, { pgId });
+			nodes = retry?.phaseGroup?.sets?.nodes ?? [];
+			if (nodes.length > 0) {
+				console.log('  ✓ Sets loaded after preview→real conversion                                        ');
+				break;
+			}
+		}
+	}
+
+	return nodes;
 }
 
 function printSets(sets: SetNode[]) {
