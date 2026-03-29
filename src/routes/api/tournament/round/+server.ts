@@ -64,6 +64,29 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		};
 		tournament.phase = 'brackets';
 
+		// Assign stations: main gets 1-half, redemption gets half+1 to numStations.
+		// Stream station goes to the first ready main bracket match.
+		const totalStations = tournament.settings.numStations;
+		const streamStn = tournament.settings.streamStation;
+		const halfStations = Math.ceil(totalStations / 2);
+		const mainStations = Array.from({ length: halfStations }, (_, i) => i + 1);
+		const redemptionStations = Array.from({ length: totalStations - halfStations }, (_, i) => halfStations + i + 1);
+		let mainIdx = 0;
+		for (const m of tournament.brackets.main.matches) {
+			if (m.topPlayerId && m.bottomPlayerId && !m.winnerId && mainIdx < mainStations.length) {
+				m.station = mainStations[mainIdx] === streamStn ? streamStn : mainStations[mainIdx];
+				if (mainIdx === 0) m.isStream = true; // first ready match gets stream
+				mainIdx++;
+			}
+		}
+		let redIdx = 0;
+		for (const m of tournament.brackets.redemption.matches) {
+			if (m.topPlayerId && m.bottomPlayerId && !m.winnerId && redIdx < redemptionStations.length) {
+				m.station = redemptionStations[redIdx];
+				redIdx++;
+			}
+		}
+
 		// Push final Swiss standings to the "Final Standings" phase on StartGG
 		let finalStandingsSynced = false;
 		if (tournament.startggFinalStandingsPhaseId && tournament.startggFinalStandingsPhaseGroupId) {

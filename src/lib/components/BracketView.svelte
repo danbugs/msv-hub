@@ -227,14 +227,11 @@
 							{/if}
 						</div>
 						<div class="flex items-center gap-1 shrink-0">
-							{#if called && match.calledAt}
-								<span class="text-xs text-green-400 font-mono shrink-0">{elapsed(match.calledAt)}</span>
-							{/if}
 							{#if onCall && ready}
 								<button onclick={() => onCall!(match)}
 									class="rounded px-2 py-0.5 text-xs font-medium transition-colors
 										{called ? 'bg-green-900/40 text-green-400 hover:bg-green-900/60' : 'border border-gray-600 text-gray-400 hover:text-green-400 hover:border-green-600'}">
-									{called ? 'Called' : 'Call'}
+									{#if called && match.calledAt}{elapsed(match.calledAt)}{:else}{called ? 'Called' : 'Call'}{/if}
 								</button>
 							{/if}
 							{#if onStream && ready && !match.isStream}
