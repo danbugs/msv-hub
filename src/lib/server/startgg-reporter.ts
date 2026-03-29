@@ -84,23 +84,59 @@ export async function preCacheRoundSetIds(
 }
 
 /**
- * Fetch set IDs from StartGG for this round's phase group and cache them on every match.
- * Sets cacheReady = true when done. Preview IDs are fine — they work for reporting, and
- * the stale-preview retry in reportSwissMatch handles the conversion window automatically.
+ * Convert preview set IDs to real IDs and cache them on every match.
+ *
+ * Strategy: report a dummy result on the first preview set to trigger StartGG's
+ * preview→real conversion, immediately reset it, then wait for real IDs to appear.
+ * This ensures all set IDs are real before users start reporting.
  *
  * Caller must set startggSync.cacheReady = false and save before calling.
+ * Sets cacheReady = true when done.
  */
 export async function triggerConversionAndCache(
 	_stale: TournamentState,
 	roundNumber: number,
 	phaseGroupId: number
 ): Promise<void> {
-	// Fetch set IDs from StartGG
+	// Fetch initial sets — may be preview or real (if conversion already happened)
 	let nodes: GqlNode[] = [];
 	try {
 		const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
 		nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
 	} catch { /* best effort */ }
+
+	// Check if sets are still preview IDs
+	const hasPreview = nodes.some((n) => String(n.id).startsWith('preview_'));
+	if (hasPreview && nodes.length > 0) {
+		// Find first set with two entrants to use as dummy report target
+		const dummySet = nodes.find((n) =>
+			n.slots?.length >= 2 && n.slots[0]?.entrant?.id && n.slots[1]?.entrant?.id
+		);
+		if (dummySet) {
+			const dummyWinnerId = Number(dummySet.slots[0].entrant!.id);
+			// Report with dummy result to trigger conversion
+			const reportResult = await reportSet(
+				String(dummySet.id), dummyWinnerId, {}
+			).catch(() => ({ ok: false as const }));
+
+			if (reportResult.ok) {
+				// Reset the set immediately so it's clean for real reporting
+				const realSetId = reportResult.reportedSetId ?? String(dummySet.id);
+				await resetSet(realSetId).catch(() => {});
+			}
+
+			// Wait for real IDs to appear (conversion takes 5-30s)
+			nodes = [];
+			for (let retry = 1; retry <= 10; retry++) {
+				await new Promise<void>((r) => setTimeout(r, retry <= 3 ? 2000 : 4000));
+				try {
+					const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
+					nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
+				} catch { /* continue */ }
+				if (nodes.length > 0) break;
+			}
+		}
+	}
 
 	// Safe merge: re-load latest state so we never overwrite concurrent match results
 	const fresh = await getActiveTournament();
@@ -317,9 +353,7 @@ async function _doReportBracketMatch(
 		return { ok: false, error: msg };
 	}
 
-	// For brackets, try to find the matching set on StartGG.
-	// MSV Hub brackets may not map to StartGG bracket phases — if no set is found,
-	// silently skip StartGG reporting rather than showing a noisy error.
+	// For brackets, use full event scan to find the matching set on StartGG.
 	let setId = match.startggSetId ?? null;
 	if (!setId && tournament.startggEventId) {
 		setId = await findSetByEntrants(
@@ -330,9 +364,9 @@ async function _doReportBracketMatch(
 	}
 
 	if (!setId) {
-		// No bracket set found — this is expected when StartGG doesn't have bracket phases.
-		// Don't pollute the error list; just return ok so the match is saved.
-		return { ok: true };
+		const msg = `Bracket set not found on StartGG for ${topEntrant.gamerTag} vs ${botEntrant.gamerTag}`;
+		addError(sync, match.id, msg);
+		return { ok: false, error: msg };
 	}
 
 	const loserEntrant = winnerEntrant === topEntrant ? botEntrant : topEntrant;
