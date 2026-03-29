@@ -93,10 +93,8 @@
 			} else {
 				fixingMatchId = null;
 				pendingWinner = null;
-				// Show StartGG errors inline (non-blocking — match was saved regardless)
-				if (data.startgg && !data.startgg.ok) {
-					error = `StartGG: ${data.startgg.error}`;
-				}
+				// StartGG errors are already shown via startggSync.errors boxes — no need
+				// to also set the main error banner (which caused duplicate display).
 				await loadTournament();
 			}
 		} finally {

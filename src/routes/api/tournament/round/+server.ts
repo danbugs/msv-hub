@@ -352,14 +352,17 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		await saveTournament(tournament);
 	}
 
-	// If this was a misreport fix in a completed round, regenerate the NEXT round's pairings
-	// if that round is still active with zero reported results. Rounds beyond that stay untouched.
+	// If this was a misreport fix in a completed round, regenerate the first ACTIVE round
+	// with no reported results. Skip completed rounds in between — they stay untouched.
+	// Also re-trigger preview→real conversion for the regenerated round.
 	let regeneratedNextRound = false;
 	if (wasMisreport && targetRound.status === 'completed') {
 		const latestState = await getActiveTournament();
 		if (latestState) {
-			const nextRound = latestState.rounds.find((r) => r.number === targetRound.number + 1);
-			if (nextRound && nextRound.status === 'active' && nextRound.matches.every((m) => !m.winnerId)) {
+			const nextRound = latestState.rounds.find(
+				(r) => r.number > targetRound.number && r.status === 'active' && r.matches.every((m) => !m.winnerId)
+			);
+			if (nextRound) {
 				// Regenerate pairings for the next round using corrected standings
 				const completedRounds = latestState.rounds.filter((r) => r.status === 'completed');
 				const standings = calculateStandings(latestState.entrants, completedRounds);
@@ -409,7 +412,20 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 					}
 				}
 
+				// Re-trigger preview→real conversion for the regenerated round
+				if (rPgId) {
+					if (!latestState.startggSync) {
+						latestState.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
+					}
+					latestState.startggSync.cacheReady = false;
+				}
+
 				await saveTournament(latestState);
+
+				// Fire conversion in background
+				if (rPgId) {
+					triggerConversionAndCache(latestState, nextRound.number, rPgId).catch(() => {});
+				}
 			}
 		}
 	}
