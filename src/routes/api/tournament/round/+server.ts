@@ -264,12 +264,38 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (isDQ) { match.isDQ = true; match.topScore = undefined; match.bottomScore = undefined; }
 	else { match.isDQ = false; if (topScore !== undefined) match.topScore = topScore; if (bottomScore !== undefined) match.bottomScore = bottomScore; }
 
-	// Report to StartGG synchronously — correctness requires we save once at the end.
+	// Report to StartGG — save match result immediately, then merge StartGG metadata.
 	const sgResult = await reportSwissMatch(tournament, targetRound.number, match).catch(
 		(e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) })
 	);
 
-	await saveTournament(tournament);
+	// Safe merge: re-load fresh state so concurrent reports don't overwrite each other.
+	// Only apply this specific match's changes to the latest state.
+	const fresh = await getActiveTournament();
+	if (fresh) {
+		const freshRound = fresh.rounds.find((r) => r.number === targetRound.number);
+		const freshMatch = freshRound?.matches.find((m) => m.id === matchId);
+		if (freshMatch) {
+			freshMatch.winnerId = match.winnerId;
+			freshMatch.topScore = match.topScore;
+			freshMatch.bottomScore = match.bottomScore;
+			freshMatch.isDQ = match.isDQ;
+			freshMatch.startggSetId = match.startggSetId;
+			// Merge any cached set IDs from conversion (other matches in this round)
+			if (freshRound) {
+				for (const m of targetRound.matches) {
+					if (m.startggSetId) {
+						const fm = freshRound.matches.find((fm) => fm.id === m.id);
+						if (fm && !fm.startggSetId) fm.startggSetId = m.startggSetId;
+					}
+				}
+			}
+			if (tournament.startggSync) fresh.startggSync = tournament.startggSync;
+		}
+		await saveTournament(fresh);
+	} else {
+		await saveTournament(tournament);
+	}
 
 	const roundComplete = targetRound.matches.every((m) => m.winnerId);
 

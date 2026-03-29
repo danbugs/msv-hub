@@ -244,26 +244,21 @@ export async function reportSwissMatch(
 		clearErrorsForMatch(sync, match.id);
 
 		// If we just reported a preview set, StartGG converts the whole phase group to real
-		// IDs. Wait for conversion to complete and cache all real set IDs on the tournament
-		// so subsequent reports resolve instantly instead of each hitting the empty window.
+		// IDs. Cache all real set IDs on the tournament object so subsequent reports in the
+		// same request resolve from cache. The PATCH handler does a safe-merge save, so
+		// these cached IDs will be persisted for future requests too.
 		if (setId.startsWith('preview_')) {
 			const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
 			if (pgId) {
-				let nodes: GqlNode[] = [];
-				for (let retry = 0; retry <= 10; retry++) {
-					if (retry > 0) await new Promise<void>((r) => setTimeout(r, retry <= 3 ? 2000 : 4000));
-					try {
-						const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId: pgId }, { delay: 0 });
-						nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
-					} catch { /* continue retrying */ }
-					if (nodes.length > 0) break;
-				}
-				if (nodes.length > 0) {
-					const round = tournament.rounds.find((r) => r.number === roundNumber);
-					if (round) {
-						applyNodesToRound(nodes, round, entrantMap);
+				// Quick attempt: try to get real IDs immediately (works if conversion is fast)
+				try {
+					const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId: pgId }, { delay: 0 });
+					const nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
+					if (nodes.length > 0) {
+						const round = tournament.rounds.find((r) => r.number === roundNumber);
+						if (round) applyNodesToRound(nodes, round, entrantMap);
 					}
-				}
+				} catch { /* best effort — findSetInPhaseGroup retry will handle it */ }
 			}
 		}
 	} else {
@@ -322,7 +317,9 @@ async function _doReportBracketMatch(
 		return { ok: false, error: msg };
 	}
 
-	// For brackets, use full event scan (no phase group mapping implemented yet)
+	// For brackets, try to find the matching set on StartGG.
+	// MSV Hub brackets may not map to StartGG bracket phases — if no set is found,
+	// silently skip StartGG reporting rather than showing a noisy error.
 	let setId = match.startggSetId ?? null;
 	if (!setId && tournament.startggEventId) {
 		setId = await findSetByEntrants(
@@ -333,9 +330,9 @@ async function _doReportBracketMatch(
 	}
 
 	if (!setId) {
-		const msg = `Bracket set not found on StartGG for ${topEntrant.gamerTag} vs ${botEntrant.gamerTag}`;
-		addError(sync, match.id, msg);
-		return { ok: false, error: msg };
+		// No bracket set found — this is expected when StartGG doesn't have bracket phases.
+		// Don't pollute the error list; just return ok so the match is saved.
+		return { ok: true };
 	}
 
 	const loserEntrant = winnerEntrant === topEntrant ? botEntrant : topEntrant;
