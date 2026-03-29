@@ -163,6 +163,29 @@
 		await loadTournament();
 	}
 
+	let mainEventUrl = $state('');
+	let redemptionEventUrl = $state('');
+	let linkingEvents = $state(false);
+	let linkResult = $state('');
+
+	async function linkBracketEvents() {
+		if (!mainEventUrl.trim() && !redemptionEventUrl.trim()) return;
+		linkingEvents = true;
+		linkResult = '';
+		const res = await fetch('/api/tournament/bracket-events', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				mainEventSlug: mainEventUrl.trim() || undefined,
+				redemptionEventSlug: redemptionEventUrl.trim() || undefined
+			})
+		});
+		const data = await res.json();
+		if (res.ok) { linkResult = 'Linked!'; await loadTournament(); }
+		else linkResult = data.error ?? 'Failed';
+		linkingEvents = false;
+	}
+
 	let splitConfirming = $state(false);
 	let splitResult = $state<{ reported: number; failed: number } | null>(null);
 
@@ -254,6 +277,29 @@
 						{#if splitResult.failed > 0}<span class="text-red-400">, {splitResult.failed} failed (see errors below)</span>{/if}
 					</span>
 				{/if}
+			</div>
+		</div>
+	{/if}
+
+	<!-- Link StartGG bracket events -->
+	{#if tournament && (!tournament.startggMainBracketEventId || !tournament.startggRedemptionBracketEventId)}
+		<div class="mt-4 rounded-lg border border-gray-700 bg-gray-800/40 px-4 py-3">
+			<p class="text-sm text-gray-300 font-medium">Link StartGG Bracket Events</p>
+			<p class="text-xs text-gray-500 mt-1">Paste the StartGG event URLs for main and redemption brackets to enable result sync.</p>
+			<div class="mt-2 grid grid-cols-2 gap-2">
+				<input bind:value={mainEventUrl} placeholder="Main bracket event URL"
+					class="rounded border border-gray-600 bg-gray-900 px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
+				<input bind:value={redemptionEventUrl} placeholder="Redemption bracket event URL"
+					class="rounded border border-gray-600 bg-gray-900 px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
+			</div>
+			<div class="mt-2 flex items-center gap-2">
+				<button onclick={linkBracketEvents} disabled={linkingEvents}
+					class="rounded bg-violet-700 px-3 py-1 text-xs font-medium text-white hover:bg-violet-600 disabled:opacity-50">
+					{linkingEvents ? 'Linking...' : 'Link Events'}
+				</button>
+				{#if linkResult}<span class="text-xs text-gray-400">{linkResult}</span>{/if}
+				{#if tournament.startggMainBracketEventId}<span class="text-xs text-green-400">Main: linked</span>{/if}
+				{#if tournament.startggRedemptionBracketEventId}<span class="text-xs text-green-400">Redemption: linked</span>{/if}
 			</div>
 		</div>
 	{/if}

@@ -353,23 +353,30 @@ async function _doReportBracketMatch(
 		return { ok: false, error: msg };
 	}
 
-	// For brackets, use full event scan to find the matching set on StartGG.
-	// Bracket phases must exist on StartGG for this to work — if they don't,
-	// skip silently (the TO can set them up later and re-report).
+	// Brackets are separate events on StartGG. Use the bracket-specific event ID.
+	const bracketEventId = _bracketName === 'main'
+		? tournament.startggMainBracketEventId
+		: tournament.startggRedemptionBracketEventId;
+	const searchEventId = bracketEventId ?? tournament.startggEventId;
+
 	let setId = match.startggSetId ?? null;
-	if (!setId && tournament.startggEventId) {
+	if (!setId && searchEventId) {
 		setId = await findSetByEntrants(
-			tournament.startggEventId,
+			searchEventId,
 			topEntrant.startggEntrantId,
 			botEntrant.startggEntrantId
 		).catch(() => null);
 	}
 
 	if (!setId) {
-		// No bracket set found — bracket phases may not exist on StartGG yet.
-		// Don't show errors; return ok so the match result is saved.
-		console.log(`[StartGG] Bracket set not found for ${topEntrant.gamerTag} vs ${botEntrant.gamerTag} — bracket phase may not exist on StartGG`);
-		return { ok: true };
+		if (!bracketEventId) {
+			// No bracket event linked — skip silently, user can link later
+			console.log(`[StartGG] No ${_bracketName} bracket event ID configured — skipping sync`);
+			return { ok: true };
+		}
+		const msg = `Bracket set not found on StartGG for ${topEntrant.gamerTag} vs ${botEntrant.gamerTag}`;
+		addError(sync, match.id, msg);
+		return { ok: false, error: msg };
 	}
 
 	const loserEntrant = winnerEntrant === topEntrant ? botEntrant : topEntrant;

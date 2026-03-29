@@ -38,6 +38,10 @@ export interface TournamentState {
 	startggFinalStandingsPhaseId?: number;
 	/** StartGG phase group ID inside the Final Standings phase */
 	startggFinalStandingsPhaseGroupId?: number;
+	/** StartGG event ID for the main bracket (separate event on StartGG) */
+	startggMainBracketEventId?: number;
+	/** StartGG event ID for the redemption bracket (separate event on StartGG) */
+	startggRedemptionBracketEventId?: number;
 	/** StartGG sync state for bracket reporting */
 	startggSync?: StartggSyncState;
 }
