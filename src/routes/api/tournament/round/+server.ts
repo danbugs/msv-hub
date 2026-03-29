@@ -3,7 +3,7 @@ import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
-import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding } from '$lib/server/startgg';
+import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -64,30 +64,62 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		};
 		tournament.phase = 'brackets';
 
-		// Assign stations: main gets 1-half, redemption gets half+1 to numStations.
-		// Stream station goes to the first ready main bracket match.
+		// Assign stations: main gets 1 through floor(numStations/2), redemption gets the rest.
+		// Stream station (e.g. 16) is separate — assigned to the highest-hype main match.
 		const totalStations = tournament.settings.numStations;
 		const streamStn = tournament.settings.streamStation;
-		const halfStations = Math.ceil(totalStations / 2);
-		const mainStations = Array.from({ length: halfStations }, (_, i) => i + 1);
-		const redemptionStations = Array.from({ length: totalStations - halfStations }, (_, i) => halfStations + i + 1);
-		let mainIdx = 0;
-		for (const m of tournament.brackets.main.matches) {
-			if (m.topPlayerId && m.bottomPlayerId && !m.winnerId && mainIdx < mainStations.length) {
-				m.station = mainStations[mainIdx] === streamStn ? streamStn : mainStations[mainIdx];
-				if (mainIdx === 0) m.isStream = true; // first ready match gets stream
-				mainIdx++;
-			}
+		const half = Math.floor(totalStations / 2);
+		// Build station pools excluding stream station
+		const mainStations = Array.from({ length: half }, (_, i) => i + 1).filter(s => s !== streamStn);
+		const redemptionStations = Array.from({ length: totalStations - half }, (_, i) => half + i + 1).filter(s => s !== streamStn);
+
+		// Find ready matches for each bracket
+		const mainReady = tournament.brackets.main.matches.filter(m => m.topPlayerId && m.bottomPlayerId && !m.winnerId);
+		const redReady = tournament.brackets.redemption.matches.filter(m => m.topPlayerId && m.bottomPlayerId && !m.winnerId);
+
+		// Pick the highest-hype main match for stream (lowest combined seed = best players)
+		const standingsMap = new Map(finalStandings.map(s => [s.entrantId, s]));
+		let bestStreamMatch: typeof mainReady[0] | undefined;
+		let bestHype = Infinity;
+		for (const m of mainReady) {
+			const s1 = standingsMap.get(m.topPlayerId!)?.rank ?? 999;
+			const s2 = standingsMap.get(m.bottomPlayerId!)?.rank ?? 999;
+			const hype = s1 + s2;
+			if (hype < bestHype) { bestHype = hype; bestStreamMatch = m; }
 		}
+		if (bestStreamMatch) {
+			bestStreamMatch.station = streamStn;
+			bestStreamMatch.isStream = true;
+		}
+
+		// Assign remaining main stations
+		let mainIdx = 0;
+		for (const m of mainReady) {
+			if (m.isStream) continue;
+			if (mainIdx < mainStations.length) m.station = mainStations[mainIdx++];
+		}
+		// Assign redemption stations
 		let redIdx = 0;
-		for (const m of tournament.brackets.redemption.matches) {
-			if (m.topPlayerId && m.bottomPlayerId && !m.winnerId && redIdx < redemptionStations.length) {
-				m.station = redemptionStations[redIdx];
-				redIdx++;
-			}
+		for (const m of redReady) {
+			if (redIdx < redemptionStations.length) m.station = redemptionStations[redIdx++];
 		}
 
 		// Push final Swiss standings to the "Final Standings" phase on StartGG
+		// If IDs aren't stored (tournament created before this feature), look them up now.
+		if (!tournament.startggFinalStandingsPhaseId && tournament.startggEventId) {
+			try {
+				const phaseData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
+					EVENT_PHASES_QUERY, { eventId: tournament.startggEventId }
+				);
+				const fsp = phaseData?.event?.phases?.find((p) => p.name.toLowerCase().includes('final'));
+				if (fsp) {
+					tournament.startggFinalStandingsPhaseId = fsp.id;
+					const groups = await fetchPhaseGroups(fsp.id).catch(() => []);
+					if (groups.length > 0) tournament.startggFinalStandingsPhaseGroupId = groups[0].id;
+					console.log(`[StartGG] Resolved Final Standings phase: ${fsp.id}, PG: ${tournament.startggFinalStandingsPhaseGroupId}`);
+				}
+			} catch { /* best effort */ }
+		}
 		let finalStandingsSynced = false;
 		if (tournament.startggFinalStandingsPhaseId && tournament.startggFinalStandingsPhaseGroupId) {
 			const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
@@ -320,6 +352,68 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		await saveTournament(tournament);
 	}
 
+	// If this was a misreport fix in a completed round, regenerate the NEXT round's pairings
+	// if that round is still active with zero reported results. Rounds beyond that stay untouched.
+	let regeneratedNextRound = false;
+	if (wasMisreport && targetRound.status === 'completed') {
+		const latestState = await getActiveTournament();
+		if (latestState) {
+			const nextRound = latestState.rounds.find((r) => r.number === targetRound.number + 1);
+			if (nextRound && nextRound.status === 'active' && nextRound.matches.every((m) => !m.winnerId)) {
+				// Regenerate pairings for the next round using corrected standings
+				const completedRounds = latestState.rounds.filter((r) => r.status === 'completed');
+				const standings = calculateStandings(latestState.entrants, completedRounds);
+				const { pairings, bye } = calculateSwissPairings(standings, nextRound.number);
+
+				let matchId2 = 0;
+				const newMatches: SwissMatch[] = pairings.map(([top, bot]) => ({
+					id: `r${nextRound.number}-m${matchId2++}`,
+					topPlayerId: top[0],
+					bottomPlayerId: bot[0]
+				}));
+
+				const pairingIds = pairings.map(([t, b]) => [t[0], b[0]] as [string, string]);
+				const lastCompleted = completedRounds.at(-1);
+				const recentStreamIds = new Set(
+					lastCompleted?.matches.filter((m) => m.isStream).flatMap((m) => [m.topPlayerId, m.bottomPlayerId]).filter(Boolean) as string[]
+				);
+				const streamRecs = recommendStreamMatches(pairingIds, standings, latestState.entrants, recentStreamIds);
+				const recsFixed = streamRecs.map((rec) => {
+					const m = newMatches.find((nm) =>
+						rec.topPlayer === latestState.entrants.find((e) => e.id === nm.topPlayerId)?.gamerTag
+					);
+					return { ...rec, matchId: m?.id ?? rec.matchId };
+				});
+				const assigned = assignStations(newMatches, latestState.settings, recsFixed);
+
+				nextRound.matches = assigned;
+				nextRound.byePlayerId = bye ? bye[0] : undefined;
+				regeneratedNextRound = true;
+
+				// Re-push pairings to StartGG
+				const roundGroup = latestState.startggPhase1Groups?.[nextRound.number - 1];
+				const rPgId = roundGroup?.id;
+				const rPhaseId = roundGroup?.phaseId ?? latestState.startggPhase1Id;
+				if (rPhaseId && rPgId) {
+					const entrantMap2 = new Map(latestState.entrants.map((e) => [e.id, e]));
+					const sgPairings = assigned
+						.map((m): [number, number] | null => {
+							const t = entrantMap2.get(m.topPlayerId)?.startggEntrantId;
+							const b = entrantMap2.get(m.bottomPlayerId)?.startggEntrantId;
+							return t && b ? [t, b] : null;
+						})
+						.filter((p): p is [number, number] => p !== null);
+					if (sgPairings.length) {
+						const byeEntrantId2 = bye ? entrantMap2.get(bye[0])?.startggEntrantId : undefined;
+						await pushPairingsToPhaseGroup(rPhaseId, rPgId, sgPairings, byeEntrantId2).catch(() => {});
+					}
+				}
+
+				await saveTournament(latestState);
+			}
+		}
+	}
+
 	const roundComplete = targetRound.matches.every((m) => m.winnerId);
 
 	return Response.json({
@@ -327,6 +421,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		match,
 		wasMisreport,
 		roundComplete,
+		regeneratedNextRound,
 		startgg: { ok: sgResult.ok, error: sgResult.ok ? undefined : sgResult.error }
 	});
 };

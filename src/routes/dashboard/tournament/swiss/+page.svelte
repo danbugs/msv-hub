@@ -424,7 +424,7 @@
 												onclick={() => reportMatch(match.id, pendingWinner!.winnerId, 'DQ', round.number)}
 												class="rounded bg-orange-700 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600"
 												title="Opponent did not show up (DQ)">
-												DQ
+												DQ Win
 											</button>
 											<button onclick={() => pendingWinner = null}
 												class="text-xs text-gray-500 hover:text-gray-300 px-2">Cancel</button>
