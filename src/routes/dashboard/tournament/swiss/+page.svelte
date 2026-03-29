@@ -253,10 +253,6 @@
 						{/each}
 					</select>
 				{/if}
-				<button onclick={deleteTournament}
-					class="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:border-red-700 hover:text-red-400 transition-colors">
-					Delete Tournament
-				</button>
 			</div>
 
 			<!-- StartGG sync status -->
@@ -285,8 +281,8 @@
 			{#if isFinalRoundComplete() && !dismissedBanners.has('final-done')}
 				<div class="mt-4 flex items-start gap-2 rounded-lg border border-amber-700 bg-amber-950/60 px-4 py-3 text-sm text-amber-200">
 					<span class="flex-1">
-						<span class="font-semibold">StartGG:</span> Swiss is complete — standings have been synced to the "Final Standings" phase on StartGG.
-						Go to StartGG and <strong>finalize placements</strong> there, then generate the bracket split here.
+						<span class="font-semibold">StartGG:</span> Swiss is complete. Click <strong>Generate Bracket Split</strong> to finalize standings
+						and sync them to the "Final Standings" phase on StartGG. Then go to StartGG to finalize placements.
 					</span>
 					<button onclick={() => dismissedBanners = new Set([...dismissedBanners, 'final-done'])}
 						class="shrink-0 text-amber-400 hover:text-amber-200 text-base leading-none" title="Dismiss">✕</button>

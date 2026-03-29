@@ -161,7 +161,7 @@
 		<div class="mx-auto max-w-3xl">
 			<div class="flex items-center gap-3">
 				<div class="flex-1 min-w-0">
-					<div class="text-base font-bold text-violet-400 truncate">{tournament?.name ?? 'MSV Live'}</div>
+					<div class="text-base font-bold text-violet-400 truncate">{tournament?.name?.replace(/\s*-\s*Phase\s+\d+\s*\(.*?\)\s*$/i, '') ?? 'MSV Live'}</div>
 					{#if tournament}
 						<div class="text-xs text-gray-500">
 							{tournament.phase === 'swiss'
