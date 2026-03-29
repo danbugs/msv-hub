@@ -183,21 +183,15 @@ export async function reportSwissMatch(
 		return { ok: false, error: msg };
 	}
 
-	let setId: string | null = null;
-
-	// Try up to 3 times (with 2s gaps) — the background triggerConversionAndCache may be
-	// hitting the API at the same time, causing rate-limit/empty responses on the first try.
-	for (let attempt = 0; attempt < 3; attempt++) {
-		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 2000));
-		setId = await resolveSetId(
-			tournament,
-			topEntrant.startggEntrantId,
-			botEntrant.startggEntrantId,
-			roundNumber,
-			match.startggSetId
-		);
-		if (setId) break;
-	}
+	// Resolve the StartGG set ID. findSetInPhaseGroup already retries internally
+	// during the preview→real conversion window, so no outer retry loop needed.
+	let setId = await resolveSetId(
+		tournament,
+		topEntrant.startggEntrantId,
+		botEntrant.startggEntrantId,
+		roundNumber,
+		match.startggSetId
+	);
 
 	if (!setId) {
 		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
@@ -220,8 +214,7 @@ export async function reportSwissMatch(
 	let result = await reportSet(setId, winnerEntrant.startggEntrantId, reportExtra);
 
 	// If we used a cached preview ID and the report failed, the phase group has already
-	// converted to real IDs (another match triggered the conversion first). Do a short
-	// inline retry with findSetInPhaseGroup (3×2 s = 6 s max) to get the real ID.
+	// converted to real IDs (another match triggered the conversion first). Re-lookup.
 	if (!result.ok && setId.startsWith('preview_')) {
 		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
 		if (pgId) {
@@ -238,7 +231,7 @@ export async function reportSwissMatch(
 		}
 	}
 
-	// If the set is already completed (misreport fix), reset it first then re-report.
+	// If the set is already completed (misreport fix or re-report), reset first then re-report.
 	if (!result.ok && result.error?.includes('Cannot report completed set')) {
 		const resetResult = await resetSet(setId);
 		if (resetResult.ok) {
@@ -250,28 +243,27 @@ export async function reportSwissMatch(
 		match.startggSetId = result.reportedSetId ?? setId;
 		clearErrorsForMatch(sync, match.id);
 
-		// If we just reported a preview set, StartGG is converting the whole phase group
-		// to real IDs. Fire off a background preCacheRoundSetIds so remaining matches get
-		// their real set IDs. Uses safe merge — re-loads latest state before saving.
+		// If we just reported a preview set, StartGG converts the whole phase group to real
+		// IDs. Wait for conversion to complete and cache all real set IDs on the tournament
+		// so subsequent reports resolve instantly instead of each hitting the empty window.
 		if (setId.startsWith('preview_')) {
 			const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
 			if (pgId) {
-				(async () => {
+				let nodes: GqlNode[] = [];
+				for (let retry = 0; retry <= 10; retry++) {
+					if (retry > 0) await new Promise<void>((r) => setTimeout(r, retry <= 3 ? 2000 : 4000));
 					try {
-						// Build a temp tournament just for the cache operation
 						const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId: pgId }, { delay: 0 });
-						const nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
-						if (nodes.length === 0) return;
-						// Safe merge: re-load latest state
-						const fresh = await getActiveTournament();
-						if (!fresh) return;
-						const freshRound = fresh.rounds.find((r) => r.number === roundNumber);
-						if (!freshRound) return;
-						const entrantMap = new Map(fresh.entrants.map((e) => [e.id, e]));
-						applyNodesToRound(nodes, freshRound, entrantMap);
-						await saveTournament(fresh);
-					} catch { /* best effort */ }
-				})();
+						nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
+					} catch { /* continue retrying */ }
+					if (nodes.length > 0) break;
+				}
+				if (nodes.length > 0) {
+					const round = tournament.rounds.find((r) => r.number === roundNumber);
+					if (round) {
+						applyNodesToRound(nodes, round, entrantMap);
+					}
+				}
 			}
 		}
 	} else {

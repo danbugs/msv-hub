@@ -364,10 +364,14 @@ export async function findSetInPhaseGroup(
 	let nodes = await fetchNodes();
 
 	// If the phase group returned 0 sets, it may be mid-transition from preview sets to
-	// real sets (triggered when the first preview set is reported). Retry a few times.
-	for (let retry = 0; retry < 3 && nodes.length === 0; retry++) {
-		await new Promise<void>((r) => setTimeout(r, 2000));
-		nodes = await fetchNodes();
+	// real sets (triggered when the first preview set is reported). Retry with increasing
+	// back-off — conversions can take 5-30s on StartGG's side.
+	if (nodes.length === 0) {
+		for (let retry = 1; retry <= 8; retry++) {
+			await new Promise<void>((r) => setTimeout(r, retry <= 3 ? 2000 : 5000));
+			nodes = await fetchNodes();
+			if (nodes.length > 0) break;
+		}
 	}
 	// Prefer unreported sets. If only a completed set is found, return it anyway so
 	// reportSet can surface the "Cannot report completed set" error from StartGG rather

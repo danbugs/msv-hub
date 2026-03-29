@@ -12,6 +12,8 @@
 	let dismissedErrorTs = $state(new Set<number>());
 	// Score selection: { matchId, winnerId } — waiting for score pick
 	let pendingWinner = $state<{ matchId: string; winnerId: string } | null>(null);
+	// Set of match IDs currently being reported (prevents double-clicks)
+	let reportingMatches = $state(new Set<string>());
 
 	// Poll briefly while StartGG set IDs are being cached (typically completes in ~1-2s)
 	onMount(() => {
@@ -60,6 +62,10 @@
 	}
 
 	async function reportMatch(matchId: string, winnerId: string, score: '2-0' | '2-1' | 'DQ', roundNumber?: number) {
+		// Prevent double-reports while a report is in flight
+		if (reportingMatches.has(matchId)) return;
+		reportingMatches = new Set([...reportingMatches, matchId]);
+
 		let topScore: number | undefined;
 		let bottomScore: number | undefined;
 		let isDQ = false;
@@ -68,29 +74,33 @@
 			isDQ = true;
 		} else {
 			const m = getMatch(matchId);
-			if (!m) return;
+			if (!m) { reportingMatches = new Set([...reportingMatches].filter(id => id !== matchId)); return; }
 			const winnerIsTop = winnerId === m.topPlayerId;
 			if (score === '2-0') { topScore = winnerIsTop ? 2 : 0; bottomScore = winnerIsTop ? 0 : 2; }
 			else { topScore = winnerIsTop ? 2 : 1; bottomScore = winnerIsTop ? 1 : 2; }
 		}
 
-		const res = await fetch('/api/tournament/round', {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ matchId, winnerId, roundNumber, topScore, bottomScore, isDQ })
-		});
+		try {
+			const res = await fetch('/api/tournament/round', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ matchId, winnerId, roundNumber, topScore, bottomScore, isDQ })
+			});
 
-		const data = await res.json();
-		if (!res.ok) {
-			error = data.error ?? 'Failed to report match';
-		} else {
-			fixingMatchId = null;
-			pendingWinner = null;
-			// Show StartGG errors inline (non-blocking — match was saved regardless)
-			if (data.startgg && !data.startgg.ok) {
-				error = `StartGG: ${data.startgg.error}`;
+			const data = await res.json();
+			if (!res.ok) {
+				error = data.error ?? 'Failed to report match';
+			} else {
+				fixingMatchId = null;
+				pendingWinner = null;
+				// Show StartGG errors inline (non-blocking — match was saved regardless)
+				if (data.startgg && !data.startgg.ok) {
+					error = `StartGG: ${data.startgg.error}`;
+				}
+				await loadTournament();
 			}
-			await loadTournament();
+		} finally {
+			reportingMatches = new Set([...reportingMatches].filter(id => id !== matchId));
 		}
 	}
 
@@ -325,7 +335,8 @@
 								{@const bot = getEntrant(match.bottomPlayerId)}
 								{@const isFixing = fixingMatchId === match.id}
 								{@const isPending = pendingWinner?.matchId === match.id}
-								{@const canInteract = isCurrent || isFixing}
+								{@const isReporting = reportingMatches.has(match.id)}
+								{@const canInteract = (isCurrent || isFixing) && !isReporting}
 
 								<div class="rounded-lg bg-gray-900 {match.isStream ? 'border border-violet-700' : 'border border-transparent'}">
 									<!-- Match row -->
@@ -396,7 +407,11 @@
 									</div>
 
 									<!-- Score picker (shown when a winner is selected but no score yet) -->
-									{#if isPending}
+									{#if isReporting}
+										<div class="flex items-center gap-2 px-3 pb-2">
+											<span class="text-xs text-gray-400 ml-16 animate-pulse">Reporting...</span>
+										</div>
+									{:else if isPending}
 										<div class="flex items-center gap-2 px-3 pb-2">
 											<span class="text-xs text-gray-400 ml-16">Score:</span>
 											<button
