@@ -13,9 +13,11 @@
 		onReport?: (match: BracketMatch) => void;
 		/** If provided, Call/Uncall buttons appear on ready match cards. */
 		onCall?: (match: BracketMatch) => void;
+		/** If provided, a stream button appears on ready match cards. */
+		onStream?: (match: BracketMatch) => void;
 	}
 
-	let { bracket, entrants, onReport, onCall }: Props = $props();
+	let { bracket, entrants, onReport, onCall, onStream }: Props = $props();
 
 	let now = $state(Date.now());
 	onMount(() => {
@@ -214,7 +216,7 @@
 				<!-- Footer: station + action buttons -->
 				{#if ready || match.winnerId}
 					<div class="flex items-center justify-between px-2 py-1 border-t border-gray-800 bg-gray-900/50">
-						<div class="flex items-center gap-1.5 min-w-0">
+						<div class="flex items-center gap-1.5 min-w-0 overflow-hidden">
 							{#if match.station !== undefined}
 								{#if match.isStream}
 									<a href="https://twitch.tv/microspacing" target="_blank"
@@ -223,16 +225,23 @@
 									<span class="text-xs text-gray-500 shrink-0">Stn {match.station}</span>
 								{/if}
 							{/if}
-							{#if called && match.calledAt}
-								<span class="text-xs text-green-400 font-mono">{elapsed(match.calledAt)}</span>
-							{/if}
 						</div>
 						<div class="flex items-center gap-1 shrink-0">
+							{#if called && match.calledAt}
+								<span class="text-xs text-green-400 font-mono shrink-0">{elapsed(match.calledAt)}</span>
+							{/if}
 							{#if onCall && ready}
 								<button onclick={() => onCall!(match)}
 									class="rounded px-2 py-0.5 text-xs font-medium transition-colors
 										{called ? 'bg-green-900/40 text-green-400 hover:bg-green-900/60' : 'border border-gray-600 text-gray-400 hover:text-green-400 hover:border-green-600'}">
 									{called ? 'Called' : 'Call'}
+								</button>
+							{/if}
+							{#if onStream && ready && !match.isStream}
+								<button onclick={() => onStream!(match)}
+									class="rounded px-2 py-0.5 text-xs text-gray-500 hover:text-violet-400 hover:bg-violet-900/20 transition-colors"
+									title="Set as stream match">
+									📺
 								</button>
 							{/if}
 							{#if onReport}

@@ -154,6 +154,15 @@
 		await loadTournament();
 	}
 
+	async function setStreamMatch(match: BracketMatch) {
+		await fetch('/api/tournament/bracket/stream', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ bracketName: activeBracket, matchId: match.id })
+		});
+		await loadTournament();
+	}
+
 	let splitConfirming = $state(false);
 	let splitResult = $state<{ reported: number; failed: number } | null>(null);
 
@@ -307,7 +316,8 @@
 					bracket={bracket}
 					entrants={tournament!.entrants}
 					onReport={openReport}
-					onCall={callMatch} />
+					onCall={callMatch}
+					onStream={setStreamMatch} />
 			</div>
 
 			<!-- Report modal -->
