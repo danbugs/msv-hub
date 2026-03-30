@@ -3,7 +3,7 @@ import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
-import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
+import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, PHASE_GROUP_SETS_QUERY, fetchPhaseGroups, resetSet } from '$lib/server/startgg';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -393,7 +393,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				nextRound.byePlayerId = bye ? bye[0] : undefined;
 				regeneratedNextRound = true;
 
-				// Re-push pairings to StartGG
+				// Re-push pairings to StartGG and re-trigger conversion
 				const roundGroup = latestState.startggPhase1Groups?.[nextRound.number - 1];
 				const rPgId = roundGroup?.id;
 				const rPhaseId = roundGroup?.phaseId ?? latestState.startggPhase1Id;
@@ -408,12 +408,39 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 						.filter((p): p is [number, number] => p !== null);
 					if (sgPairings.length) {
 						const byeEntrantId2 = bye ? entrantMap2.get(bye[0])?.startggEntrantId : undefined;
-						await pushPairingsToPhaseGroup(rPhaseId, rPgId, sgPairings, byeEntrantId2).catch(() => {});
+						const seedResult = await pushPairingsToPhaseGroup(rPhaseId, rPgId, sgPairings, byeEntrantId2)
+							.catch((e) => ({ ok: false as const, error: String(e) }));
+						if (!seedResult.ok) {
+							console.error(`[StartGG] Re-seed failed for round ${nextRound.number} after misreport fix: ${seedResult.error}`);
+							// If pools are started (sets already converted), we need to reset
+							// all sets in the phase group first, then re-seed, then re-convert.
+							// Reset all unreported sets to allow re-seeding.
+							const pgSetsData = await gql<{ phaseGroup: { sets: { nodes: { id: unknown; winnerId?: unknown }[] } } }>(
+								PHASE_GROUP_SETS_QUERY, { phaseGroupId: rPgId }, { delay: 0 }
+							).catch(() => null);
+							const pgSets = pgSetsData?.phaseGroup?.sets?.nodes ?? [];
+							for (const s of pgSets) {
+								if (s.winnerId) continue; // don't reset reported sets
+								await resetSet(String(s.id)).catch(() => {});
+							}
+							// Retry seeding after reset
+							const retryResult = await pushPairingsToPhaseGroup(rPhaseId, rPgId, sgPairings, byeEntrantId2)
+								.catch((e) => ({ ok: false as const, error: String(e) }));
+							if (!retryResult.ok) {
+								console.error(`[StartGG] Re-seed retry also failed: ${retryResult.error}`);
+							} else {
+								console.log(`[StartGG] Re-seed succeeded after resetting sets for round ${nextRound.number}`);
+							}
+						} else {
+							console.log(`[StartGG] Re-seed successful for round ${nextRound.number} after misreport fix`);
+						}
 					}
-				}
 
-				// Re-trigger preview→real conversion for the regenerated round
-				if (rPgId) {
+					// Clear cached set IDs since pairings changed — need fresh conversion
+					for (const m of nextRound.matches) {
+						m.startggSetId = undefined;
+					}
+
 					if (!latestState.startggSync) {
 						latestState.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
 					}
