@@ -167,18 +167,35 @@
 	let redemptionEventUrl = $state('');
 	let linkingEvents = $state(false);
 	let linkResult = $state('');
+	let discoveredEvents = $state<{ main: { id: number; name: string } | null; redemption: { id: number; name: string } | null } | null>(null);
+	let discovering = $state(false);
 
-	async function linkBracketEvents() {
-		if (!mainEventUrl.trim() && !redemptionEventUrl.trim()) return;
+	async function discoverBracketEvents() {
+		discovering = true;
+		const res = await fetch('/api/tournament/bracket-events');
+		if (res.ok) {
+			const data = await res.json();
+			discoveredEvents = data.suggested;
+		}
+		discovering = false;
+	}
+
+	async function linkBracketEvents(useDiscovered = false) {
 		linkingEvents = true;
 		linkResult = '';
+		const body: Record<string, unknown> = {};
+		if (useDiscovered && discoveredEvents) {
+			if (discoveredEvents.main) body.mainEventId = discoveredEvents.main.id;
+			if (discoveredEvents.redemption) body.redemptionEventId = discoveredEvents.redemption.id;
+		} else {
+			if (mainEventUrl.trim()) body.mainEventSlug = mainEventUrl.trim();
+			if (redemptionEventUrl.trim()) body.redemptionEventSlug = redemptionEventUrl.trim();
+		}
+		if (!Object.keys(body).length) { linkingEvents = false; return; }
 		const res = await fetch('/api/tournament/bracket-events', {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				mainEventSlug: mainEventUrl.trim() || undefined,
-				redemptionEventSlug: redemptionEventUrl.trim() || undefined
-			})
+			body: JSON.stringify(body)
 		});
 		const data = await res.json();
 		if (res.ok) { linkResult = 'Linked!'; await loadTournament(); }
@@ -285,18 +302,51 @@
 	{#if tournament && (!tournament.startggMainBracketEventId || !tournament.startggRedemptionBracketEventId)}
 		<div class="mt-4 rounded-lg border border-gray-700 bg-gray-800/40 px-4 py-3">
 			<p class="text-sm text-gray-300 font-medium">Link StartGG Bracket Events</p>
-			<p class="text-xs text-gray-500 mt-1">Paste the StartGG event URLs for main and redemption brackets to enable result sync.</p>
-			<div class="mt-2 grid grid-cols-2 gap-2">
-				<input bind:value={mainEventUrl} placeholder="Main bracket event URL"
-					class="rounded border border-gray-600 bg-gray-900 px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
-				<input bind:value={redemptionEventUrl} placeholder="Redemption bracket event URL"
-					class="rounded border border-gray-600 bg-gray-900 px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
-			</div>
-			<div class="mt-2 flex items-center gap-2">
-				<button onclick={linkBracketEvents} disabled={linkingEvents}
-					class="rounded bg-violet-700 px-3 py-1 text-xs font-medium text-white hover:bg-violet-600 disabled:opacity-50">
+			<p class="text-xs text-gray-500 mt-1">Link the main and redemption bracket events on StartGG to enable result sync.</p>
+
+			{#if discoveredEvents}
+				<div class="mt-2 space-y-1">
+					{#if discoveredEvents.main}
+						<div class="flex items-center gap-2 text-xs">
+							<span class="text-gray-400">Main:</span>
+							<span class="text-white">{discoveredEvents.main.name}</span>
+							<span class="text-green-400">(auto-detected)</span>
+						</div>
+					{/if}
+					{#if discoveredEvents.redemption}
+						<div class="flex items-center gap-2 text-xs">
+							<span class="text-gray-400">Redemption:</span>
+							<span class="text-white">{discoveredEvents.redemption.name}</span>
+							<span class="text-green-400">(auto-detected)</span>
+						</div>
+					{/if}
+					<button onclick={() => linkBracketEvents(true)} disabled={linkingEvents}
+						class="mt-1 rounded bg-violet-700 px-3 py-1 text-xs font-medium text-white hover:bg-violet-600 disabled:opacity-50">
+						{linkingEvents ? 'Linking...' : 'Link Detected Events'}
+					</button>
+				</div>
+			{:else}
+				<button onclick={discoverBracketEvents} disabled={discovering}
+					class="mt-2 rounded bg-gray-700 px-3 py-1 text-xs font-medium text-gray-300 hover:bg-gray-600 disabled:opacity-50">
+					{discovering ? 'Searching...' : 'Auto-detect Events'}
+				</button>
+			{/if}
+
+			<details class="mt-2">
+				<summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Manual link</summary>
+				<div class="mt-2 grid grid-cols-2 gap-2">
+					<input bind:value={mainEventUrl} placeholder="Main bracket event URL"
+						class="rounded border border-gray-600 bg-gray-900 px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
+					<input bind:value={redemptionEventUrl} placeholder="Redemption bracket event URL"
+						class="rounded border border-gray-600 bg-gray-900 px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
+				</div>
+				<button onclick={() => linkBracketEvents(false)} disabled={linkingEvents}
+					class="mt-1 rounded bg-violet-700 px-3 py-1 text-xs font-medium text-white hover:bg-violet-600 disabled:opacity-50">
 					{linkingEvents ? 'Linking...' : 'Link Events'}
 				</button>
+			</details>
+
+			<div class="mt-2 flex items-center gap-2">
 				{#if linkResult}<span class="text-xs text-gray-400">{linkResult}</span>{/if}
 				{#if tournament.startggMainBracketEventId}<span class="text-xs text-green-400">Main: linked</span>{/if}
 				{#if tournament.startggRedemptionBracketEventId}<span class="text-xs text-green-400">Redemption: linked</span>{/if}
