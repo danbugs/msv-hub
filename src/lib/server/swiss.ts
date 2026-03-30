@@ -134,9 +134,11 @@ export function calculateSwissPairings(
 		// Heavy penalty for matching players with different win-loss differentials
 		const recordDiff = Math.abs((p1[1].wins - p1[1].losses) - (p2[1].wins - p2[1].losses));
 		const recordPenalty = recordDiff * 200;
-		if (isPowerOf2) return seedDiff + recordPenalty;
-		if (seedDiff <= 1 && p1[1].wins + p1[1].losses <= 2) return 1000 + recordPenalty;
-		return seedDiff * 0.5 + recordPenalty;
+		// Within a record group, prefer MAXIMUM seed spread (top seeds play bottom seeds).
+		// Lower score = better. Invert seedDiff so larger spread scores lower.
+		const maxSpread = totalPlayers;
+		const spreadScore = maxSpread - seedDiff;
+		return spreadScore + recordPenalty;
 	}
 
 	// Group players by record
@@ -199,8 +201,8 @@ export function calculateSwissPairings(
 		if (n % 2 !== 0) return null;
 		const half = n / 2;
 
-		// Strategy 1: Swiss-style top-half vs bottom-half
-		const sorted = [...players].sort((a, b) => a[1].seed - b[1].seed + (rng() - 0.5) * 3);
+		// Strategy 1: Swiss-style top-half vs bottom-half (fold pattern)
+		const sorted = [...players].sort((a, b) => a[1].seed - b[1].seed);
 		const swissPairs: [PlayerEntry, PlayerEntry][] = [];
 		const usedIndices = new Set<number>();
 
@@ -257,10 +259,8 @@ export function calculateSwissPairings(
 		if (players.length === 0) return [];
 		if (players.length === 1) return null;
 
-		// Sort by seed with random variance
-		const withRandom = players.map((p) => [p, rng()] as [PlayerEntry, number]);
-		withRandom.sort((a, b) => a[0][1].seed + a[1] * 3 - (b[0][1].seed + b[1] * 3));
-		const sorted = withRandom.map((x) => x[0]);
+		// Sort deterministically by seed — fold pattern pairs top vs bottom
+		const sorted = [...players].sort((a, b) => a[1].seed - b[1].seed);
 
 		if (sorted.length <= 8) return findPerfectMatchingBacktrack(sorted);
 		return findPerfectMatchingLargeGroup(sorted);
@@ -419,7 +419,12 @@ export function assignStations(
 
 // ── Bracket station assignment ────────────────────────────────────────────
 
-export function assignBracketStations(bracket: BracketState, settings: TournamentSettings): BracketState {
+export function assignBracketStations(
+	bracket: BracketState,
+	settings: TournamentSettings,
+	bracketName?: 'main' | 'redemption',
+	otherBracketHasStream?: boolean
+): BracketState {
 	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
 
 	// Find ready matches that don't have a station yet
@@ -428,30 +433,32 @@ export function assignBracketStations(bracket: BracketState, settings: Tournamen
 	);
 	if (ready.length === 0) return updated;
 
-	// Pick stream match: highest-round ready match (later rounds = more hype)
-	const maxReadyRound = Math.max(...ready.map((m) => Math.abs(m.round)));
-	const streamCandidate = ready.find((m) => Math.abs(m.round) === maxReadyRound);
-
-	// Only assign a new stream match if there isn't one currently active
+	// Only auto-assign stream for main bracket, and only if no other bracket has stream
 	const activeStream = updated.matches.find((m) => m.isStream && !m.winnerId);
-	if (!activeStream && streamCandidate) {
-		const idx = updated.matches.findIndex((m) => m.id === streamCandidate.id);
-		// Clear completed stream designations
-		for (let i = 0; i < updated.matches.length; i++) {
-			if (updated.matches[i].isStream && updated.matches[i].winnerId) {
-				updated.matches[i] = { ...updated.matches[i], isStream: false };
+	if (bracketName !== 'redemption' && !activeStream && !otherBracketHasStream) {
+		const maxReadyRound = Math.max(...ready.map((m) => Math.abs(m.round)));
+		const streamCandidate = ready.find((m) => Math.abs(m.round) === maxReadyRound);
+		if (streamCandidate) {
+			const idx = updated.matches.findIndex((m) => m.id === streamCandidate.id);
+			for (let i = 0; i < updated.matches.length; i++) {
+				if (updated.matches[i].isStream && updated.matches[i].winnerId) {
+					updated.matches[i] = { ...updated.matches[i], isStream: false };
+				}
 			}
+			updated.matches[idx] = { ...updated.matches[idx], station: settings.streamStation, isStream: true };
 		}
-		updated.matches[idx] = { ...updated.matches[idx], station: settings.streamStation, isStream: true };
 	}
 
-	// Assign remaining stations
-	let nextStation = 1;
+	// Assign remaining stations — use bracket-specific station ranges
+	const half = Math.floor(settings.numStations / 2);
+	const startStation = bracketName === 'redemption' ? half + 1 : 1;
+	const endStation = bracketName === 'redemption' ? settings.numStations : half;
+	let nextStation = startStation;
 	for (let i = 0; i < updated.matches.length; i++) {
 		const m = updated.matches[i];
 		if (!m.topPlayerId || !m.bottomPlayerId || m.winnerId || m.station !== undefined) continue;
-		while (nextStation === settings.streamStation) nextStation++;
-		if (nextStation > settings.numStations) nextStation = 1;
+		while (nextStation === settings.streamStation && nextStation <= endStation) nextStation++;
+		if (nextStation > endStation) break;
 		updated.matches[i] = { ...m, station: nextStation };
 		nextStation++;
 	}
@@ -559,8 +566,8 @@ function getExpectedWins(seed: number, totalPlayers: number, numRounds: number):
 function getCinderellaMultiplier(seed: number, totalPlayers: number): number {
 	if (totalPlayers <= 0) return 1.0;
 	const pct = seed / totalPlayers;
-	if (pct <= 0.25) return 0.5;
-	if (pct <= 0.5) return 1.0;
+	if (pct <= 0.25) return 0.0;  // Top quartile: no Cinderella (they're favorites, not underdogs)
+	if (pct <= 0.5) return 0.5;
 	if (pct <= 0.75) return 1.5;
 	return 2.0;
 }
@@ -894,7 +901,7 @@ export function generateBracket(
 		currentRound: 1
 	};
 
-	return settings ? assignBracketStations(state, settings) : state;
+	return settings ? assignBracketStations(state, settings, name as 'main' | 'redemption') : state;
 }
 
 /** Swap top/bottom so the better-seeded player is always on top (cosmetic, doesn't affect wiring). */
@@ -946,7 +953,9 @@ export function reportBracketMatch(
 	bottomCharacters?: string[],
 	topScore?: number,
 	bottomScore?: number,
-	settings?: TournamentSettings
+	settings?: TournamentSettings,
+	bracketName?: 'main' | 'redemption',
+	otherBracketHasStream?: boolean
 ): BracketState {
 	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
 	const match = updated.matches.find((m) => m.id === matchId);
@@ -982,7 +991,7 @@ export function reportBracketMatch(
 		}
 	}
 
-	return settings ? assignBracketStations(updated, settings) : updated;
+	return settings ? assignBracketStations(updated, settings, bracketName, otherBracketHasStream) : updated;
 }
 
 function optimizeBracketArrangement(
