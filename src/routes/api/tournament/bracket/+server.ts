@@ -30,8 +30,12 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (!bracket) return Response.json({ error: `Bracket "${bracketName}" not found` }, { status: 404 });
 
 	try {
+		const otherName = bracketName === 'main' ? 'redemption' : 'main';
+		const otherBracket = tournament.brackets[otherName];
+		const otherHasStream = otherBracket?.matches.some((m) => m.isStream && !m.winnerId) ?? false;
 		tournament.brackets[bracketName] = reportBracketMatch(
-			bracket, matchId, winnerId, topCharacters, bottomCharacters, topScore, bottomScore, tournament.settings
+			bracket, matchId, winnerId, topCharacters, bottomCharacters, topScore, bottomScore,
+			tournament.settings, bracketName, otherHasStream
 		);
 	} catch (err) {
 		return Response.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 400 });
