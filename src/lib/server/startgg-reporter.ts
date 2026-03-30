@@ -84,11 +84,13 @@ export async function preCacheRoundSetIds(
 }
 
 /**
- * Convert preview set IDs to real IDs and cache them on every match.
+ * Cache set IDs (preview or real) from StartGG onto every match in the round.
+ * Does NOT trigger preview→real conversion — the pool stays "not started" so that
+ * pairings can be re-seeded if a misreport fix changes them.
  *
- * Strategy: report a dummy result on the first preview set to trigger StartGG's
- * preview→real conversion, immediately reset it, then wait for real IDs to appear.
- * This ensures all set IDs are real before users start reporting.
+ * Conversion happens automatically when the first match is reported (preview IDs
+ * work for reporting). After that first report, reportSwissMatch caches the real IDs
+ * for all remaining matches.
  *
  * Caller must set startggSync.cacheReady = false and save before calling.
  * Sets cacheReady = true when done.
@@ -98,45 +100,11 @@ export async function triggerConversionAndCache(
 	roundNumber: number,
 	phaseGroupId: number
 ): Promise<void> {
-	// Fetch initial sets — may be preview or real (if conversion already happened)
 	let nodes: GqlNode[] = [];
 	try {
 		const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
 		nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
 	} catch { /* best effort */ }
-
-	// Check if sets are still preview IDs
-	const hasPreview = nodes.some((n) => String(n.id).startsWith('preview_'));
-	if (hasPreview && nodes.length > 0) {
-		// Find first set with two entrants to use as dummy report target
-		const dummySet = nodes.find((n) =>
-			n.slots?.length >= 2 && n.slots[0]?.entrant?.id && n.slots[1]?.entrant?.id
-		);
-		if (dummySet) {
-			const dummyWinnerId = Number(dummySet.slots[0].entrant!.id);
-			// Report with dummy result to trigger conversion
-			const reportResult = await reportSet(
-				String(dummySet.id), dummyWinnerId, {}
-			).catch(() => ({ ok: false as const }));
-
-			if (reportResult.ok) {
-				// Reset the set immediately so it's clean for real reporting
-				const realSetId = reportResult.reportedSetId ?? String(dummySet.id);
-				await resetSet(realSetId).catch(() => {});
-			}
-
-			// Wait for real IDs to appear (conversion takes 5-30s)
-			nodes = [];
-			for (let retry = 1; retry <= 10; retry++) {
-				await new Promise<void>((r) => setTimeout(r, retry <= 3 ? 2000 : 4000));
-				try {
-					const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
-					nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
-				} catch { /* continue */ }
-				if (nodes.length > 0) break;
-			}
-		}
-	}
 
 	// Safe merge: re-load latest state so we never overwrite concurrent match results
 	const fresh = await getActiveTournament();

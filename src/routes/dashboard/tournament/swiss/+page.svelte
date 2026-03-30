@@ -259,7 +259,7 @@
 					<svg class="h-3 w-3 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M21 12a9 9 0 1 1-6.219-8.56" />
 					</svg>
-					<span>Preparing StartGG set IDs (please wait before reporting)...</span>
+					<span>Syncing set IDs from StartGG...</span>
 				</div>
 			{/if}
 

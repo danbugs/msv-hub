@@ -3,7 +3,7 @@ import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
-import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, PHASE_GROUP_SETS_QUERY, fetchPhaseGroups, resetSet } from '$lib/server/startgg';
+import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -393,7 +393,8 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				nextRound.byePlayerId = bye ? bye[0] : undefined;
 				regeneratedNextRound = true;
 
-				// Re-push pairings to StartGG and re-trigger conversion
+				// Re-push pairings to StartGG. Since we no longer trigger conversion at round
+				// start (pool stays un-started with preview IDs), re-seeding should work.
 				const roundGroup = latestState.startggPhase1Groups?.[nextRound.number - 1];
 				const rPgId = roundGroup?.id;
 				const rPhaseId = roundGroup?.phaseId ?? latestState.startggPhase1Id;
@@ -408,20 +409,6 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 						.filter((p): p is [number, number] => p !== null);
 					if (sgPairings.length) {
 						const byeEntrantId2 = bye ? entrantMap2.get(bye[0])?.startggEntrantId : undefined;
-
-						// The pool is likely "started" (sets converted from preview to real).
-						// Reset ALL sets first to un-start the pool, then re-seed.
-						const pgSetsData = await gql<{ phaseGroup: { sets: { nodes: { id: unknown; winnerId?: unknown }[] } } }>(
-							PHASE_GROUP_SETS_QUERY, { phaseGroupId: rPgId }, { delay: 0 }
-						).catch(() => null);
-						const pgSets = pgSetsData?.phaseGroup?.sets?.nodes ?? [];
-						if (pgSets.length > 0) {
-							console.log(`[StartGG] Resetting ${pgSets.length} sets in PG ${rPgId} to allow re-seeding`);
-							for (const s of pgSets) {
-								await resetSet(String(s.id)).catch(() => {});
-							}
-						}
-
 						const seedResult = await pushPairingsToPhaseGroup(rPhaseId, rPgId, sgPairings, byeEntrantId2)
 							.catch((e) => ({ ok: false as const, error: String(e) }));
 						if (!seedResult.ok) {
@@ -431,11 +418,12 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 						}
 					}
 
-					// Clear cached set IDs since pairings changed — need fresh conversion
+					// Clear cached set IDs since pairings changed
 					for (const m of nextRound.matches) {
 						m.startggSetId = undefined;
 					}
 
+					// Re-cache preview IDs
 					if (!latestState.startggSync) {
 						latestState.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
 					}
@@ -444,7 +432,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 				await saveTournament(latestState);
 
-				// Fire conversion in background
+				// Fire set ID caching in background (preview IDs — no conversion)
 				if (rPgId) {
 					triggerConversionAndCache(latestState, nextRound.number, rPgId).catch(() => {});
 				}
