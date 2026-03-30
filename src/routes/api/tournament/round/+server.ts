@@ -152,13 +152,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const standings = calculateStandings(tournament.entrants, completedRounds);
 	const { pairings, bye } = calculateSwissPairings(standings, nextRound);
 
-	// Build matches
+	// Build matches — ensure lower seed is always on top (left) side
+	const seedMap = new Map(tournament.entrants.map((e) => [e.id, e.initialSeed]));
 	let matchId = 0;
-	const matches: SwissMatch[] = pairings.map(([top, bot]) => ({
-		id: `r${nextRound}-m${matchId++}`,
-		topPlayerId: top[0],
-		bottomPlayerId: bot[0]
-	}));
+	const matches: SwissMatch[] = pairings.map(([p1, p2]) => {
+		const s1 = seedMap.get(p1[0]) ?? Infinity;
+		const s2 = seedMap.get(p2[0]) ?? Infinity;
+		const [top, bot] = s1 <= s2 ? [p1, p2] : [p2, p1];
+		return { id: `r${nextRound}-m${matchId++}`, topPlayerId: top[0], bottomPlayerId: bot[0] };
+	});
 
 	// Collect players who were on stream last round to avoid repeat stream appearances
 	const lastCompleted = completedRounds.at(-1);
@@ -350,7 +352,12 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 					}
 				}
 			}
-			if (tournament.startggSync) fresh.startggSync = tournament.startggSync;
+			if (tournament.startggSync) {
+				const freshCacheReady = fresh.startggSync?.cacheReady;
+				fresh.startggSync = tournament.startggSync;
+				// Preserve cacheReady=true if the background caching completed
+				if (freshCacheReady === true) fresh.startggSync.cacheReady = true;
+			}
 		}
 		await saveTournament(fresh);
 	} else {
