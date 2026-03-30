@@ -408,29 +408,24 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 						.filter((p): p is [number, number] => p !== null);
 					if (sgPairings.length) {
 						const byeEntrantId2 = bye ? entrantMap2.get(bye[0])?.startggEntrantId : undefined;
+
+						// The pool is likely "started" (sets converted from preview to real).
+						// Reset ALL sets first to un-start the pool, then re-seed.
+						const pgSetsData = await gql<{ phaseGroup: { sets: { nodes: { id: unknown; winnerId?: unknown }[] } } }>(
+							PHASE_GROUP_SETS_QUERY, { phaseGroupId: rPgId }, { delay: 0 }
+						).catch(() => null);
+						const pgSets = pgSetsData?.phaseGroup?.sets?.nodes ?? [];
+						if (pgSets.length > 0) {
+							console.log(`[StartGG] Resetting ${pgSets.length} sets in PG ${rPgId} to allow re-seeding`);
+							for (const s of pgSets) {
+								await resetSet(String(s.id)).catch(() => {});
+							}
+						}
+
 						const seedResult = await pushPairingsToPhaseGroup(rPhaseId, rPgId, sgPairings, byeEntrantId2)
 							.catch((e) => ({ ok: false as const, error: String(e) }));
 						if (!seedResult.ok) {
-							console.error(`[StartGG] Re-seed failed for round ${nextRound.number} after misreport fix: ${seedResult.error}`);
-							// If pools are started (sets already converted), we need to reset
-							// all sets in the phase group first, then re-seed, then re-convert.
-							// Reset all unreported sets to allow re-seeding.
-							const pgSetsData = await gql<{ phaseGroup: { sets: { nodes: { id: unknown; winnerId?: unknown }[] } } }>(
-								PHASE_GROUP_SETS_QUERY, { phaseGroupId: rPgId }, { delay: 0 }
-							).catch(() => null);
-							const pgSets = pgSetsData?.phaseGroup?.sets?.nodes ?? [];
-							for (const s of pgSets) {
-								if (s.winnerId) continue; // don't reset reported sets
-								await resetSet(String(s.id)).catch(() => {});
-							}
-							// Retry seeding after reset
-							const retryResult = await pushPairingsToPhaseGroup(rPhaseId, rPgId, sgPairings, byeEntrantId2)
-								.catch((e) => ({ ok: false as const, error: String(e) }));
-							if (!retryResult.ok) {
-								console.error(`[StartGG] Re-seed retry also failed: ${retryResult.error}`);
-							} else {
-								console.log(`[StartGG] Re-seed succeeded after resetting sets for round ${nextRound.number}`);
-							}
+							console.error(`[StartGG] Re-seed failed for round ${nextRound.number}: ${seedResult.error}`);
 						} else {
 							console.log(`[StartGG] Re-seed successful for round ${nextRound.number} after misreport fix`);
 						}
