@@ -314,7 +314,10 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'winnerId must be one of the match players' }, { status: 400 });
 	}
 
-	const wasMisreport = match.winnerId !== undefined && match.winnerId !== winnerId;
+	// A "fix" is any change to an already-reported match (different winner OR different score).
+	// This triggers pairing regeneration for the next active round.
+	const wasMisreport = match.winnerId !== undefined;
+	const winnerChanged = match.winnerId !== undefined && match.winnerId !== winnerId;
 	match.winnerId = winnerId;
 	if (isDQ) { match.isDQ = true; match.topScore = undefined; match.bottomScore = undefined; }
 	else { match.isDQ = false; if (topScore !== undefined) match.topScore = topScore; if (bottomScore !== undefined) match.bottomScore = bottomScore; }
@@ -352,11 +355,11 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		await saveTournament(tournament);
 	}
 
-	// If this was a misreport fix in a completed round, regenerate the first ACTIVE round
+	// If a winner was changed in a completed round, regenerate the first ACTIVE round
 	// with no reported results. Skip completed rounds in between — they stay untouched.
-	// Also re-trigger preview→real conversion for the regenerated round.
 	let regeneratedNextRound = false;
-	if (wasMisreport && targetRound.status === 'completed') {
+	console.log(`[PATCH] wasMisreport=${wasMisreport} winnerChanged=${winnerChanged} round=${targetRound.number} status=${targetRound.status}`);
+	if (winnerChanged && targetRound.status === 'completed') {
 		const latestState = await getActiveTournament();
 		if (latestState) {
 			const nextRound = latestState.rounds.find(
@@ -398,49 +401,24 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				const roundGroup = latestState.startggPhase1Groups?.[nextRound.number - 1];
 				const rPgId = roundGroup?.id;
 				const rPhaseId = roundGroup?.phaseId ?? latestState.startggPhase1Id;
-				if (rPhaseId && rPgId) {
-					const entrantMap2 = new Map(latestState.entrants.map((e) => [e.id, e]));
-					const sgPairings = assigned
-						.map((m): [number, number] | null => {
-							const t = entrantMap2.get(m.topPlayerId)?.startggEntrantId;
-							const b = entrantMap2.get(m.bottomPlayerId)?.startggEntrantId;
-							return t && b ? [t, b] : null;
-						})
-						.filter((p): p is [number, number] => p !== null);
-					if (sgPairings.length) {
-						const byeEntrantId2 = bye ? entrantMap2.get(bye[0])?.startggEntrantId : undefined;
-						const seedResult = await pushPairingsToPhaseGroup(rPhaseId, rPgId, sgPairings, byeEntrantId2)
-							.catch((e) => ({ ok: false as const, error: String(e) }));
-						if (seedResult.ok) {
-							console.log(`[StartGG] Re-seed successful for round ${nextRound.number}`);
-							// Clear cached set IDs and re-trigger conversion
-							for (const m of nextRound.matches) m.startggSetId = undefined;
-							if (!latestState.startggSync) {
-								latestState.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
-							}
-							latestState.startggSync.cacheReady = false;
-							latestState.startggSync.pendingPhaseReset = undefined;
-							await saveTournament(latestState);
-							triggerConversionAndCache(latestState, nextRound.number, rPgId).catch(() => {});
-						} else {
-							// Pool is started — user must reset the phase on StartGG manually
-							console.log(`[StartGG] Re-seed failed (pool started): ${seedResult.error}`);
-							if (!latestState.startggSync) {
-								latestState.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
-							}
-							latestState.startggSync.pendingPhaseReset = {
-								roundNumber: nextRound.number,
-								phaseGroupId: rPgId,
-								phaseId: rPhaseId
-							};
-							await saveTournament(latestState);
-						}
-					} else {
-						await saveTournament(latestState);
-					}
-				} else {
-					await saveTournament(latestState);
+				// Since we trigger conversion at round start, the pool is always started.
+				// Set pendingPhaseReset so the user resets the phase on StartGG, then
+				// clicks "Phase Reset Done" to re-seed and re-convert.
+				if (!latestState.startggSync) {
+					latestState.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
 				}
+				// Clear cached set IDs since pairings changed
+				for (const m of nextRound.matches) m.startggSetId = undefined;
+
+				if (rPhaseId && rPgId) {
+					latestState.startggSync.pendingPhaseReset = {
+						roundNumber: nextRound.number,
+						phaseGroupId: rPgId,
+						phaseId: rPhaseId
+					};
+					console.log(`[PATCH] Set pendingPhaseReset for round ${nextRound.number} (PG ${rPgId})`);
+				}
+				await saveTournament(latestState);
 			}
 		}
 	}
