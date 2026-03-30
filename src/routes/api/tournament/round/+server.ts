@@ -3,7 +3,7 @@ import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
-import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, pushBracketSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
+import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, pushBracketSeeding, reportSet, resetSet, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, PHASE_GROUP_SETS_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -168,6 +168,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						.catch((e) => ({ ok: false as const, error: String(e) }));
 					if (result.ok) {
 						console.log(`[StartGG] Pushed ${bName} bracket seeding (${rankedSwissEntrantIds.length} players)`);
+
+						// Trigger preview→real conversion via dummy report + reset
+						// (same approach as Swiss round start)
+						type PGData = { phaseGroup: { sets: { nodes: { id: unknown; slots: { entrant: { id: unknown } | null }[] }[] } } };
+						const setsData = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId: bPgId }, { delay: 0 }).catch(() => null);
+						const bSets = setsData?.phaseGroup?.sets?.nodes ?? [];
+						const previewSet = bSets.find((s) =>
+							String(s.id).startsWith('preview_') && s.slots?.length >= 2 && s.slots[0]?.entrant?.id && s.slots[1]?.entrant?.id
+						);
+						if (previewSet) {
+							const dummyWinner = Number(previewSet.slots[0].entrant!.id);
+							console.log(`[StartGG] Converting ${bName} bracket preview IDs via dummy report...`);
+							const rep = await reportSet(String(previewSet.id), dummyWinner, {}).catch(() => ({ ok: false as const }));
+							if (rep.ok) {
+								const realId = rep.reportedSetId ?? String(previewSet.id);
+								await resetSet(realId).catch(() => {});
+							}
+						}
 					} else {
 						console.error(`[StartGG] ${bName} bracket seeding failed: ${result.error}`);
 					}
