@@ -3,7 +3,7 @@ import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
-import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
+import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -102,6 +102,78 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		let redIdx = 0;
 		for (const m of redReady) {
 			if (redIdx < redemptionStations.length) m.station = redemptionStations[redIdx++];
+		}
+
+		// Auto-discover and link bracket events from StartGG, then push seeding
+		if (tournament.startggEventSlug && (!tournament.startggMainBracketEventId || !tournament.startggRedemptionBracketEventId)) {
+			try {
+				const slugMatch = tournament.startggEventSlug.match(/tournament\/([^/]+)/);
+				if (slugMatch) {
+					const tData = await gql<{ tournament: { events: { id: number; name: string; numEntrants: number }[] } }>(
+						TOURNAMENT_QUERY, { slug: slugMatch[1] }
+					);
+					const allEvents = tData?.tournament?.events ?? [];
+					const otherEvents = allEvents.filter((e) => e.id !== tournament.startggEventId);
+					const mainEvt = otherEvents.find((e) => /main/i.test(e.name));
+					const redEvt = otherEvents.find((e) => /redemption/i.test(e.name));
+					if (mainEvt) {
+						tournament.startggMainBracketEventId = mainEvt.id;
+						console.log(`[StartGG] Auto-linked main bracket event: ${mainEvt.name} (${mainEvt.id})`);
+					}
+					if (redEvt) {
+						tournament.startggRedemptionBracketEventId = redEvt.id;
+						console.log(`[StartGG] Auto-linked redemption bracket event: ${redEvt.name} (${redEvt.id})`);
+					}
+					// Fallback: if exactly 2 non-Swiss events, larger = main
+					if (!mainEvt && !redEvt && otherEvents.length === 2) {
+						const sorted = [...otherEvents].sort((a, b) => b.numEntrants - a.numEntrants);
+						tournament.startggMainBracketEventId = sorted[0].id;
+						tournament.startggRedemptionBracketEventId = sorted[1].id;
+						console.log(`[StartGG] Auto-linked by size: main=${sorted[0].name}, redemption=${sorted[1].name}`);
+					}
+				}
+			} catch (e) {
+				console.error(`[StartGG] Bracket event auto-discovery failed: ${e}`);
+			}
+		}
+
+		// Push bracket seeding to linked StartGG bracket events
+		const bracketEntrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+		for (const [bName, bEventId] of [
+			['main', tournament.startggMainBracketEventId] as const,
+			['redemption', tournament.startggRedemptionBracketEventId] as const
+		]) {
+			if (!bEventId || !tournament.brackets) continue;
+			const bracket = tournament.brackets[bName];
+			if (!bracket) continue;
+			try {
+				// Get the first phase and phase group for this bracket event
+				const epData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
+					EVENT_PHASES_QUERY, { eventId: bEventId }
+				);
+				const bracketPhase = epData?.event?.phases?.[0];
+				if (!bracketPhase) { console.log(`[StartGG] No phases in ${bName} bracket event ${bEventId}`); continue; }
+				const bGroups = await fetchPhaseGroups(bracketPhase.id).catch(() => []);
+				if (!bGroups.length) { console.log(`[StartGG] No phase groups in ${bName} bracket phase ${bracketPhase.id}`); continue; }
+				const bPgId = bGroups[0].id;
+
+				// Build ranked entrant IDs from bracket players
+				const rankedIds = bracket.players
+					.sort((a, b) => a.seed - b.seed)
+					.map((p) => bracketEntrantMap.get(p.entrantId)?.startggEntrantId)
+					.filter((id): id is number => id !== undefined);
+				if (rankedIds.length) {
+					const result = await pushFinalStandingsSeeding(bracketPhase.id, bPgId, rankedIds)
+						.catch((e) => ({ ok: false as const, error: String(e) }));
+					if (result.ok) {
+						console.log(`[StartGG] Pushed ${bName} bracket seeding (${rankedIds.length} players)`);
+					} else {
+						console.error(`[StartGG] ${bName} bracket seeding failed: ${result.error}`);
+					}
+				}
+			} catch (e) {
+				console.error(`[StartGG] ${bName} bracket seeding error: ${e}`);
+			}
 		}
 
 		// Push final Swiss standings to the "Final Standings" phase on StartGG

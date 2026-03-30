@@ -277,8 +277,8 @@
 	{#if tournament && !tournament.startggSync?.splitConfirmed}
 		<div class="mt-4 rounded-lg border border-amber-800 bg-amber-900/20 px-4 py-3">
 			<p class="text-sm text-amber-300">
-				<span class="font-semibold">StartGG:</span> Correct the main/redemption bracket split in StartGG&#8217;s phase 2 before
-				confirming. Match results reported here are <strong>queued</strong> until you click Split Done.
+				<span class="font-semibold">StartGG:</span> Bracket seeding has been pushed automatically.
+				Verify the brackets look correct on StartGG, then click <strong>Start Reporting</strong> to begin syncing match results.
 			</p>
 			<div class="mt-2 flex items-center gap-3">
 				<button
@@ -286,7 +286,7 @@
 					disabled={splitConfirming}
 					class="rounded-lg bg-amber-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
 				>
-					{splitConfirming ? 'Flushing...' : 'Split Done'}
+					{splitConfirming ? 'Starting...' : 'Start Reporting'}
 				</button>
 				{#if splitResult}
 					<span class="text-xs text-gray-400">
@@ -294,65 +294,17 @@
 						{#if splitResult.failed > 0}<span class="text-red-400">, {splitResult.failed} failed (see errors below)</span>{/if}
 					</span>
 				{/if}
+				{#if tournament.startggMainBracketEventId}
+					<span class="text-xs text-green-400">Main: linked</span>
+				{/if}
+				{#if tournament.startggRedemptionBracketEventId}
+					<span class="text-xs text-green-400">Redemption: linked</span>
+				{/if}
 			</div>
 		</div>
 	{/if}
 
-	<!-- Link StartGG bracket events -->
-	{#if tournament && (!tournament.startggMainBracketEventId || !tournament.startggRedemptionBracketEventId)}
-		<div class="mt-4 rounded-lg border border-gray-700 bg-gray-800/40 px-4 py-3">
-			<p class="text-sm text-gray-300 font-medium">Link StartGG Bracket Events</p>
-			<p class="text-xs text-gray-500 mt-1">Link the main and redemption bracket events on StartGG to enable result sync.</p>
-
-			{#if discoveredEvents}
-				<div class="mt-2 space-y-1">
-					{#if discoveredEvents.main}
-						<div class="flex items-center gap-2 text-xs">
-							<span class="text-gray-400">Main:</span>
-							<span class="text-white">{discoveredEvents.main.name}</span>
-							<span class="text-green-400">(auto-detected)</span>
-						</div>
-					{/if}
-					{#if discoveredEvents.redemption}
-						<div class="flex items-center gap-2 text-xs">
-							<span class="text-gray-400">Redemption:</span>
-							<span class="text-white">{discoveredEvents.redemption.name}</span>
-							<span class="text-green-400">(auto-detected)</span>
-						</div>
-					{/if}
-					<button onclick={() => linkBracketEvents(true)} disabled={linkingEvents}
-						class="mt-1 rounded bg-violet-700 px-3 py-1 text-xs font-medium text-white hover:bg-violet-600 disabled:opacity-50">
-						{linkingEvents ? 'Linking...' : 'Link Detected Events'}
-					</button>
-				</div>
-			{:else}
-				<button onclick={discoverBracketEvents} disabled={discovering}
-					class="mt-2 rounded bg-gray-700 px-3 py-1 text-xs font-medium text-gray-300 hover:bg-gray-600 disabled:opacity-50">
-					{discovering ? 'Searching...' : 'Auto-detect Events'}
-				</button>
-			{/if}
-
-			<details class="mt-2">
-				<summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Manual link</summary>
-				<div class="mt-2 grid grid-cols-2 gap-2">
-					<input bind:value={mainEventUrl} placeholder="Main bracket event URL"
-						class="rounded border border-gray-600 bg-gray-900 px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
-					<input bind:value={redemptionEventUrl} placeholder="Redemption bracket event URL"
-						class="rounded border border-gray-600 bg-gray-900 px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
-				</div>
-				<button onclick={() => linkBracketEvents(false)} disabled={linkingEvents}
-					class="mt-1 rounded bg-violet-700 px-3 py-1 text-xs font-medium text-white hover:bg-violet-600 disabled:opacity-50">
-					{linkingEvents ? 'Linking...' : 'Link Events'}
-				</button>
-			</details>
-
-			<div class="mt-2 flex items-center gap-2">
-				{#if linkResult}<span class="text-xs text-gray-400">{linkResult}</span>{/if}
-				{#if tournament.startggMainBracketEventId}<span class="text-xs text-green-400">Main: linked</span>{/if}
-				{#if tournament.startggRedemptionBracketEventId}<span class="text-xs text-green-400">Redemption: linked</span>{/if}
-			</div>
-		</div>
-	{/if}
+	<!-- Bracket events are auto-linked during bracket generation. No manual step needed. -->
 
 	<!-- StartGG errors -->
 	{#if tournament?.startggSync?.errors?.length}
