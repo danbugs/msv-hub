@@ -730,6 +730,34 @@ export function calculateFinalStandings(
 
 import type { BracketMatch, BracketState } from '$lib/types/tournament';
 
+/**
+ * Generate standard bracket seeding order for N players (N must be power of 2).
+ * Returns an array of 0-indexed seed positions — pairs of (top, bottom) for each match.
+ *
+ * For 8 players: [0,7, 3,4, 1,6, 2,5] → matches: 1v8, 4v5, 2v7, 3v6
+ * For 16 players: [0,15, 7,8, 3,12, 4,11, 1,14, 6,9, 2,13, 5,10]
+ *   → matches: 1v16, 8v9, 4v13, 5v12, 2v15, 7v10, 3v14, 6v11
+ *
+ * This ensures seeds 1 and 2 are in opposite halves and only meet in the final.
+ */
+function getStandardBracketOrder(bracketSize: number): number[] {
+	// Start with seed 0 (the #1 seed)
+	let positions = [0];
+
+	// Recursively split: at each round, for each existing position p,
+	// add its mirror (complement) in the current round size
+	for (let round = 1; round < bracketSize; round *= 2) {
+		const next: number[] = [];
+		for (const p of positions) {
+			next.push(p);
+			next.push(2 * round - 1 - p);
+		}
+		positions = next;
+	}
+
+	return positions;
+}
+
 export function generateBracket(
 	name: string,
 	players: { entrantId: string; seed: number }[],
@@ -741,8 +769,11 @@ export function generateBracket(
 	const bracketSize = Math.pow(2, Math.ceil(Math.log2(n)));
 	const numFirstRoundMatches = bracketSize / 2;
 
-	// Optimize arrangement to minimize rematches
-	const optimized = optimizeBracketArrangement(players, allStandings);
+	// Use standard bracket seeding order (same as StartGG):
+	// Seeds are placed so 1 and 2 are in opposite halves, 1 plays bracketSize in R1, etc.
+	// This ensures top seeds only meet in later rounds.
+	const standardOrder = getStandardBracketOrder(bracketSize);
+	const sortedPlayers = [...players].sort((a, b) => a.seed - b.seed);
 
 	const matches: BracketMatch[] = [];
 	let matchCounter = 0;
@@ -750,14 +781,14 @@ export function generateBracket(
 	// ── Winners bracket ──
 	const winnersRounds = Math.ceil(Math.log2(bracketSize));
 
-	// First round: seeded matchups (1 vs N, 2 vs N-1, etc.)
+	// First round: standard seeded matchups
 	const firstRoundMatches: BracketMatch[] = [];
 	for (let i = 0; i < numFirstRoundMatches; i++) {
-		const topIdx = i;
-		const botIdx = bracketSize - 1 - i;
+		const topSeedPos = standardOrder[i * 2];      // 0-indexed position in seed order
+		const botSeedPos = standardOrder[i * 2 + 1];
 
-		const topPlayer = topIdx < optimized.length ? optimized[topIdx].entrantId : undefined;
-		const botPlayer = botIdx < optimized.length ? optimized[botIdx].entrantId : undefined;
+		const topPlayer = topSeedPos < sortedPlayers.length ? sortedPlayers[topSeedPos].entrantId : undefined;
+		const botPlayer = botSeedPos < sortedPlayers.length ? sortedPlayers[botSeedPos].entrantId : undefined;
 
 		const match: BracketMatch = {
 			id: `${name}-W${1}-${matchCounter++}`,
@@ -890,7 +921,7 @@ export function generateBracket(
 		}
 	}
 
-	const bracketPlayers = optimized.map((p, i) => ({ entrantId: p.entrantId, seed: i + 1 }));
+	const bracketPlayers = sortedPlayers.map((p, i) => ({ entrantId: p.entrantId, seed: i + 1 }));
 	normalizeSeedOrder(matches, bracketPlayers);
 
 	const state: BracketState = {
