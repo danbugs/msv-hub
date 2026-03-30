@@ -3,7 +3,7 @@ import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
-import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
+import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, pushBracketSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -137,17 +137,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
-		// Push bracket seeding to linked StartGG bracket events
+		// Push bracket seeding to linked StartGG bracket events.
+		// Uses pushBracketSeeding which matches players by player ID across events
+		// (entrant IDs differ between Swiss and bracket events on StartGG).
+		const swissPgId = tournament.startggPhase1Groups?.[0]?.id;
 		const bracketEntrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
 		for (const [bName, bEventId] of [
 			['main', tournament.startggMainBracketEventId] as const,
 			['redemption', tournament.startggRedemptionBracketEventId] as const
 		]) {
-			if (!bEventId || !tournament.brackets) continue;
+			if (!bEventId || !tournament.brackets || !swissPgId) continue;
 			const bracket = tournament.brackets[bName];
 			if (!bracket) continue;
 			try {
-				// Get the first phase and phase group for this bracket event
 				const epData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
 					EVENT_PHASES_QUERY, { eventId: bEventId }
 				);
@@ -157,16 +159,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				if (!bGroups.length) { console.log(`[StartGG] No phase groups in ${bName} bracket phase ${bracketPhase.id}`); continue; }
 				const bPgId = bGroups[0].id;
 
-				// Build ranked entrant IDs from bracket players
-				const rankedIds = bracket.players
+				const rankedSwissEntrantIds = bracket.players
 					.sort((a, b) => a.seed - b.seed)
 					.map((p) => bracketEntrantMap.get(p.entrantId)?.startggEntrantId)
 					.filter((id): id is number => id !== undefined);
-				if (rankedIds.length) {
-					const result = await pushFinalStandingsSeeding(bracketPhase.id, bPgId, rankedIds)
+				if (rankedSwissEntrantIds.length) {
+					const result = await pushBracketSeeding(bracketPhase.id, bPgId, rankedSwissEntrantIds, swissPgId)
 						.catch((e) => ({ ok: false as const, error: String(e) }));
 					if (result.ok) {
-						console.log(`[StartGG] Pushed ${bName} bracket seeding (${rankedIds.length} players)`);
+						console.log(`[StartGG] Pushed ${bName} bracket seeding (${rankedSwissEntrantIds.length} players)`);
 					} else {
 						console.error(`[StartGG] ${bName} bracket seeding failed: ${result.error}`);
 					}

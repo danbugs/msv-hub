@@ -241,7 +241,7 @@ query PhaseGroupSeeds($phaseGroupId: ID!, $page: Int!, $perPage: Int!) {
       pageInfo { totalPages }
       nodes {
         id
-        entrant { id }
+        entrant { id participants { player { id } } }
       }
     }
   }
@@ -635,5 +635,80 @@ export async function pushFinalStandingsSeeding(
 		{ delay: 0 }
 	).catch(() => null);
 	if (!data) return { ok: false, error: 'updatePhaseSeeding for Final Standings failed' };
+	return { ok: true };
+}
+
+/**
+ * Push bracket seeding by matching players across events via player ID.
+ *
+ * StartGG entrant IDs differ between events — the same person has different entrant IDs
+ * in the Swiss event vs the bracket event. This function matches by player ID (which is
+ * consistent across events) to build the correct seed mapping.
+ *
+ * @param swissEntrantIds - Swiss event entrant IDs in desired seed order (index 0 = seed 1)
+ * @param swissPhaseGroupId - Swiss event phase group (to look up player IDs)
+ */
+export async function pushBracketSeeding(
+	bracketPhaseId: number,
+	bracketPhaseGroupId: number,
+	swissEntrantIds: number[],
+	swissPhaseGroupId: number
+): Promise<{ ok: boolean; error?: string }> {
+	// Fetch seeds from BOTH phase groups to get player IDs
+	const [swissSeeds, bracketSeeds] = await Promise.all([
+		fetchAllPages(PHASE_GROUP_SEEDS_QUERY, { phaseGroupId: swissPhaseGroupId }, (d) => {
+			const pg = d.phaseGroup as GqlRecord | undefined;
+			return pg?.seeds ?? null;
+		}, undefined, 0).catch(() => [] as GqlRecord[]),
+		fetchAllPages(PHASE_GROUP_SEEDS_QUERY, { phaseGroupId: bracketPhaseGroupId }, (d) => {
+			const pg = d.phaseGroup as GqlRecord | undefined;
+			return pg?.seeds ?? null;
+		}, undefined, 0).catch(() => [] as GqlRecord[])
+	]);
+
+	if (!(bracketSeeds as GqlRecord[]).length) {
+		return { ok: false, error: 'Bracket phase group has no seeds' };
+	}
+
+	// Build Swiss entrantId → playerId map
+	const swissEntrantToPlayer = new Map<number, number>();
+	for (const seed of swissSeeds as GqlRecord[]) {
+		const entrantId = seed.entrant?.id;
+		const playerId = seed.entrant?.participants?.[0]?.player?.id;
+		if (entrantId && playerId) swissEntrantToPlayer.set(Number(entrantId), Number(playerId));
+	}
+
+	// Build bracket playerId → seedId map
+	const bracketPlayerToSeedId = new Map<number, string>();
+	for (const seed of bracketSeeds as GqlRecord[]) {
+		const playerId = seed.entrant?.participants?.[0]?.player?.id;
+		if (playerId && seed.id) bracketPlayerToSeedId.set(Number(playerId), String(seed.id));
+	}
+
+	// Build seed mapping: Swiss entrant order → bracket seedId assignment
+	const seedMapping: { seedId: string; phaseGroupId: string; seedNum: number }[] = [];
+	let matched = 0;
+	swissEntrantIds.forEach((swissEntrantId, i) => {
+		const playerId = swissEntrantToPlayer.get(swissEntrantId);
+		if (!playerId) return;
+		const bracketSeedId = bracketPlayerToSeedId.get(playerId);
+		if (!bracketSeedId) return;
+		seedMapping.push({ seedId: bracketSeedId, phaseGroupId: String(bracketPhaseGroupId), seedNum: i + 1 });
+		matched++;
+	});
+
+	if (!seedMapping.length) {
+		return { ok: false, error: `No player matches found between Swiss and bracket (${swissEntrantToPlayer.size} Swiss players, ${bracketPlayerToSeedId.size} bracket players)` };
+	}
+
+	console.log(`[StartGG] pushBracketSeeding: matched ${matched}/${swissEntrantIds.length} players`);
+	seedMapping.sort((a, b) => a.seedNum - b.seedNum);
+
+	const data = await gql(
+		UPDATE_PHASE_SEEDING_MUTATION,
+		{ phaseId: String(bracketPhaseId), seedMapping },
+		{ delay: 0 }
+	).catch(() => null);
+	if (!data) return { ok: false, error: 'updatePhaseSeeding for bracket failed' };
 	return { ok: true };
 }
