@@ -393,8 +393,8 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				nextRound.byePlayerId = bye ? bye[0] : undefined;
 				regeneratedNextRound = true;
 
-				// Re-push pairings to StartGG. Since we no longer trigger conversion at round
-				// start (pool stays un-started with preview IDs), re-seeding should work.
+				// Try to re-seed on StartGG. If the pool is already started (conversion
+				// already happened), set pendingPhaseReset so the UI shows a prompt.
 				const roundGroup = latestState.startggPhase1Groups?.[nextRound.number - 1];
 				const rPgId = roundGroup?.id;
 				const rPhaseId = roundGroup?.phaseId ?? latestState.startggPhase1Id;
@@ -411,30 +411,35 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 						const byeEntrantId2 = bye ? entrantMap2.get(bye[0])?.startggEntrantId : undefined;
 						const seedResult = await pushPairingsToPhaseGroup(rPhaseId, rPgId, sgPairings, byeEntrantId2)
 							.catch((e) => ({ ok: false as const, error: String(e) }));
-						if (!seedResult.ok) {
-							console.error(`[StartGG] Re-seed failed for round ${nextRound.number}: ${seedResult.error}`);
+						if (seedResult.ok) {
+							console.log(`[StartGG] Re-seed successful for round ${nextRound.number}`);
+							// Clear cached set IDs and re-trigger conversion
+							for (const m of nextRound.matches) m.startggSetId = undefined;
+							if (!latestState.startggSync) {
+								latestState.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
+							}
+							latestState.startggSync.cacheReady = false;
+							latestState.startggSync.pendingPhaseReset = undefined;
+							await saveTournament(latestState);
+							triggerConversionAndCache(latestState, nextRound.number, rPgId).catch(() => {});
 						} else {
-							console.log(`[StartGG] Re-seed successful for round ${nextRound.number} after misreport fix`);
+							// Pool is started — user must reset the phase on StartGG manually
+							console.log(`[StartGG] Re-seed failed (pool started): ${seedResult.error}`);
+							if (!latestState.startggSync) {
+								latestState.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
+							}
+							latestState.startggSync.pendingPhaseReset = {
+								roundNumber: nextRound.number,
+								phaseGroupId: rPgId,
+								phaseId: rPhaseId
+							};
+							await saveTournament(latestState);
 						}
+					} else {
+						await saveTournament(latestState);
 					}
-
-					// Clear cached set IDs since pairings changed
-					for (const m of nextRound.matches) {
-						m.startggSetId = undefined;
-					}
-
-					// Re-cache preview IDs
-					if (!latestState.startggSync) {
-						latestState.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
-					}
-					latestState.startggSync.cacheReady = false;
-				}
-
-				await saveTournament(latestState);
-
-				// Fire set ID caching in background (preview IDs — no conversion)
-				if (rPgId) {
-					triggerConversionAndCache(latestState, nextRound.number, rPgId).catch(() => {});
+				} else {
+					await saveTournament(latestState);
 				}
 			}
 		}

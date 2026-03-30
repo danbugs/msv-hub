@@ -10,6 +10,12 @@ export interface StartggSyncState {
 	 * False while triggerConversionAndCache is running. Undefined = no sync attempted yet.
 	 */
 	cacheReady?: boolean;
+	/**
+	 * Set when a misreport fix regenerated pairings for a round whose pool is already started
+	 * on StartGG. The user must reset the phase on StartGG, then click "Phase Reset Done"
+	 * to re-seed and re-convert.
+	 */
+	pendingPhaseReset?: { roundNumber: number; phaseGroupId: number; phaseId: number };
 }
 
 /** Core tournament state persisted in Redis */
