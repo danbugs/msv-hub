@@ -222,14 +222,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			).catch((e) => ({ ok: false as const, error: String(e) }));
 			if (!seedResult.ok) {
 				console.error(`[StartGG] pushPairingsToPhaseGroup failed: ${seedResult.error}`);
+				// Pool is already started (from previous test run or prior attempt).
+				// Show the Phase Reset banner so user can reset on StartGG and retry.
 				if (!tournament.startggSync) {
 					tournament.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
 				}
-				tournament.startggSync.errors.push({
-					matchId: `round-${nextRound}-seed`,
-					message: `StartGG re-seed failed for round ${nextRound}: ${seedResult.error}`,
-					ts: Date.now()
-				});
+				tournament.startggSync.pendingPhaseReset = {
+					roundNumber: nextRound,
+					phaseGroupId: pgId,
+					phaseId: roundPhaseId
+				};
 				await saveTournament(tournament);
 			} else {
 				console.log(`[StartGG] Re-seed successful for round ${nextRound}`);
