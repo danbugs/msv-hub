@@ -488,17 +488,21 @@ export async function reportSet(
 		}
 
 		// Build game data dynamically based on actual scores (supports BO3 and BO5)
+		// Character index maps to game number (Game 1 = index 0, Game 2 = index 1, etc.)
 		gameData = [];
 		let gameNum = 1;
 		const winnerFirstBatch = lScore > 0 ? wScore - 1 : wScore;
 		for (let i = 0; i < winnerFirstBatch; i++) {
-			gameData.push(buildGameEntry(gameNum++, w, winnerEntrantId, extra.loserEntrantId, charsByEntrant, i));
+			gameData.push(buildGameEntry(gameNum, w, winnerEntrantId, extra.loserEntrantId, charsByEntrant, gameNum - 1));
+			gameNum++;
 		}
 		for (let i = 0; i < lScore; i++) {
-			gameData.push(buildGameEntry(gameNum++, l, winnerEntrantId, extra.loserEntrantId, charsByEntrant, winnerFirstBatch + i));
+			gameData.push(buildGameEntry(gameNum, l, winnerEntrantId, extra.loserEntrantId, charsByEntrant, gameNum - 1));
+			gameNum++;
 		}
 		if (lScore > 0) {
-			gameData.push(buildGameEntry(gameNum++, w, winnerEntrantId, extra.loserEntrantId, charsByEntrant, winnerFirstBatch + lScore));
+			gameData.push(buildGameEntry(gameNum, w, winnerEntrantId, extra.loserEntrantId, charsByEntrant, gameNum - 1));
+			gameNum++;
 		}
 	}
 
