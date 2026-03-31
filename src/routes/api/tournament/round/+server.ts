@@ -245,6 +245,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
+		// Auto-confirm split since bracket setup is fully automated now
+		if (!tournament.startggSync) {
+			tournament.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };
+		} else {
+			tournament.startggSync.splitConfirmed = true;
+		}
+
 		await saveTournament(tournament);
 		return Response.json({
 			phase: 'brackets', finalStandings, brackets: tournament.brackets,
