@@ -3,7 +3,7 @@ import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
-import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, pushBracketSeeding, reportSet, resetSet, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, PHASE_GROUP_SETS_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
+import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -139,76 +139,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
-		// Push bracket seeding to linked StartGG bracket events.
-		// Uses pushBracketSeeding which matches players by player ID across events
-		// (entrant IDs differ between Swiss and bracket events on StartGG).
-		const swissPgId = tournament.startggPhase1Groups?.[0]?.id;
-		console.log(`[StartGG] Bracket seeding: mainEvent=${tournament.startggMainBracketEventId} redEvent=${tournament.startggRedemptionBracketEventId} swissPgId=${swissPgId}`);
-		const bracketEntrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
-		for (const [bName, bEventId] of [
-			['main', tournament.startggMainBracketEventId] as const,
-			['redemption', tournament.startggRedemptionBracketEventId] as const
-		]) {
-			if (!bEventId || !tournament.brackets) {
-				console.log(`[StartGG] Skipping ${bName} bracket seeding: eventId=${bEventId} hasBrackets=${!!tournament.brackets}`);
-				continue;
-			}
-			if (!swissPgId) {
-				console.log(`[StartGG] Skipping ${bName} bracket seeding: no Swiss phase group ID`);
-				continue;
-			}
-			const bracket = tournament.brackets[bName];
-			if (!bracket) continue;
-			try {
-				const epData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
-					EVENT_PHASES_QUERY, { eventId: bEventId }
-				);
-				const bracketPhase = epData?.event?.phases?.[0];
-				if (!bracketPhase) { console.log(`[StartGG] No phases in ${bName} bracket event ${bEventId}`); continue; }
-				const bGroups = await fetchPhaseGroups(bracketPhase.id).catch(() => []);
-				if (!bGroups.length) { console.log(`[StartGG] No phase groups in ${bName} bracket phase ${bracketPhase.id}`); continue; }
-				const bPgId = bGroups[0].id;
-
-				const rankedSwissEntrantIds = bracket.players
-					.sort((a, b) => a.seed - b.seed)
-					.map((p) => bracketEntrantMap.get(p.entrantId)?.startggEntrantId)
-					.filter((id): id is number => id !== undefined);
-				if (rankedSwissEntrantIds.length) {
-					const result = await pushBracketSeeding(bracketPhase.id, bPgId, rankedSwissEntrantIds, swissPgId)
-						.catch((e) => ({ ok: false as const, error: String(e) }));
-					if (result.ok) {
-						console.log(`[StartGG] Pushed ${bName} bracket seeding (${rankedSwissEntrantIds.length} players)`);
-
-						// Trigger preview→real conversion via dummy report + reset
-						// (same approach as Swiss round start)
-						type PGData = { phaseGroup: { sets: { nodes: { id: unknown; slots: { entrant: { id: unknown } | null }[] }[] } } };
-						const setsData = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId: bPgId }, { delay: 0 }).catch(() => null);
-						const bSets = setsData?.phaseGroup?.sets?.nodes ?? [];
-						const previewSet = bSets.find((s) =>
-							String(s.id).startsWith('preview_') && s.slots?.length >= 2 && s.slots[0]?.entrant?.id && s.slots[1]?.entrant?.id
-						);
-						if (previewSet) {
-							const dummyWinner = Number(previewSet.slots[0].entrant!.id);
-							console.log(`[StartGG] Converting ${bName} bracket preview IDs via dummy report...`);
-							const rep = await reportSet(String(previewSet.id), dummyWinner, {}).catch(() => ({ ok: false as const }));
-							if (rep.ok) {
-								const realId = rep.reportedSetId ?? String(previewSet.id);
-								const rstResult = await resetSet(realId).catch((e) => ({ ok: false, error: String(e) }));
-								console.log(`[StartGG] Reset dummy set ${realId}: ${rstResult.ok ? 'ok' : 'failed — ' + (rstResult as {error?:string}).error}`);
-							} else {
-								console.log(`[StartGG] Dummy report failed for ${bName} (may already be converted)`);
-							}
-						} else {
-							console.log(`[StartGG] No preview sets found in ${bName} bracket (already converted)`);
-						}
-					} else {
-						console.error(`[StartGG] ${bName} bracket seeding failed: ${result.error}`);
-					}
-				}
-			} catch (e) {
-				console.error(`[StartGG] ${bName} bracket seeding error: ${e}`);
-			}
-		}
+		// Bracket seeding + conversion happens when TO clicks "Split Done" (startgg-sync POST)
+		// after they assign players to bracket events on StartGG.
 
 		// Push final Swiss standings to the "Final Standings" phase on StartGG
 		// If IDs aren't stored (tournament created before this feature), look them up now.
@@ -243,13 +175,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					console.error(`[StartGG] pushFinalStandingsSeeding failed: ${result.error}`);
 				}
 			}
-		}
-
-		// Auto-confirm split since bracket setup is fully automated now
-		if (!tournament.startggSync) {
-			tournament.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };
-		} else {
-			tournament.startggSync.splitConfirmed = true;
 		}
 
 		await saveTournament(tournament);
