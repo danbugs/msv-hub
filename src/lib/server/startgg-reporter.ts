@@ -464,23 +464,23 @@ async function _doReportBracketMatch(
 		gameCharacters.push({ entrantId: bracketBotEntrantId, characters: match.bottomCharacters });
 	}
 
-	let result = await reportSet(setId, bracketWinnerEntrantId, {
+	const reportExtra = {
 		loserEntrantId: bracketLoserEntrantId,
 		winnerScore,
 		loserScore,
-		gameCharacters: gameCharacters.length > 0 ? gameCharacters : undefined
-	});
+		gameCharacters: gameCharacters.length > 0 ? gameCharacters : undefined,
+		gameWinners: match.gameWinners,
+		topEntrantId: bracketTopEntrantId,
+		bottomEntrantId: bracketBotEntrantId
+	};
+
+	let result = await reportSet(setId, bracketWinnerEntrantId, reportExtra);
 
 	// If set is already completed (dummy conversion leftover or misreport), reset then re-report
 	if (!result.ok && result.error?.includes('Cannot report completed set')) {
 		const resetResult = await resetSet(setId);
 		if (resetResult.ok) {
-			result = await reportSet(setId, bracketWinnerEntrantId, {
-				loserEntrantId: bracketLoserEntrantId,
-				winnerScore,
-				loserScore,
-				gameCharacters: gameCharacters.length > 0 ? gameCharacters : undefined
-			});
+			result = await reportSet(setId, bracketWinnerEntrantId, reportExtra);
 		}
 	}
 

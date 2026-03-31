@@ -50,16 +50,24 @@
 		return w + l;
 	}
 
+	// Per-game winner: 'top' or 'bottom' for each game
+	let gameWinners = $state<('top' | 'bottom')[]>([]);
+
 	function resizeGameArrays(n: number) {
 		gameTopChars = Array.from({ length: n }, (_, i) => gameTopChars[i] ?? '');
 		gameBotChars = Array.from({ length: n }, (_, i) => gameBotChars[i] ?? '');
 		gameTopSearch = Array.from({ length: n }, (_, i) => gameTopSearch[i] ?? '');
 		gameBotSearch = Array.from({ length: n }, (_, i) => gameBotSearch[i] ?? '');
+		gameWinners = Array.from({ length: n }, (_, i) => gameWinners[i] ?? (reportWinnerId === reportingMatch?.topPlayerId ? 'top' : 'bottom'));
 	}
 
 	function setScore(s: string) {
 		reportScore = s;
 		resizeGameArrays(numGames(s));
+	}
+
+	function toggleGameWinner(gameIdx: number) {
+		gameWinners = gameWinners.map((w, i) => i === gameIdx ? (w === 'top' ? 'bottom' : 'top') : w);
 	}
 
 	function setGameChar(side: 'top' | 'bot', gameIdx: number, char: string) {
@@ -240,7 +248,8 @@
 				topCharacters: topCharacters.length ? topCharacters : undefined,
 				bottomCharacters: bottomCharacters.length ? bottomCharacters : undefined,
 				topScore,
-				bottomScore
+				bottomScore,
+				gameWinners: gameWinners.length ? gameWinners : undefined
 			})
 		});
 
@@ -423,14 +432,26 @@
 							{/if}
 						{/if}
 
-						<!-- Step 3: Per-game character tracking (top 8 only) -->
+						<!-- Step 3: Per-game details (winner + characters) -->
 						{#if reportWinnerId && reportScore && showChars}
 							<div class="mt-3">
-								<p class="text-xs font-medium text-gray-400 mb-2">Characters by game</p>
+								<p class="text-xs font-medium text-gray-400 mb-2">Per-game details</p>
 								<div class="space-y-2 max-h-64 overflow-y-auto">
 								{#each Array.from({length: numGames(reportScore)}, (_, i) => i) as gameIdx}
 									<div class="rounded-lg border border-gray-800 bg-gray-800/50 p-2">
-										<div class="text-xs text-gray-500 mb-1.5">Game {gameIdx + 1}</div>
+										<div class="flex items-center gap-2 mb-1.5">
+											<span class="text-xs text-gray-500">G{gameIdx + 1}</span>
+											<button type="button" onclick={() => toggleGameWinner(gameIdx)}
+												class="rounded px-1.5 py-0.5 text-xs font-medium transition-colors
+													{gameWinners[gameIdx] === 'top' ? 'bg-green-700/60 text-green-200' : 'bg-gray-700 text-gray-400 hover:text-white'}">
+												{gameWinners[gameIdx] === 'top' ? 'W' : 'L'} {top?.gamerTag ?? '?'}
+											</button>
+											<button type="button" onclick={() => toggleGameWinner(gameIdx)}
+												class="rounded px-1.5 py-0.5 text-xs font-medium transition-colors
+													{gameWinners[gameIdx] === 'bottom' ? 'bg-green-700/60 text-green-200' : 'bg-gray-700 text-gray-400 hover:text-white'}">
+												{gameWinners[gameIdx] === 'bottom' ? 'W' : 'L'} {bot?.gamerTag ?? '?'}
+											</button>
+										</div>
 										<div class="grid grid-cols-2 gap-2">
 											<div class="relative">
 												{#if gameTopChars[gameIdx]}

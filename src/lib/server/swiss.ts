@@ -1009,7 +1009,8 @@ export function reportBracketMatch(
 	bottomScore?: number,
 	settings?: TournamentSettings,
 	bracketName?: 'main' | 'redemption',
-	otherBracketHasStream?: boolean
+	otherBracketHasStream?: boolean,
+	gameWinners?: ('top' | 'bottom')[]
 ): BracketState {
 	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
 	const match = updated.matches.find((m) => m.id === matchId);
@@ -1020,6 +1021,7 @@ export function reportBracketMatch(
 	if (bottomCharacters?.length) match.bottomCharacters = bottomCharacters;
 	if (topScore !== undefined) match.topScore = topScore;
 	if (bottomScore !== undefined) match.bottomScore = bottomScore;
+	if (gameWinners?.length) match.gameWinners = gameWinners;
 
 	advancePlayer(updated.matches, match);
 	normalizeSeedOrder(updated.matches, updated.players);

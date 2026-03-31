@@ -467,8 +467,12 @@ export async function reportSet(
 		winnerScore?: number;
 		loserScore?: number;
 		isDQ?: boolean;
-		/** Per-game character selections: [{ gameNum, selections: [{ entrantId, characterId }] }] */
 		gameCharacters?: { entrantId: number; characters: string[] }[];
+		/** Per-game winners: 'top' or 'bottom' for each game. 'top' = winnerEntrantId won. */
+		gameWinners?: ('top' | 'bottom')[];
+		/** IDs for top/bottom mapping: top entrant ID, bottom entrant ID */
+		topEntrantId?: number;
+		bottomEntrantId?: number;
 	}
 ): Promise<{ ok: boolean; reportedSetId?: string; error?: string }> {
 	const token = getToken();
@@ -487,22 +491,34 @@ export async function reportSet(
 			for (const gc of extra.gameCharacters) charsByEntrant.set(gc.entrantId, gc.characters);
 		}
 
-		// Build game data dynamically based on actual scores (supports BO3 and BO5)
-		// Character index maps to game number (Game 1 = index 0, Game 2 = index 1, etc.)
+		// Build game data. If gameWinners is provided, use exact per-game results.
+		// Otherwise, use the default pattern (winner wins first, loser wins middle, winner clinches).
 		gameData = [];
-		let gameNum = 1;
-		const winnerFirstBatch = lScore > 0 ? wScore - 1 : wScore;
-		for (let i = 0; i < winnerFirstBatch; i++) {
-			gameData.push(buildGameEntry(gameNum, w, winnerEntrantId, extra.loserEntrantId, charsByEntrant, gameNum - 1));
-			gameNum++;
-		}
-		for (let i = 0; i < lScore; i++) {
-			gameData.push(buildGameEntry(gameNum, l, winnerEntrantId, extra.loserEntrantId, charsByEntrant, gameNum - 1));
-			gameNum++;
-		}
-		if (lScore > 0) {
-			gameData.push(buildGameEntry(gameNum, w, winnerEntrantId, extra.loserEntrantId, charsByEntrant, gameNum - 1));
-			gameNum++;
+		const totalGames = wScore + lScore;
+
+		if (extra.gameWinners?.length === totalGames && extra.topEntrantId && extra.bottomEntrantId) {
+			// Exact per-game winners provided by the user
+			for (let i = 0; i < totalGames; i++) {
+				const gw = extra.gameWinners[i];
+				const gameWinnerId = gw === 'top' ? String(extra.topEntrantId) : String(extra.bottomEntrantId);
+				gameData.push(buildGameEntry(i + 1, gameWinnerId, extra.topEntrantId, extra.bottomEntrantId, charsByEntrant, i));
+			}
+		} else {
+			// Default pattern: W,W,...,L,L,...,W (winner wins first batch, loser wins middle, winner clinches)
+			let gameNum = 1;
+			const winnerFirstBatch = lScore > 0 ? wScore - 1 : wScore;
+			for (let i = 0; i < winnerFirstBatch; i++) {
+				gameData.push(buildGameEntry(gameNum, w, winnerEntrantId, extra.loserEntrantId, charsByEntrant, gameNum - 1));
+				gameNum++;
+			}
+			for (let i = 0; i < lScore; i++) {
+				gameData.push(buildGameEntry(gameNum, l, winnerEntrantId, extra.loserEntrantId, charsByEntrant, gameNum - 1));
+				gameNum++;
+			}
+			if (lScore > 0) {
+				gameData.push(buildGameEntry(gameNum, w, winnerEntrantId, extra.loserEntrantId, charsByEntrant, gameNum - 1));
+				gameNum++;
+			}
 		}
 	}
 

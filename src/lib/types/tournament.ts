@@ -119,6 +119,8 @@ export interface BracketMatch {
 	isDQ?: boolean;
 	topCharacters?: string[];
 	bottomCharacters?: string[];
+	/** Per-game winner: 'top' or 'bottom' for each game (used for accurate StartGG reporting) */
+	gameWinners?: ('top' | 'bottom')[];
 	/** Where winner advances to */
 	winnerNextMatchId?: string;
 	winnerNextSlot?: 'top' | 'bottom';

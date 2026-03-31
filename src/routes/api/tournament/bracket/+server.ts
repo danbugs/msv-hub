@@ -12,7 +12,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (!tournament.brackets) return Response.json({ error: 'No brackets generated' }, { status: 400 });
 
 	const body = await request.json();
-	const { bracketName, matchId, winnerId, topCharacters, bottomCharacters, topScore, bottomScore } = body as {
+	const { bracketName, matchId, winnerId, topCharacters, bottomCharacters, topScore, bottomScore, gameWinners } = body as {
 		bracketName: 'main' | 'redemption';
 		matchId: string;
 		winnerId: string;
@@ -20,6 +20,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		bottomCharacters?: string[];
 		topScore?: number;
 		bottomScore?: number;
+		gameWinners?: ('top' | 'bottom')[];
 	};
 
 	if (!bracketName || !matchId || !winnerId) {
@@ -35,7 +36,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		const otherHasStream = otherBracket?.matches.some((m) => m.isStream && !m.winnerId) ?? false;
 		tournament.brackets[bracketName] = reportBracketMatch(
 			bracket, matchId, winnerId, topCharacters, bottomCharacters, topScore, bottomScore,
-			tournament.settings, bracketName, otherHasStream
+			tournament.settings, bracketName, otherHasStream, gameWinners
 		);
 	} catch (err) {
 		return Response.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 400 });
@@ -66,7 +67,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				const otherHasStream2 = fresh.brackets[otherName2]?.matches.some((m) => m.isStream && !m.winnerId) ?? false;
 				fresh.brackets[bracketName] = reportBracketMatch(
 					freshBracket, matchId, winnerId, topCharacters, bottomCharacters, topScore, bottomScore,
-					fresh.settings, bracketName, otherHasStream2
+					fresh.settings, bracketName, otherHasStream2, gameWinners
 				);
 			} catch { /* match already reported in fresh state — fine */ }
 
