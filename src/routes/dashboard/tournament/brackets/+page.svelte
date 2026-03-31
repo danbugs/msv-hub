@@ -138,6 +138,7 @@
 		gameBotChars = [];
 		gameTopSearch = [];
 		gameBotSearch = [];
+		gameWinners = [];
 		// Pre-fill from existing characters (restore per-game if available)
 		if (match.topCharacters?.length || match.bottomCharacters?.length) {
 			const existing = match.topCharacters ?? match.bottomCharacters ?? [];
