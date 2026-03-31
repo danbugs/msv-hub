@@ -55,37 +55,48 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		(e) => ({ ok: false, queued: false, error: e instanceof Error ? e.message : String(e) })
 	);
 
-	// Safe merge: re-load fresh state to avoid concurrent reports overwriting each other.
-	// Re-apply this match's result + all player advancements to the latest state.
+	// Safe merge: re-load fresh state and apply ONLY this match's changes.
+	// Don't re-run reportBracketMatch (which would double-advance players).
+	// Instead, apply the match result + advancements field by field.
 	const fresh = await getActiveTournament();
 	if (fresh?.brackets) {
 		const freshBracket = fresh.brackets[bracketName];
 		if (freshBracket) {
-			// Re-run reportBracketMatch on fresh state to get correct advancements
-			try {
-				const otherName2 = bracketName === 'main' ? 'redemption' : 'main';
-				const otherHasStream2 = fresh.brackets[otherName2]?.matches.some((m) => m.isStream && !m.winnerId) ?? false;
-				fresh.brackets[bracketName] = reportBracketMatch(
-					freshBracket, matchId, winnerId, topCharacters, bottomCharacters, topScore, bottomScore,
-					fresh.settings, bracketName, otherHasStream2, gameWinners
-				);
-			} catch { /* match already reported in fresh state — fine */ }
+			const updatedBracket = tournament.brackets![bracketName];
+			const updatedMatch = updatedBracket.matches.find((m) => m.id === matchId);
 
-			// Copy StartGG set ID
-			const freshMatch = fresh.brackets[bracketName].matches.find((m) => m.id === matchId);
-			if (freshMatch) freshMatch.startggSetId = reportedMatch.startggSetId;
+			// Apply match result fields to fresh state
+			const fm = freshBracket.matches.find((m) => m.id === matchId);
+			if (fm && updatedMatch) {
+				fm.winnerId = updatedMatch.winnerId;
+				fm.loserId = updatedMatch.loserId;
+				fm.topScore = updatedMatch.topScore;
+				fm.bottomScore = updatedMatch.bottomScore;
+				fm.topCharacters = updatedMatch.topCharacters;
+				fm.bottomCharacters = updatedMatch.bottomCharacters;
+				fm.gameWinners = updatedMatch.gameWinners;
+				fm.isDQ = updatedMatch.isDQ;
+				fm.startggSetId = reportedMatch.startggSetId;
+			}
 
-			if (tournament.startggSync) fresh.startggSync = tournament.startggSync;
-
-			const allComplete2 = Object.values(fresh.brackets).every((b) =>
-				b.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).every((m) => m.winnerId)
-			);
-			if (allComplete2) fresh.phase = 'completed';
-
-			await saveTournament(fresh);
-		} else {
-			await saveTournament(tournament);
+			// Apply player advancements: copy topPlayerId/bottomPlayerId for downstream matches
+			// that were changed by advancePlayer (only set them if fresh state doesn't have them yet)
+			for (const um of updatedBracket.matches) {
+				const freshM = freshBracket.matches.find((m) => m.id === um.id);
+				if (!freshM) continue;
+				if (um.topPlayerId && !freshM.topPlayerId) freshM.topPlayerId = um.topPlayerId;
+				if (um.bottomPlayerId && !freshM.bottomPlayerId) freshM.bottomPlayerId = um.bottomPlayerId;
+			}
 		}
+
+		if (tournament.startggSync) fresh.startggSync = tournament.startggSync;
+
+		const allComplete2 = Object.values(fresh.brackets).every((b) =>
+			b.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).every((m) => m.winnerId)
+		);
+		if (allComplete2) fresh.phase = 'completed';
+
+		await saveTournament(fresh);
 	} else {
 		await saveTournament(tournament);
 	}
