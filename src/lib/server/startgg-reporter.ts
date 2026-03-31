@@ -455,10 +455,20 @@ async function _doReportBracketMatch(
 	const winnerScore = match.winnerId === match.topPlayerId ? match.topScore : match.bottomScore;
 	const loserScore  = match.winnerId === match.topPlayerId ? match.bottomScore : match.topScore;
 
+	// Build per-game character data from match's topCharacters/bottomCharacters
+	const gameCharacters: { entrantId: number; characters: string[] }[] = [];
+	if (match.topCharacters?.length) {
+		gameCharacters.push({ entrantId: bracketTopEntrantId, characters: match.topCharacters });
+	}
+	if (match.bottomCharacters?.length) {
+		gameCharacters.push({ entrantId: bracketBotEntrantId, characters: match.bottomCharacters });
+	}
+
 	let result = await reportSet(setId, bracketWinnerEntrantId, {
 		loserEntrantId: bracketLoserEntrantId,
 		winnerScore,
-		loserScore
+		loserScore,
+		gameCharacters: gameCharacters.length > 0 ? gameCharacters : undefined
 	});
 
 	// If set is already completed (dummy conversion leftover or misreport), reset then re-report
@@ -468,7 +478,8 @@ async function _doReportBracketMatch(
 			result = await reportSet(setId, bracketWinnerEntrantId, {
 				loserEntrantId: bracketLoserEntrantId,
 				winnerScore,
-				loserScore
+				loserScore,
+				gameCharacters: gameCharacters.length > 0 ? gameCharacters : undefined
 			});
 		}
 	}

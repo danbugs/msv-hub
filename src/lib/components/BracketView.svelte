@@ -40,21 +40,26 @@
 		return entrants.find((e) => e.id === id);
 	}
 
-	/** Can this match be fixed? Only if no downstream match has been reported yet. */
+	/** Can this match be fixed? Only if ALL downstream matches are unreported (recursive). */
 	function canFix(match: BracketMatch): boolean {
 		if (!match.winnerId) return false;
 		const allMatches = bracket.matches;
-		// Check winner's next match
-		if (match.winnerNextMatchId) {
-			const next = allMatches.find((m) => m.id === match.winnerNextMatchId);
-			if (next?.winnerId) return false;
+		const checked = new Set<string>();
+
+		function anyDownstreamReported(m: BracketMatch): boolean {
+			if (checked.has(m.id)) return false;
+			checked.add(m.id);
+			for (const nextId of [m.winnerNextMatchId, m.loserNextMatchId]) {
+				if (!nextId) continue;
+				const next = allMatches.find((n) => n.id === nextId);
+				if (!next) continue;
+				if (next.winnerId) return true;
+				if (anyDownstreamReported(next)) return true;
+			}
+			return false;
 		}
-		// Check loser's next match
-		if (match.loserNextMatchId) {
-			const next = allMatches.find((m) => m.id === match.loserNextMatchId);
-			if (next?.winnerId) return false;
-		}
-		return true;
+
+		return !anyDownstreamReported(match);
 	}
 
 	function computeLayout(b: BracketState): BracketLayout {

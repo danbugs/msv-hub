@@ -4,6 +4,27 @@ const API_URL = 'https://api.start.gg/gql/alpha';
 const API_DELAY = 800;
 const SETS_PER_PAGE = 50;
 
+// StartGG character IDs for SSBU (videogame 1386)
+const SSBU_CHAR_IDS: Record<string, number> = {
+	'Mario': 1279, 'Donkey Kong': 1280, 'Link': 1281, 'Samus': 1282, 'Dark Samus': 1441,
+	'Yoshi': 1283, 'Kirby': 1284, 'Fox': 1285, 'Pikachu': 1286, 'Luigi': 1287,
+	'Ness': 1288, 'Captain Falcon': 1289, 'Jigglypuff': 1290, 'Peach': 1291, 'Daisy': 1428,
+	'Bowser': 1292, 'Ice Climbers': 1293, 'Sheik': 1294, 'Zelda': 1295, 'Dr. Mario': 1296,
+	'Pichu': 1297, 'Falco': 1298, 'Marth': 1299, 'Lucina': 1370, 'Young Link': 1300,
+	'Ganondorf': 1301, 'Mewtwo': 1302, 'Roy': 1303, 'Chrom': 1442, 'Mr. Game & Watch': 1304,
+	'Meta Knight': 1305, 'Pit': 1306, 'Dark Pit': 1371, 'Zero Suit Samus': 1307, 'Wario': 1308,
+	'Snake': 1309, 'Ike': 1310, 'Pokemon Trainer': 1453, 'Diddy Kong': 1312, 'Lucas': 1313,
+	'Sonic': 1314, 'King Dedede': 1315, 'Olimar': 1316, 'Lucario': 1317, 'R.O.B.': 1318,
+	'Toon Link': 1319, 'Wolf': 1320, 'Villager': 1363, 'Mega Man': 1364, 'Wii Fit Trainer': 1365,
+	'Rosalina & Luma': 1366, 'Little Mac': 1367, 'Greninja': 1368, 'Palutena': 1373,
+	'Pac-Man': 1369, 'Robin': 1372, 'Shulk': 1374, 'Bowser Jr.': 1375, 'Duck Hunt': 1376,
+	'Ryu': 1377, 'Ken': 1443, 'Cloud': 1378, 'Corrin': 1379, 'Bayonetta': 1380,
+	'Inkling': 1405, 'Ridley': 1406, 'Simon': 1432, 'Richter': 1433, 'King K. Rool': 1434,
+	'Isabelle': 1435, 'Incineroar': 1440, 'Piranha Plant': 1454, 'Joker': 1455, 'Hero': 1462,
+	'Banjo & Kazooie': 1463, 'Terry': 1464, 'Byleth': 1465, 'Min Min': 1466, 'Steve': 1467,
+	'Sephiroth': 1468, 'Pyra/Mythra': 1469, 'Kazuya': 1470, 'Sora': 1471
+};
+
 function getToken(): string {
 	const token = env.STARTGG_TOKEN;
 	if (!token) throw new Error('STARTGG_TOKEN must be set');
@@ -438,34 +459,65 @@ export async function findSetByEntrants(
 export async function reportSet(
 	setId: string,
 	winnerEntrantId: number,
-	extra?: { loserEntrantId?: number; winnerScore?: number; loserScore?: number; isDQ?: boolean }
+	extra?: {
+		loserEntrantId?: number;
+		winnerScore?: number;
+		loserScore?: number;
+		isDQ?: boolean;
+		/** Per-game character selections: [{ gameNum, selections: [{ entrantId, characterId }] }] */
+		gameCharacters?: { entrantId: number; characters: string[] }[];
+	}
 ): Promise<{ ok: boolean; reportedSetId?: string; error?: string }> {
 	const token = getToken();
 
-	let gameData: { winnerId: string; gameNum: number }[] | undefined;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	let gameData: Record<string, any>[] | undefined;
 	if (!extra?.isDQ && extra?.loserEntrantId && extra.winnerScore !== undefined && extra.loserScore !== undefined) {
 		const w = String(winnerEntrantId);
 		const l = String(extra.loserEntrantId);
 		const wScore = extra.winnerScore;
 		const lScore = extra.loserScore;
+
+		// Build per-game character selections lookup
+		const charsByEntrant = new Map<number, string[]>();
+		if (extra.gameCharacters) {
+			for (const gc of extra.gameCharacters) charsByEntrant.set(gc.entrantId, gc.characters);
+		}
+
 		// Build game data dynamically based on actual scores (supports BO3 and BO5)
-		// Pattern: winner wins games 1..wScore, loser wins games wScore+1..wScore+lScore,
-		// then winner takes the final game if lScore > 0
 		gameData = [];
 		let gameNum = 1;
-		// Winner takes first (wScore - (lScore > 0 ? 1 : 0)) games
 		const winnerFirstBatch = lScore > 0 ? wScore - 1 : wScore;
 		for (let i = 0; i < winnerFirstBatch; i++) {
-			gameData.push({ gameNum: gameNum++, winnerId: w });
+			gameData.push(buildGameEntry(gameNum++, w, winnerEntrantId, extra.loserEntrantId, charsByEntrant, i));
 		}
-		// Loser takes their games
 		for (let i = 0; i < lScore; i++) {
-			gameData.push({ gameNum: gameNum++, winnerId: l });
+			gameData.push(buildGameEntry(gameNum++, l, winnerEntrantId, extra.loserEntrantId, charsByEntrant, winnerFirstBatch + i));
 		}
-		// Winner clinches with final game if loser won any
 		if (lScore > 0) {
-			gameData.push({ gameNum: gameNum++, winnerId: w });
+			gameData.push(buildGameEntry(gameNum++, w, winnerEntrantId, extra.loserEntrantId, charsByEntrant, winnerFirstBatch + lScore));
 		}
+	}
+
+	function buildGameEntry(
+		gameNum: number, winnerId: string,
+		entrantA: number, entrantB: number,
+		charsByEntrant: Map<number, string[]>, gameIdx: number
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	): Record<string, any> {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const entry: Record<string, any> = { gameNum, winnerId };
+		const selections: { entrantId: string; characterId: number }[] = [];
+		for (const eid of [entrantA, entrantB]) {
+			const chars = charsByEntrant.get(eid);
+			const charName = chars?.[gameIdx];
+			if (charName) {
+				const charId = SSBU_CHAR_IDS[charName];
+				if (charId) selections.push({ entrantId: String(eid), characterId: charId });
+			}
+		}
+		if (selections.length > 0) entry.selections = selections;
+		return entry;
 	}
 
 	const variables: Record<string, unknown> = { setId, winnerId: String(winnerEntrantId) };
