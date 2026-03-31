@@ -235,9 +235,10 @@
 		if (!reportingMatch || !reportWinnerId || !reportScore) return;
 		error = '';
 
-		const [topScore, bottomScore] = parseScore(reportScore, reportWinnerId, reportingMatch);
-		const topCharacters = gameTopChars.filter(Boolean);
-		const bottomCharacters = gameBotChars.filter(Boolean);
+		const isDQ = reportScore === 'DQ';
+		const [topScore, bottomScore] = isDQ ? [0, 0] : parseScore(reportScore, reportWinnerId, reportingMatch);
+		const topCharacters = isDQ ? [] : gameTopChars.filter(Boolean);
+		const bottomCharacters = isDQ ? [] : gameBotChars.filter(Boolean);
 
 		const res = await fetch('/api/tournament/bracket', {
 			method: 'PATCH',
@@ -250,7 +251,8 @@
 				bottomCharacters: bottomCharacters.length ? bottomCharacters : undefined,
 				topScore,
 				bottomScore,
-				gameWinners: gameWinners.length ? gameWinners : undefined
+				isDQ: isDQ || undefined,
+				gameWinners: !isDQ && gameWinners.length ? gameWinners : undefined
 			})
 		});
 
@@ -413,13 +415,18 @@
 						<!-- Step 2: Pick score (BO3 or BO5) -->
 						{#if reportWinnerId}
 							{#if isBo5}
-								<div class="mt-3 grid grid-cols-3 gap-2">
+								<div class="mt-3 grid grid-cols-4 gap-2">
 									{#each ['3-0', '3-1', '3-2'] as s}
 										<button onclick={() => setScore(s)}
 											class="rounded-lg py-2 text-sm font-medium transition-colors {reportScore === s ? 'bg-violet-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
 											{s.replace('-', ' – ')}
 										</button>
 									{/each}
+									<button onclick={() => setScore('DQ')}
+										class="rounded-lg py-2 text-sm font-medium transition-colors {reportScore === 'DQ' ? 'bg-orange-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
+										title="Opponent did not show up">
+										DQ Win
+									</button>
 								</div>
 							{:else}
 								<div class="mt-3 flex gap-2">
@@ -429,6 +436,11 @@
 											{s.replace('-', ' – ')}
 										</button>
 									{/each}
+									<button onclick={() => setScore('DQ')}
+										class="flex-1 rounded-lg py-2 text-sm font-medium transition-colors {reportScore === 'DQ' ? 'bg-orange-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
+										title="Opponent did not show up">
+										DQ Win
+									</button>
 								</div>
 							{/if}
 						{/if}

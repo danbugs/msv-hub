@@ -12,7 +12,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (!tournament.brackets) return Response.json({ error: 'No brackets generated' }, { status: 400 });
 
 	const body = await request.json();
-	const { bracketName, matchId, winnerId, topCharacters, bottomCharacters, topScore, bottomScore, gameWinners } = body as {
+	const { bracketName, matchId, winnerId, topCharacters, bottomCharacters, topScore, bottomScore, gameWinners, isDQ } = body as {
 		bracketName: 'main' | 'redemption';
 		matchId: string;
 		winnerId: string;
@@ -21,6 +21,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		topScore?: number;
 		bottomScore?: number;
 		gameWinners?: ('top' | 'bottom')[];
+		isDQ?: boolean;
 	};
 
 	if (!bracketName || !matchId || !winnerId) {
@@ -55,51 +56,10 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		(e) => ({ ok: false, queued: false, error: e instanceof Error ? e.message : String(e) })
 	);
 
-	// Safe merge: re-load fresh state and apply ONLY this match's changes.
-	// Don't re-run reportBracketMatch (which would double-advance players).
-	// Instead, apply the match result + advancements field by field.
-	const fresh = await getActiveTournament();
-	if (fresh?.brackets) {
-		const freshBracket = fresh.brackets[bracketName];
-		if (freshBracket) {
-			const updatedBracket = tournament.brackets![bracketName];
-			const updatedMatch = updatedBracket.matches.find((m) => m.id === matchId);
-
-			// Apply match result fields to fresh state
-			const fm = freshBracket.matches.find((m) => m.id === matchId);
-			if (fm && updatedMatch) {
-				fm.winnerId = updatedMatch.winnerId;
-				fm.loserId = updatedMatch.loserId;
-				fm.topScore = updatedMatch.topScore;
-				fm.bottomScore = updatedMatch.bottomScore;
-				fm.topCharacters = updatedMatch.topCharacters;
-				fm.bottomCharacters = updatedMatch.bottomCharacters;
-				fm.gameWinners = updatedMatch.gameWinners;
-				fm.isDQ = updatedMatch.isDQ;
-				fm.startggSetId = reportedMatch.startggSetId;
-			}
-
-			// Apply player advancements: copy topPlayerId/bottomPlayerId for downstream matches
-			// that were changed by advancePlayer (only set them if fresh state doesn't have them yet)
-			for (const um of updatedBracket.matches) {
-				const freshM = freshBracket.matches.find((m) => m.id === um.id);
-				if (!freshM) continue;
-				if (um.topPlayerId && !freshM.topPlayerId) freshM.topPlayerId = um.topPlayerId;
-				if (um.bottomPlayerId && !freshM.bottomPlayerId) freshM.bottomPlayerId = um.bottomPlayerId;
-			}
-		}
-
-		if (tournament.startggSync) fresh.startggSync = tournament.startggSync;
-
-		const allComplete2 = Object.values(fresh.brackets).every((b) =>
-			b.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).every((m) => m.winnerId)
-		);
-		if (allComplete2) fresh.phase = 'completed';
-
-		await saveTournament(fresh);
-	} else {
-		await saveTournament(tournament);
-	}
+	// Save directly. Bracket reports should not be concurrent for the same match
+	// (UI has per-match lock). Player advancement is deterministic from the match result,
+	// so saving the full tournament state is safe.
+	await saveTournament(tournament);
 	return Response.json({
 		ok: true,
 		bracket: tournament.brackets[bracketName],

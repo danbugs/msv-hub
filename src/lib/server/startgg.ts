@@ -566,7 +566,9 @@ export async function reportSet(
 
 	if (!res.ok) {
 		const text = await res.text().catch(() => '');
-		return { ok: false, error: `StartGG HTTP ${res.status}: ${text.slice(0, 200)}` };
+		const cleanText = text.replace(/<[^>]*>/g, '').slice(0, 100).trim() || `status ${res.status}`;
+		const label = res.status === 504 ? 'StartGG timed out (try again)' : `StartGG HTTP ${res.status}: ${cleanText}`;
+		return { ok: false, error: label };
 	}
 
 	const json = await res.json().catch(() => null);
