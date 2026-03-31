@@ -4,25 +4,28 @@ const API_URL = 'https://api.start.gg/gql/alpha';
 const API_DELAY = 800;
 const SETS_PER_PAGE = 50;
 
-// StartGG character IDs for SSBU (videogame 1386)
+// StartGG character IDs for SSBU (videogame 1386) — fetched from StartGG API
+// Keys match MSV Hub's character list in brackets page; aliases added for API name mismatches.
 const SSBU_CHAR_IDS: Record<string, number> = {
-	'Mario': 1279, 'Donkey Kong': 1280, 'Link': 1281, 'Samus': 1282, 'Dark Samus': 1441,
-	'Yoshi': 1283, 'Kirby': 1284, 'Fox': 1285, 'Pikachu': 1286, 'Luigi': 1287,
-	'Ness': 1288, 'Captain Falcon': 1289, 'Jigglypuff': 1290, 'Peach': 1291, 'Daisy': 1428,
-	'Bowser': 1292, 'Ice Climbers': 1293, 'Sheik': 1294, 'Zelda': 1295, 'Dr. Mario': 1296,
-	'Pichu': 1297, 'Falco': 1298, 'Marth': 1299, 'Lucina': 1370, 'Young Link': 1300,
-	'Ganondorf': 1301, 'Mewtwo': 1302, 'Roy': 1303, 'Chrom': 1442, 'Mr. Game & Watch': 1304,
-	'Meta Knight': 1305, 'Pit': 1306, 'Dark Pit': 1371, 'Zero Suit Samus': 1307, 'Wario': 1308,
-	'Snake': 1309, 'Ike': 1310, 'Pokemon Trainer': 1453, 'Diddy Kong': 1312, 'Lucas': 1313,
-	'Sonic': 1314, 'King Dedede': 1315, 'Olimar': 1316, 'Lucario': 1317, 'R.O.B.': 1318,
-	'Toon Link': 1319, 'Wolf': 1320, 'Villager': 1363, 'Mega Man': 1364, 'Wii Fit Trainer': 1365,
-	'Rosalina & Luma': 1366, 'Little Mac': 1367, 'Greninja': 1368, 'Palutena': 1373,
-	'Pac-Man': 1369, 'Robin': 1372, 'Shulk': 1374, 'Bowser Jr.': 1375, 'Duck Hunt': 1376,
-	'Ryu': 1377, 'Ken': 1443, 'Cloud': 1378, 'Corrin': 1379, 'Bayonetta': 1380,
-	'Inkling': 1405, 'Ridley': 1406, 'Simon': 1432, 'Richter': 1433, 'King K. Rool': 1434,
-	'Isabelle': 1435, 'Incineroar': 1440, 'Piranha Plant': 1454, 'Joker': 1455, 'Hero': 1462,
-	'Banjo & Kazooie': 1463, 'Terry': 1464, 'Byleth': 1465, 'Min Min': 1466, 'Steve': 1467,
-	'Sephiroth': 1468, 'Pyra/Mythra': 1469, 'Kazuya': 1470, 'Sora': 1471
+	'Mario': 1302, 'Donkey Kong': 1280, 'Link': 1296, 'Samus': 1328, 'Dark Samus': 1408,
+	'Yoshi': 1338, 'Kirby': 1295, 'Fox': 1286, 'Pikachu': 1319, 'Luigi': 1301,
+	'Ness': 1313, 'Captain Falcon': 1274, 'Jigglypuff': 1293, 'Peach': 1317, 'Daisy': 1277,
+	'Bowser': 1273, 'Ice Climbers': 1290, 'Sheik': 1329, 'Zelda': 1340, 'Dr. Mario': 1282,
+	'Pichu': 1318, 'Falco': 1285, 'Marth': 1304, 'Lucina': 1300, 'Young Link': 1339,
+	'Ganondorf': 1287, 'Mewtwo': 1310, 'Roy': 1326, 'Chrom': 1409, 'Mr. Game & Watch': 1405,
+	'Meta Knight': 1307, 'Pit': 1320, 'Dark Pit': 1278, 'Zero Suit Samus': 1341, 'Wario': 1335,
+	'Snake': 1331, 'Ike': 1291, 'Pokemon Trainer': 1321, 'Diddy Kong': 1279, 'Lucas': 1299,
+	'Sonic': 1332, 'King Dedede': 1294, 'Olimar': 1314, 'Lucario': 1298, 'R.O.B.': 1323,
+	'Toon Link': 1333, 'Wolf': 1337, 'Villager': 1334, 'Mega Man': 1305, 'Wii Fit Trainer': 1336,
+	'Rosalina & Luma': 1325, 'Rosalina': 1325, 'Little Mac': 1297, 'Greninja': 1289,
+	'Palutena': 1316, 'Pac-Man': 1315, 'Robin': 1324, 'Shulk': 1330, 'Bowser Jr.': 1272,
+	'Duck Hunt': 1283, 'Ryu': 1327, 'Ken': 1410, 'Cloud': 1275, 'Corrin': 1276,
+	'Bayonetta': 1271, 'Inkling': 1292, 'Ridley': 1322, 'Simon': 1411, 'Simon Belmont': 1411,
+	'Richter': 1412, 'King K. Rool': 1407, 'Isabelle': 1413, 'Incineroar': 1406,
+	'Piranha Plant': 1441, 'Joker': 1453, 'Hero': 1526, 'Banjo & Kazooie': 1530,
+	'Banjo-Kazooie': 1530, 'Terry': 1532, 'Byleth': 1539, 'Min Min': 1747, 'Steve': 1766,
+	'Sephiroth': 1777, 'Pyra/Mythra': 1795, 'Pyra & Mythra': 1795, 'Kazuya': 1846, 'Sora': 1897,
+	'Mii Brawler': 1311, 'Mii Gunner': 1415, 'Mii Swordfighter': 1414
 };
 
 function getToken(): string {
