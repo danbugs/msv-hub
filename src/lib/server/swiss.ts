@@ -889,13 +889,16 @@ export function generateBracket(
 				if (w1b) { w1b.loserNextMatchId = roundMatches[i].id; w1b.loserNextSlot = 'bottom'; }
 			}
 		} else if (lRound % 2 === 0) {
-			// Even: L(prev) survivors → top; W(lR/2+1) losers → bottom (cross/reversed to match StartGG)
+			// Even: L(prev) survivors → top; W losers → bottom.
+			// StartGG alternates drop-in order: L2=reversed, L4=straight, L6=reversed, etc.
 			const dropWinnersRound = lRound / 2 + 1;
 			const winnersDropMatches = matches.filter((m) => m.round === dropWinnersRound);
+			const reversed = (lRound / 2) % 2 === 1; // L2→rev, L4→straight, L6→rev
 			for (let i = 0; i < numMatches; i++) {
 				const prev = losersPrevMatches[i];
 				if (prev) { prev.winnerNextMatchId = roundMatches[i].id; prev.winnerNextSlot = 'top'; }
-				const wd = winnersDropMatches[numMatches - 1 - i];
+				const wdIdx = reversed ? numMatches - 1 - i : i;
+				const wd = winnersDropMatches[wdIdx];
 				if (wd) { wd.loserNextMatchId = roundMatches[i].id; wd.loserNextSlot = 'bottom'; }
 			}
 		} else {

@@ -59,8 +59,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const redemptionPlayers = finalStandings.filter((s) => s.bracket === 'redemption').map((s, i) => ({ entrantId: s.entrantId, seed: i + 1 }));
 
 		tournament.brackets = {
-			main: generateBracket('main', mainPlayers, finalStandings, tournament.settings),
-			redemption: generateBracket('redemption', redemptionPlayers, finalStandings, tournament.settings)
+			main: generateBracket('main', mainPlayers, finalStandings),
+			redemption: generateBracket('redemption', redemptionPlayers, finalStandings)
 		};
 		tournament.phase = 'brackets';
 

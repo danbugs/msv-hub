@@ -40,6 +40,23 @@
 		return entrants.find((e) => e.id === id);
 	}
 
+	/** Can this match be fixed? Only if no downstream match has been reported yet. */
+	function canFix(match: BracketMatch): boolean {
+		if (!match.winnerId) return false;
+		const allMatches = bracket.matches;
+		// Check winner's next match
+		if (match.winnerNextMatchId) {
+			const next = allMatches.find((m) => m.id === match.winnerNextMatchId);
+			if (next?.winnerId) return false;
+		}
+		// Check loser's next match
+		if (match.loserNextMatchId) {
+			const next = allMatches.find((m) => m.id === match.loserNextMatchId);
+			if (next?.winnerId) return false;
+		}
+		return true;
+	}
+
 	function computeLayout(b: BracketState): BracketLayout {
 		const allMatches = b.matches;
 
@@ -247,7 +264,7 @@
 										class="rounded bg-violet-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-violet-600">
 										Report
 									</button>
-								{:else if match.winnerId && match.topPlayerId && match.bottomPlayerId}
+								{:else if match.winnerId && match.topPlayerId && match.bottomPlayerId && canFix(match)}
 									<button onclick={() => onReport!(match)}
 										class="rounded border border-yellow-700/50 px-2 py-0.5 text-xs text-yellow-500 hover:bg-yellow-900/20">
 										Fix
