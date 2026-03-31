@@ -449,18 +449,38 @@ export function assignBracketStations(
 		}
 	}
 
-	// Assign remaining stations — use bracket-specific station ranges
+	// Assign remaining stations — use bracket-specific station ranges, skip already-used
 	const half = Math.floor(settings.numStations / 2);
 	const startStation = bracketName === 'redemption' ? half + 1 : 1;
 	const endStation = bracketName === 'redemption' ? settings.numStations : half;
-	let nextStation = startStation;
+
+	// Build station pool for this bracket (excluding stream station)
+	const allRegular = Array.from({ length: settings.numStations }, (_, i) => i + 1)
+		.filter((s) => s !== settings.streamStation);
+	const halfIdx = Math.ceil(allRegular.length / 2);
+	const stationPool = bracketName === 'redemption' ? allRegular.slice(halfIdx) : allRegular.slice(0, halfIdx);
+
+	// Collect stations already in use by active (unreported) matches
+	const usedStations = new Set(
+		updated.matches
+			.filter((m) => m.station !== undefined && !m.winnerId)
+			.map((m) => m.station!)
+	);
+
 	for (let i = 0; i < updated.matches.length; i++) {
 		const m = updated.matches[i];
 		if (!m.topPlayerId || !m.bottomPlayerId || m.winnerId || m.station !== undefined) continue;
-		while (nextStation === settings.streamStation && nextStation <= endStation) nextStation++;
-		if (nextStation > endStation) break;
-		updated.matches[i] = { ...m, station: nextStation };
-		nextStation++;
+		let assigned = false;
+		for (const s of stationPool) {
+			if (usedStations.has(s)) continue;
+			updated.matches[i] = { ...m, station: s };
+			usedStations.add(s);
+			assigned = true;
+			break;
+		}
+		if (!assigned && stationPool.length > 0) {
+			updated.matches[i] = { ...m, station: stationPool[0] };
+		}
 	}
 
 	return updated;

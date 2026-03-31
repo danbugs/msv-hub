@@ -446,19 +446,25 @@ export async function reportSet(
 	if (!extra?.isDQ && extra?.loserEntrantId && extra.winnerScore !== undefined && extra.loserScore !== undefined) {
 		const w = String(winnerEntrantId);
 		const l = String(extra.loserEntrantId);
-		if (extra.loserScore === 0) {
-			// 2-0
-			gameData = [
-				{ gameNum: 1, winnerId: w },
-				{ gameNum: 2, winnerId: w }
-			];
-		} else {
-			// 2-1: winner takes games 1 & 3, loser takes game 2
-			gameData = [
-				{ gameNum: 1, winnerId: w },
-				{ gameNum: 2, winnerId: l },
-				{ gameNum: 3, winnerId: w }
-			];
+		const wScore = extra.winnerScore;
+		const lScore = extra.loserScore;
+		// Build game data dynamically based on actual scores (supports BO3 and BO5)
+		// Pattern: winner wins games 1..wScore, loser wins games wScore+1..wScore+lScore,
+		// then winner takes the final game if lScore > 0
+		gameData = [];
+		let gameNum = 1;
+		// Winner takes first (wScore - (lScore > 0 ? 1 : 0)) games
+		const winnerFirstBatch = lScore > 0 ? wScore - 1 : wScore;
+		for (let i = 0; i < winnerFirstBatch; i++) {
+			gameData.push({ gameNum: gameNum++, winnerId: w });
+		}
+		// Loser takes their games
+		for (let i = 0; i < lScore; i++) {
+			gameData.push({ gameNum: gameNum++, winnerId: l });
+		}
+		// Winner clinches with final game if loser won any
+		if (lScore > 0) {
+			gameData.push({ gameNum: gameNum++, winnerId: w });
 		}
 	}
 

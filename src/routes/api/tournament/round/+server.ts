@@ -64,14 +64,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		};
 		tournament.phase = 'brackets';
 
-		// Assign stations: main gets 1 through floor(numStations/2), redemption gets the rest.
+		// Assign stations: split non-stream stations evenly between main and redemption.
 		// Stream station (e.g. 16) is separate — assigned to the highest-hype main match.
 		const totalStations = tournament.settings.numStations;
 		const streamStn = tournament.settings.streamStation;
-		const half = Math.floor(totalStations / 2);
-		// Build station pools excluding stream station
-		const mainStations = Array.from({ length: half }, (_, i) => i + 1).filter(s => s !== streamStn);
-		const redemptionStations = Array.from({ length: totalStations - half }, (_, i) => half + i + 1).filter(s => s !== streamStn);
+		// Build pool of all regular stations (excluding stream)
+		const allRegularStations = Array.from({ length: totalStations }, (_, i) => i + 1).filter(s => s !== streamStn);
+		const halfIdx = Math.ceil(allRegularStations.length / 2);
+		const mainStations = allRegularStations.slice(0, halfIdx);
+		const redemptionStations = allRegularStations.slice(halfIdx);
 
 		// Find ready matches for each bracket
 		const mainReady = tournament.brackets.main.matches.filter(m => m.topPlayerId && m.bottomPlayerId && !m.winnerId);
