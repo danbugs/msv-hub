@@ -105,7 +105,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// Auto-discover and link bracket events from StartGG, then push seeding
-		if (tournament.startggEventSlug && (!tournament.startggMainBracketEventId || !tournament.startggRedemptionBracketEventId)) {
+		// Always try discovery — event IDs from a previous run may be stale.
+		if (tournament.startggEventSlug) {
 			try {
 				const slugMatch = tournament.startggEventSlug.match(/tournament\/([^/]+)/);
 				if (slugMatch) {
@@ -141,12 +142,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Uses pushBracketSeeding which matches players by player ID across events
 		// (entrant IDs differ between Swiss and bracket events on StartGG).
 		const swissPgId = tournament.startggPhase1Groups?.[0]?.id;
+		console.log(`[StartGG] Bracket seeding: mainEvent=${tournament.startggMainBracketEventId} redEvent=${tournament.startggRedemptionBracketEventId} swissPgId=${swissPgId}`);
 		const bracketEntrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
 		for (const [bName, bEventId] of [
 			['main', tournament.startggMainBracketEventId] as const,
 			['redemption', tournament.startggRedemptionBracketEventId] as const
 		]) {
-			if (!bEventId || !tournament.brackets || !swissPgId) continue;
+			if (!bEventId || !tournament.brackets) {
+				console.log(`[StartGG] Skipping ${bName} bracket seeding: eventId=${bEventId} hasBrackets=${!!tournament.brackets}`);
+				continue;
+			}
+			if (!swissPgId) {
+				console.log(`[StartGG] Skipping ${bName} bracket seeding: no Swiss phase group ID`);
+				continue;
+			}
 			const bracket = tournament.brackets[bName];
 			if (!bracket) continue;
 			try {
@@ -233,7 +242,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await saveTournament(tournament);
 		return Response.json({
 			phase: 'brackets', finalStandings, brackets: tournament.brackets,
-			startggFinalStandingsSynced: finalStandingsSynced
+			startggFinalStandingsSynced: finalStandingsSynced,
+			startggMainBracketLinked: !!tournament.startggMainBracketEventId,
+			startggRedemptionBracketLinked: !!tournament.startggRedemptionBracketEventId
 		});
 	}
 
