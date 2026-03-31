@@ -455,11 +455,23 @@ async function _doReportBracketMatch(
 	const winnerScore = match.winnerId === match.topPlayerId ? match.topScore : match.bottomScore;
 	const loserScore  = match.winnerId === match.topPlayerId ? match.bottomScore : match.topScore;
 
-	const result = await reportSet(setId, bracketWinnerEntrantId, {
+	let result = await reportSet(setId, bracketWinnerEntrantId, {
 		loserEntrantId: bracketLoserEntrantId,
 		winnerScore,
 		loserScore
 	});
+
+	// If set is already completed (dummy conversion leftover or misreport), reset then re-report
+	if (!result.ok && result.error?.includes('Cannot report completed set')) {
+		const resetResult = await resetSet(setId);
+		if (resetResult.ok) {
+			result = await reportSet(setId, bracketWinnerEntrantId, {
+				loserEntrantId: bracketLoserEntrantId,
+				winnerScore,
+				loserScore
+			});
+		}
+	}
 
 	if (result.ok) {
 		match.startggSetId = result.reportedSetId ?? setId;

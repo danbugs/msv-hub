@@ -192,8 +192,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 							const rep = await reportSet(String(previewSet.id), dummyWinner, {}).catch(() => ({ ok: false as const }));
 							if (rep.ok) {
 								const realId = rep.reportedSetId ?? String(previewSet.id);
-								await resetSet(realId).catch(() => {});
+								const rstResult = await resetSet(realId).catch((e) => ({ ok: false, error: String(e) }));
+								console.log(`[StartGG] Reset dummy set ${realId}: ${rstResult.ok ? 'ok' : 'failed — ' + (rstResult as {error?:string}).error}`);
+							} else {
+								console.log(`[StartGG] Dummy report failed for ${bName} (may already be converted)`);
 							}
+						} else {
+							console.log(`[StartGG] No preview sets found in ${bName} bracket (already converted)`);
 						}
 					} else {
 						console.error(`[StartGG] ${bName} bracket seeding failed: ${result.error}`);
