@@ -37,7 +37,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		const otherHasStream = otherBracket?.matches.some((m) => m.isStream && !m.winnerId) ?? false;
 		tournament.brackets[bracketName] = reportBracketMatch(
 			bracket, matchId, winnerId, topCharacters, bottomCharacters, topScore, bottomScore,
-			tournament.settings, bracketName, otherHasStream, gameWinners
+			tournament.settings, bracketName, otherHasStream, gameWinners, isDQ
 		);
 	} catch (err) {
 		return Response.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 400 });

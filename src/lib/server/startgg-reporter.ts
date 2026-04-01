@@ -468,8 +468,9 @@ async function _doReportBracketMatch(
 		loserEntrantId: bracketLoserEntrantId,
 		winnerScore,
 		loserScore,
-		gameCharacters: gameCharacters.length > 0 ? gameCharacters : undefined,
-		gameWinners: match.gameWinners,
+		isDQ: match.isDQ,
+		gameCharacters: !match.isDQ && gameCharacters.length > 0 ? gameCharacters : undefined,
+		gameWinners: !match.isDQ ? match.gameWinners : undefined,
 		topEntrantId: bracketTopEntrantId,
 		bottomEntrantId: bracketBotEntrantId
 	};

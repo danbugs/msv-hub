@@ -1010,18 +1010,29 @@ export function reportBracketMatch(
 	settings?: TournamentSettings,
 	bracketName?: 'main' | 'redemption',
 	otherBracketHasStream?: boolean,
-	gameWinners?: ('top' | 'bottom')[]
+	gameWinners?: ('top' | 'bottom')[],
+	isDQ?: boolean
 ): BracketState {
 	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
 	const match = updated.matches.find((m) => m.id === matchId);
 	if (!match) throw new Error(`Match ${matchId} not found`);
 
 	match.winnerId = winnerId;
-	if (topCharacters?.length) match.topCharacters = topCharacters;
-	if (bottomCharacters?.length) match.bottomCharacters = bottomCharacters;
-	if (topScore !== undefined) match.topScore = topScore;
-	if (bottomScore !== undefined) match.bottomScore = bottomScore;
-	if (gameWinners?.length) match.gameWinners = gameWinners;
+	if (isDQ) {
+		match.isDQ = true;
+		match.topScore = undefined;
+		match.bottomScore = undefined;
+		match.topCharacters = undefined;
+		match.bottomCharacters = undefined;
+		match.gameWinners = undefined;
+	} else {
+		match.isDQ = false;
+		if (topCharacters?.length) match.topCharacters = topCharacters;
+		if (bottomCharacters?.length) match.bottomCharacters = bottomCharacters;
+		if (topScore !== undefined) match.topScore = topScore;
+		if (bottomScore !== undefined) match.bottomScore = bottomScore;
+		if (gameWinners?.length) match.gameWinners = gameWinners;
+	}
 
 	advancePlayer(updated.matches, match);
 	normalizeSeedOrder(updated.matches, updated.players);
