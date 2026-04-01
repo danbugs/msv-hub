@@ -53,8 +53,7 @@ function channelId(envKey: string, fallback: string): string {
 	return (env as Record<string, string | undefined>)[envKey] ?? fallback;
 }
 
-export const POST: RequestHandler = async ({ request }) => {
-	// Authenticate via CRON_SECRET bearer token.
+async function handleCron(request: Request) {
 	const cronSecret = env.CRON_SECRET;
 	if (!cronSecret) {
 		return Response.json({ ok: false, fired: false, reason: 'CRON_SECRET not configured' }, { status: 500 });
@@ -143,4 +142,8 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	return Response.json({ ok: true, fired, reason: results.join('; ') });
-};
+}
+
+// Accept both GET (Vercel Cron) and POST (GitHub Actions)
+export const GET: RequestHandler = async ({ request }) => handleCron(request);
+export const POST: RequestHandler = async ({ request }) => handleCron(request);

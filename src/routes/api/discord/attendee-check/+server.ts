@@ -46,8 +46,7 @@ async function fetchNumEntrants(slug: string): Promise<number | null> {
 	return (json.data?.event?.numEntrants as number | null | undefined) ?? null;
 }
 
-export const POST: RequestHandler = async ({ request }) => {
-	// Authenticate via CRON_SECRET bearer token.
+async function handleAttendeeCheck(request: Request) {
 	const cronSecret = env.CRON_SECRET;
 	if (!cronSecret) {
 		return Response.json({ ok: false, fired: false, reason: 'CRON_SECRET not configured' }, { status: 500 });
@@ -103,4 +102,8 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	return Response.json({ ok: true, fired: false, entrants: numEntrants });
-};
+}
+
+// Accept both GET (Vercel Cron) and POST (GitHub Actions)
+export const GET: RequestHandler = async ({ request }) => handleAttendeeCheck(request);
+export const POST: RequestHandler = async ({ request }) => handleAttendeeCheck(request);
