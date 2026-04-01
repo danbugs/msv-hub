@@ -243,6 +243,20 @@
 		await loadTournament();
 	}
 
+	let resettingBracket = $state(false);
+	async function resetBracket() {
+		if (!confirm(`Reset ${activeBracket} bracket? This clears all match results for this bracket.`)) return;
+		resettingBracket = true;
+		const res = await fetch('/api/tournament/bracket/sync-from-startgg', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ bracketName: activeBracket })
+		});
+		if (!res.ok) { const d = await res.json(); error = d.error ?? 'Reset failed'; }
+		resettingBracket = false;
+		await loadTournament();
+	}
+
 	async function submitReport() {
 		if (!reportingMatch || !reportWinnerId || !reportScore) return;
 		error = '';
@@ -359,6 +373,11 @@
 			<button onclick={() => activeBracket = 'redemption'}
 				class="rounded-lg px-4 py-2 text-sm font-medium transition-colors {activeBracket === 'redemption' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}">
 				Redemption Bracket
+			</button>
+			<button onclick={resetBracket} disabled={resettingBracket}
+				class="ml-auto rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-500 hover:border-red-700 hover:text-red-400 transition-colors disabled:opacity-50"
+				title="Reset this bracket to a clean state (clears all match results)">
+				{resettingBracket ? 'Resetting...' : 'Reset Bracket'}
 			</button>
 		</div>
 
