@@ -453,7 +453,7 @@ describe('StartGG API — 6. Full lifecycle across two rounds', () => {
 				station: 1
 			});
 		}
-		tournament.rounds.push({ number: 1, matches: round1Matches });
+		tournament.rounds.push({ number: 1, status: 'active', matches: round1Matches });
 
 		let r1ok = 0, r1skip = 0;
 		for (const match of round1Matches) {
@@ -480,6 +480,7 @@ describe('StartGG API — 6. Full lifecycle across two rounds', () => {
 		}));
 		tournament.rounds.push({
 			number: 2,
+			status: 'active',
 			matches: round2Matches,
 			byePlayerId: bye ? bye[0] : undefined
 		});

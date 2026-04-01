@@ -408,7 +408,7 @@ export async function findSetInPhaseGroup(
 	for (const set of nodes as GqlRecord[]) {
 		const ids = (set.slots ?? [])
 			.map((s: GqlRecord) => Number(s.entrant?.id))
-			.filter((id): id is number => !isNaN(id) && id > 0);
+			.filter((n: number) => !isNaN(n) && n > 0);
 		if (ids.includes(e1) && ids.includes(e2)) {
 			if (!set.winnerId) return String(set.id); // unreported — use immediately
 			completedFallback ??= String(set.id);     // completed — remember as fallback
@@ -445,7 +445,7 @@ export async function findSetByEntrants(
 	for (const set of sets as GqlRecord[]) {
 		const ids = (set.slots ?? [])
 			.map((s: GqlRecord) => Number(s.entrant?.id))
-			.filter((id): id is number => !isNaN(id) && id > 0);
+			.filter((n: number) => !isNaN(n) && n > 0);
 		if (ids.includes(e1) && ids.includes(e2)) {
 			if (!set.winnerId) return String(set.id);
 			completedFallback ??= String(set.id);
