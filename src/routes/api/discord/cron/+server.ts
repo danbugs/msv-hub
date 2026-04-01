@@ -16,12 +16,7 @@
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { sendMessage, buildAnnouncementMessage } from '$lib/server/discord';
-import {
-	getDiscordConfig,
-	getCommunityConfig,
-	getLastMotivationalTs,
-	setLastMotivationalTs
-} from '$lib/server/store';
+import { getDiscordConfig } from '$lib/server/store';
 
 const DAY_MAP: Record<string, number> = {
 	sun: 0,
@@ -116,30 +111,9 @@ async function handleCron(request: Request) {
 		results.push('announcement skipped (no event slug configured)');
 	}
 
-	// --- Motivational message check (48h throttle) ---
-	const lastMotivational = await getLastMotivationalTs();
-	const hoursSinceLast = (nowUtcMs - lastMotivational) / (1000 * 60 * 60);
-
-	if (hoursSinceLast >= 48) {
-		const communityConfig = await getCommunityConfig();
-		const messages = communityConfig.motivationalMessages;
-		if (messages.length > 0) {
-			const pick = messages[Math.floor(Math.random() * messages.length)];
-			const generalChannelId = '1066863005591162961';
-			try {
-				await sendMessage(generalChannelId, pick);
-				await setLastMotivationalTs(nowUtcMs);
-				results.push('motivational message sent');
-			} catch (e) {
-				const msg = e instanceof Error ? e.message : String(e);
-				results.push(`motivational failed: ${msg}`);
-			}
-		} else {
-			results.push('motivational skipped (no messages configured)');
-		}
-	} else {
-		results.push(`motivational skipped (${Math.round(hoursSinceLast)}h since last, need 48h)`);
-	}
+	// Motivational messages are handled by the background hook (motivational-bg.ts)
+	// — fires on Fridays around noon PDT, piggybacking on any site request.
+	results.push('motivational handled by background hook');
 
 	return Response.json({ ok: true, fired, reason: results.join('; ') });
 }
