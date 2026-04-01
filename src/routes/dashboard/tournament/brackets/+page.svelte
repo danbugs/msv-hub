@@ -243,17 +243,21 @@
 		await loadTournament();
 	}
 
-	let resettingBracket = $state(false);
-	async function resetBracket() {
-		if (!confirm(`Reset ${activeBracket} bracket? This clears all match results for this bracket.`)) return;
-		resettingBracket = true;
+	let syncingFromStartGG = $state(false);
+	let syncResult = $state('');
+	async function syncFromStartGG() {
+		if (!confirm(`Sync ${activeBracket} bracket from StartGG? This overwrites MSV Hub's bracket state with StartGG's current results.`)) return;
+		syncingFromStartGG = true;
+		syncResult = '';
 		const res = await fetch('/api/tournament/bracket/sync-from-startgg', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ bracketName: activeBracket })
 		});
-		if (!res.ok) { const d = await res.json(); error = d.error ?? 'Reset failed'; }
-		resettingBracket = false;
+		const data = await res.json();
+		if (res.ok) syncResult = `Synced ${data.synced} matches from StartGG`;
+		else error = data.error ?? 'Sync failed';
+		syncingFromStartGG = false;
 		await loadTournament();
 	}
 
@@ -374,11 +378,12 @@
 				class="rounded-lg px-4 py-2 text-sm font-medium transition-colors {activeBracket === 'redemption' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}">
 				Redemption Bracket
 			</button>
-			<button onclick={resetBracket} disabled={resettingBracket}
-				class="ml-auto rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-500 hover:border-red-700 hover:text-red-400 transition-colors disabled:opacity-50"
-				title="Reset this bracket to a clean state (clears all match results)">
-				{resettingBracket ? 'Resetting...' : 'Reset Bracket'}
+			<button onclick={syncFromStartGG} disabled={syncingFromStartGG}
+				class="ml-auto rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-500 hover:border-violet-700 hover:text-violet-400 transition-colors disabled:opacity-50"
+				title="Sync from StartGG — pulls results and overwrites MSV Hub's bracket state">
+				{syncingFromStartGG ? 'Syncing...' : 'Sync from StartGG'}
 			</button>
+			{#if syncResult}<span class="text-xs text-green-400 ml-2">{syncResult}</span>{/if}
 		</div>
 
 		{@const bracket = getBracket()}
@@ -418,7 +423,7 @@
 				{@const bot = getEntrant(reportingMatch.bottomPlayerId)}
 				{@const isTop8 = bracket ? isTop8Match(reportingMatch, bracket) : false}
 				{@const isBo5 = activeBracket === 'main' ? isTop8 : (bracket ? isFinalsMatch(reportingMatch, bracket) : false)}
-				{@const showChars = isBo5}
+				{@const showChars = isTop8}
 
 				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
 					<div class="w-full max-w-sm rounded-xl bg-gray-900 border border-gray-700 p-5">
