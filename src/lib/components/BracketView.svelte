@@ -185,11 +185,13 @@
 	}
 
 	const layout = $derived(computeLayout(bracket));
+	const roundColumns = $derived(
+		[...new Map(layout.matchPositions.map((mp) => [mp.x, mp.match])).entries()].sort((a, b) => a[0] - b[0])
+	);
 </script>
 
 <div class="overflow-x-auto rounded-xl border border-gray-800 bg-gray-950 p-4">
 	<!-- Round labels -->
-	{@const roundColumns = [...new Map(layout.matchPositions.map((mp) => [mp.x, mp.match])).entries()].sort((a, b) => a[0] - b[0])}
 	<div class="relative" style="width: {layout.width}px; height: 20px; margin-bottom: 4px">
 		{#each roundColumns as [x, match]}
 			<div class="absolute text-xs text-gray-500 font-medium truncate" style="left: {x}px; width: {CARD_W}px">
