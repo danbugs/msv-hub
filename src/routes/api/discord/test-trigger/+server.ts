@@ -7,7 +7,7 @@
  * Body: { action: 'announcement' | 'attendee-check' | 'motivational' }
  */
 
-import type { RequestHandler } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { sendMessage, buildAnnouncementMessage } from '$lib/server/discord';
 import {
 	getDiscordConfig,
@@ -31,8 +31,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (action === 'announcement') {
 		if (!config.eventSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
 		const message = buildAnnouncementMessage(config.eventSlug, config.attendeeCap, config.announcementTemplate);
-		await sendMessage(ANNOUNCE_CHANNEL_ID, message);
-		return Response.json({ ok: true, action: 'announcement', message: 'Sent to #announcements' });
+		// Test sends to #talk-to-balrog, not #announcements
+		const TALK_TO_BALROG = '1317322917129879562';
+		await sendMessage(TALK_TO_BALROG, `[TEST] ${message}`);
+		return Response.json({ ok: true, action: 'announcement', message: 'Sent to #talk-to-balrog (test)' });
 	}
 
 	if (action === 'attendee-check') {
@@ -62,9 +64,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const messages = communityConfig.motivationalMessages;
 		if (!messages.length) return Response.json({ error: 'No motivational messages configured' }, { status: 400 });
 		const pick = messages[Math.floor(Math.random() * messages.length)];
-		await sendMessage(GENERAL_CHANNEL_ID, pick);
-		await setLastMotivationalTs(Date.now());
-		return Response.json({ ok: true, action: 'motivational', message: pick });
+		// Test sends to #talk-to-balrog, not #general
+		const TALK_TO_BALROG = '1317322917129879562';
+		await sendMessage(TALK_TO_BALROG, `[TEST] ${pick}`);
+		return Response.json({ ok: true, action: 'motivational', message: pick, note: 'Sent to #talk-to-balrog (test)' });
 	}
 
 	return Response.json({ error: 'Unknown action' }, { status: 400 });
