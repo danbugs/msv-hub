@@ -58,12 +58,24 @@
 		gameBotChars = Array.from({ length: n }, (_, i) => gameBotChars[i] ?? '');
 		gameTopSearch = Array.from({ length: n }, (_, i) => gameTopSearch[i] ?? '');
 		gameBotSearch = Array.from({ length: n }, (_, i) => gameBotSearch[i] ?? '');
-		gameWinners = Array.from({ length: n }, (_, i) => gameWinners[i] ?? (reportWinnerId === reportingMatch?.topPlayerId ? 'top' : 'bottom'));
 	}
 
 	function setScore(s: string) {
 		reportScore = s;
-		resizeGameArrays(numGames(s));
+		if (s === 'DQ') { gameWinners = []; resizeGameArrays(0); return; }
+		const [wScore, lScore] = s.split('-').map(Number);
+		const total = wScore + lScore;
+		resizeGameArrays(total);
+
+		// Pre-populate game winners: W,W,...,L,...,W pattern
+		const winnerSide: 'top' | 'bottom' = reportWinnerId === reportingMatch?.topPlayerId ? 'top' : 'bottom';
+		const loserSide: 'top' | 'bottom' = winnerSide === 'top' ? 'bottom' : 'top';
+		const pattern: ('top' | 'bottom')[] = [];
+		const winnerFirstBatch = lScore > 0 ? wScore - 1 : wScore;
+		for (let i = 0; i < winnerFirstBatch; i++) pattern.push(winnerSide);
+		for (let i = 0; i < lScore; i++) pattern.push(loserSide);
+		if (lScore > 0) pattern.push(winnerSide);
+		gameWinners = pattern;
 	}
 
 	function toggleGameWinner(gameIdx: number) {
@@ -252,7 +264,7 @@
 				topScore,
 				bottomScore,
 				isDQ: isDQ || undefined,
-				gameWinners: !isDQ && gameWinners.length ? gameWinners : undefined
+				gameWinners: !isDQ && reportScore.startsWith('3-') && gameWinners.length ? gameWinners : undefined
 			})
 		});
 

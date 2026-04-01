@@ -1037,13 +1037,21 @@ export function reportBracketMatch(
 	advancePlayer(updated.matches, match);
 	normalizeSeedOrder(updated.matches, updated.players);
 
-	// Grand Finals Reset: if the GF bottom-slot player (losers finalist) wins,
-	// create a reset match — no bracket advantage, single game.
-	const maxRound = Math.max(...updated.matches.map((m) => m.round));
-	const isGF = match.round === maxRound && !match.winnerNextMatchId;
+	// Grand Finals Reset logic
+	const maxRound = Math.max(...updated.matches.filter((m) => !m.id.includes('-GFR-')).map((m) => m.round));
+	const isGF = match.round === maxRound && !match.id.includes('-GFR-');
 	const isGFReset = match.id.includes('-GFR-');
+
+	// If GF is re-reported with winners finalist (top) winning, remove the reset match
+	if (isGF && winnerId === match.topPlayerId) {
+		const resetIdx = updated.matches.findIndex((m) => m.id.includes('-GFR-'));
+		if (resetIdx >= 0) {
+			updated.matches.splice(resetIdx, 1);
+		}
+	}
+
+	// If GF bottom-slot player (losers finalist) wins, create reset match
 	if (isGF && !isGFReset && winnerId === match.bottomPlayerId) {
-		// Check a reset doesn't already exist
 		const resetExists = updated.matches.some((m) => m.id.includes('-GFR-'));
 		if (!resetExists) {
 			const resetMatch: BracketMatch = {

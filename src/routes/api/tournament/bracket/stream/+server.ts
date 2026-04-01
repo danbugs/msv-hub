@@ -22,7 +22,13 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	if (!targetMatch) return Response.json({ error: 'Match not found' }, { status: 404 });
 
 	const streamStn = tournament.settings.streamStation;
-	const half = Math.floor(tournament.settings.numStations / 2);
+
+	// Build station pools same as initial assignment (exclude stream, split evenly)
+	const allRegular = Array.from({ length: tournament.settings.numStations }, (_, i) => i + 1)
+		.filter((s) => s !== streamStn);
+	const halfIdx = Math.ceil(allRegular.length / 2);
+	const mainPool = new Set(allRegular.slice(0, halfIdx));
+	const redemptionPool = new Set(allRegular.slice(halfIdx));
 
 	// Collect all used stations across both brackets (excluding stream station)
 	const allMatches = [...tournament.brackets.main.matches, ...tournament.brackets.redemption.matches];
@@ -35,15 +41,14 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	// Clear stream from ALL bracket matches. If a match had the stream station,
 	// assign it a regular station from its bracket's range.
 	for (const [bName, b] of Object.entries(tournament.brackets) as ['main' | 'redemption', typeof bracket][]) {
-		const startStn = bName === 'redemption' ? half + 1 : 1;
-		const endStn = bName === 'redemption' ? tournament.settings.numStations : half;
+		const pool = bName === 'redemption' ? redemptionPool : mainPool;
 		for (const m of b.matches) {
 			if (m.isStream) {
 				m.isStream = false;
 				if (m.station === streamStn && !m.winnerId) {
-					// Find next available station in this bracket's range
-					for (let s = startStn; s <= endStn; s++) {
-						if (s !== streamStn && !usedStations.has(s)) {
+					// Find next available station in this bracket's pool
+					for (const s of pool) {
+						if (!usedStations.has(s)) {
 							m.station = s;
 							usedStations.add(s);
 							break;

@@ -40,6 +40,25 @@
 		return entrants.find((e) => e.id === id);
 	}
 
+	function getRoundName(round: number, isGFR: boolean): string {
+		if (isGFR) return 'Grand Final Reset';
+		const maxW = Math.max(...bracket.matches.filter((m) => m.round > 0 && !m.id.includes('-GFR-')).map((m) => m.round));
+		const maxL = Math.max(...bracket.matches.filter((m) => m.round < 0).map((m) => Math.abs(m.round)), 0);
+		if (round > 0) {
+			if (round === maxW) return 'Grand Final';
+			if (round === maxW - 1) return 'Winners Final';
+			if (round === maxW - 2) return 'Winners Semi-Final';
+			if (round === maxW - 3) return 'Winners Quarter-Final';
+			return `Winners Round ${round}`;
+		} else {
+			const absR = Math.abs(round);
+			if (absR === maxL) return 'Losers Final';
+			if (absR === maxL - 1) return 'Losers Semi-Final';
+			if (absR === maxL - 2) return 'Losers Quarter-Final';
+			return `Losers Round ${absR}`;
+		}
+	}
+
 	/** Can this match be fixed? Only if ALL downstream matches are unreported (recursive). */
 	function canFix(match: BracketMatch): boolean {
 		if (!match.winnerId) return false;
@@ -168,8 +187,16 @@
 	const layout = $derived(computeLayout(bracket));
 </script>
 
-<div class="overflow-x-auto overflow-y-auto rounded-xl border border-gray-800 bg-gray-950 p-4"
-	style="max-height: 80vh">
+<div class="overflow-x-auto rounded-xl border border-gray-800 bg-gray-950 p-4">
+	<!-- Round labels -->
+	{@const roundColumns = [...new Map(layout.matchPositions.map((mp) => [mp.x, mp.match])).entries()].sort((a, b) => a[0] - b[0])}
+	<div class="relative" style="width: {layout.width}px; height: 20px; margin-bottom: 4px">
+		{#each roundColumns as [x, match]}
+			<div class="absolute text-xs text-gray-500 font-medium truncate" style="left: {x}px; width: {CARD_W}px">
+				{getRoundName(match.round, match.id.includes('-GFR-'))}
+			</div>
+		{/each}
+	</div>
 	<div class="relative" style="width: {layout.width}px; height: {layout.height}px">
 		<svg class="absolute inset-0 pointer-events-none overflow-visible"
 			width={layout.width} height={layout.height}>

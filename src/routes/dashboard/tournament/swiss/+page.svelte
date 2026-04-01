@@ -532,6 +532,9 @@
 								<span class="w-6 text-right font-mono text-gray-500">{s.rank}.</span>
 								<span class="text-white">{s.gamerTag}</span>
 								<span class="text-gray-500">{s.wins}-{s.losses}</span>
+								{#if s.cinderellaBonus > 0}
+									<span class="text-yellow-400 text-xs">+{s.cinderellaBonus.toFixed(0)} Cinderella</span>
+								{/if}
 							</div>
 						{/each}
 					</div>
