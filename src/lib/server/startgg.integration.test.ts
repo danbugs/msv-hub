@@ -11,6 +11,15 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Skip all integration tests in CI (no .env file with STARTGG_TOKEN).
+// Locally, the .env file provides the token.
+const envPath = path.resolve(import.meta.dirname ?? '.', '../../..', '.env');
+let hasEnvFile = false;
+try { hasEnvFile = fs.existsSync(envPath); } catch { /* */ }
+const describeIntegration = hasEnvFile ? describe : describe.skip;
 import {
 	gql,
 	findSetInPhaseGroup,
@@ -67,7 +76,7 @@ async function logPhaseGroupState(label: string) {
 
 // ── 1. Initial diagnostic ─────────────────────────────────────────────────────
 
-describe('StartGG API — 1. phase group diagnostic', () => {
+describeIntegration('StartGG API — 1. phase group diagnostic', () => {
 	it('shows initial state of phase group 3251998', async () => {
 		await logPhaseGroupState('initial');
 	}, TIMEOUT);
@@ -75,7 +84,7 @@ describe('StartGG API — 1. phase group diagnostic', () => {
 
 // ── 2. findSetInPhaseGroup ────────────────────────────────────────────────────
 
-describe('StartGG API — 2. findSetInPhaseGroup', () => {
+describeIntegration('StartGG API — 2. findSetInPhaseGroup', () => {
 	it('finds set for 2Test vs 18Test with number IDs', async () => {
 		const setId = await findSetInPhaseGroup(TEST_PHASE_GROUP_ID, ENTRANT_2TEST, ENTRANT_18TEST);
 		console.log(`\nfindSetInPhaseGroup(numbers): ${setId}`);
@@ -118,7 +127,7 @@ describe('StartGG API — 2. findSetInPhaseGroup', () => {
 // a StartGG preview→real conversion; subsequent lookups use the retry logic
 // in findSetInPhaseGroup to wait out the transitional empty state.
 
-describe('StartGG API — 3. full end-to-end: load seeds → report all round-1 results', () => {
+describeIntegration('StartGG API — 3. full end-to-end: load seeds → report all round-1 results', () => {
 	it('pulls seeds via fetchPhaseSeeds, builds TournamentState, reports top seeds winning 2-0', async () => {
 		// ── Step 1: discover phase ID from the phase group ──
 		const pgInfo = await gql<{ phaseGroup: { phase: { id: number } } }>(
@@ -240,7 +249,7 @@ describe('StartGG API — 3. full end-to-end: load seeds → report all round-1 
 
 // ── 4. Targeted tests (run after E2E so phase group has settled) ─────────────
 
-describe('StartGG API — 4. reportSet (targeted)', () => {
+describeIntegration('StartGG API — 4. reportSet (targeted)', () => {
 	it('pair A (2Test vs 18Test): reports fresh or surfaces "Cannot report" for already-done', async () => {
 		const setId = await findSetInPhaseGroup(TEST_PHASE_GROUP_ID, ENTRANT_2TEST, ENTRANT_18TEST);
 		console.log(`\nfindSetInPhaseGroup for 2T vs 18T: ${setId}`);
@@ -254,7 +263,7 @@ describe('StartGG API — 4. reportSet (targeted)', () => {
 	}, TIMEOUT);
 });
 
-describe('StartGG API — 4. reportSwissMatch (targeted)', () => {
+describeIntegration('StartGG API — 4. reportSwissMatch (targeted)', () => {
 	it('pair B (1Test vs 17Test): reports fresh or surfaces "Cannot report" for already-done', async () => {
 		const tournament: TournamentState = {
 			slug: 'test', name: 'Test', phase: 'swiss', createdAt: 0, updatedAt: 0, currentRound: 1,
@@ -279,7 +288,7 @@ describe('StartGG API — 4. reportSwissMatch (targeted)', () => {
 
 // ── 5. Round 2 re-seeding ─────────────────────────────────────────────────────
 
-describe('StartGG API — 5. pushPairingsToPhaseGroup (re-seeding on round 3)', () => {
+describeIntegration('StartGG API — 5. pushPairingsToPhaseGroup (re-seeding on round 3)', () => {
 	it('discovers all phases and their phase groups', async () => {
 		// Verify the test event has separate phases per round (same structure as from-event/+server.ts)
 		const data = await gql<{
@@ -384,7 +393,7 @@ describe('StartGG API — 5. pushPairingsToPhaseGroup (re-seeding on round 3)', 
 
 // ── 6. Full lifecycle: report round 1 → re-seed round 2 → report round 2 ────
 
-describe('StartGG API — 6. Full lifecycle across two rounds', () => {
+describeIntegration('StartGG API — 6. Full lifecycle across two rounds', () => {
 	const PG1 = TEST_PHASE_GROUP_ID;
 	const PG2 = TEST_PHASE_GROUP_ROUND2;
 
@@ -568,7 +577,7 @@ describe('StartGG API — 6. Full lifecycle across two rounds', () => {
 });
 
 // ── 7. Re-seed started pool after reset ─────────────────────────────────────
-describe('StartGG API — 7. Re-seed after pool start (misreport fix simulation)', () => {
+describeIntegration('StartGG API — 7. Re-seed after pool start (misreport fix simulation)', () => {
 	type PGData = { phaseGroup: { sets: { nodes: { id: unknown; winnerId?: unknown; slots: { entrant: { id: unknown } | null }[] }[] } } };
 
 	it('seeds round 4, starts pool via dummy report, resets all sets, re-seeds with different pairings', async () => {
