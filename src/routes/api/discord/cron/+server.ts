@@ -33,8 +33,21 @@ const DAY_MAP: Record<string, number> = {
 	sat: 6
 };
 
-// PST is UTC-8 (no DST awareness — community uses fixed PST).
-const PST_OFFSET_HOURS = 8;
+// Pacific Time offset — auto-detect PST (UTC-8) vs PDT (UTC-7)
+function getPacificOffsetHours(): number {
+	// Check if a date in Pacific Time is currently in DST
+	const now = new Date();
+	const jan = new Date(now.getFullYear(), 0, 1);
+	const jul = new Date(now.getFullYear(), 6, 1);
+	const janOffset = jan.getTimezoneOffset();
+	const julOffset = jul.getTimezoneOffset();
+	// If we can't detect, check by formatting
+	const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'short' });
+	const parts = formatter.formatToParts(now);
+	const tzName = parts.find(p => p.type === 'timeZoneName')?.value ?? '';
+	return tzName === 'PDT' ? 7 : 8;
+}
+const PST_OFFSET_HOURS = getPacificOffsetHours();
 
 function channelId(envKey: string, fallback: string): string {
 	return (env as Record<string, string | undefined>)[envKey] ?? fallback;
