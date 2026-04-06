@@ -397,8 +397,8 @@
 									const next = new Set(expandedRounds);
 									if (next.has(round.number)) next.delete(round.number); else next.add(round.number);
 									expandedRounds = next;
-								}} class="cursor-pointer select-none flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-white w-full text-left">
-									<span class="text-gray-600">{isOpen ? '▾' : '▸'}</span>
+								}} class="cursor-pointer select-none flex items-center gap-2 text-sm font-medium text-white w-full text-left">
+									<span class="text-gray-400">{isOpen ? '▾' : '▸'}</span>
 									<span>Round {round.number}</span>
 									<span class="rounded-full px-2 py-0.5 text-xs {round.status === 'active' ? 'bg-violet-900/50 text-violet-300' : 'bg-gray-800 text-gray-500'}">{round.status}</span>
 									{#if round.byePlayerId}

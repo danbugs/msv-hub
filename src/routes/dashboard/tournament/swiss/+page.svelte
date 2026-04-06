@@ -551,23 +551,25 @@
 					{#each [mainPlayers[mainPlayers.length - 1]] as lastMain}
 						{#each [tournament.finalStandings.find((s) => s.bracket === 'redemption')] as firstRed}
 							{#if lastMain && firstRed && lastMain.wins === firstRed.wins && lastMain.losses === firstRed.losses}
+								{@const diff = lastMain.totalScore - firstRed.totalScore}
+								{@const mainBetterWins = lastMain.winPoints > firstRed.winPoints}
+								{@const mainBetterLosses = lastMain.lossPoints > firstRed.lossPoints}
+								{@const mainHigherSeed = lastMain.initialSeed < firstRed.initialSeed}
+								{@const mainMoreCinderella = lastMain.cinderellaBonus > firstRed.cinderellaBonus}
 								<div class="mt-4 rounded-lg border border-amber-700 bg-amber-900/20 p-3 text-sm text-amber-300 space-y-2">
-									<p><strong>{firstRed.gamerTag}</strong> ({firstRed.wins}-{firstRed.losses}) was placed in Redemption
-									despite having the same record as <strong>{lastMain.gamerTag}</strong> ({lastMain.wins}-{lastMain.losses}) in Main.</p>
+									<p><strong>{firstRed.gamerTag}</strong> ({firstRed.wins}-{firstRed.losses}, seed #{firstRed.initialSeed}) was placed in Redemption
+									over <strong>{lastMain.gamerTag}</strong> ({lastMain.wins}-{lastMain.losses}, seed #{lastMain.initialSeed}) who made Main.</p>
 									<p class="text-xs text-amber-400">
-										Both went {lastMain.wins}-{lastMain.losses}, so the tiebreaker is strength of schedule:
-										who they beat, who they lost to, and how they performed relative to their initial seeding.
+										Both went {lastMain.wins}-{lastMain.losses}. <strong>{lastMain.gamerTag}</strong> earned <strong>{diff.toFixed(0)} more points</strong> because:
+										{#if mainBetterWins}they beat higher-seeded opponents.{/if}
+										{#if mainBetterLosses}their losses were to stronger players.{/if}
+										{#if mainHigherSeed && !mainBetterWins && !mainBetterLosses}they had a higher initial seed (#{lastMain.initialSeed} vs #{firstRed.initialSeed}).{/if}
+										{#if mainMoreCinderella}they overperformed their seeding (underdog bonus).{/if}
+										{#if !mainBetterWins && !mainBetterLosses && !mainHigherSeed && !mainMoreCinderella}margin was very small ({diff.toFixed(1)} pts).{/if}
 									</p>
-									<div class="text-xs text-amber-400 space-y-1 ml-2">
-										<p><strong>{lastMain.gamerTag}</strong> (seed #{lastMain.initialSeed}) — <strong>{lastMain.totalScore.toFixed(0)} pts</strong>
-											{lastMain.winPoints > firstRed.winPoints ? ' (beat stronger opponents)' : ''}
-											{lastMain.cinderellaBonus > 0 ? ` · underdog bonus +${lastMain.cinderellaBonus.toFixed(0)}` : ''}
-										</p>
-										<p><strong>{firstRed.gamerTag}</strong> (seed #{firstRed.initialSeed}) — <strong>{firstRed.totalScore.toFixed(0)} pts</strong>
-											{firstRed.winPoints > lastMain.winPoints ? ' (beat stronger opponents)' : ''}
-											{firstRed.cinderellaBonus > 0 ? ` · underdog bonus +${firstRed.cinderellaBonus.toFixed(0)}` : ''}
-										</p>
-									</div>
+									<p class="text-xs text-gray-500">
+										Score: {lastMain.gamerTag} {lastMain.totalScore.toFixed(0)} pts vs {firstRed.gamerTag} {firstRed.totalScore.toFixed(0)} pts
+									</p>
 								</div>
 							{/if}
 						{/each}
