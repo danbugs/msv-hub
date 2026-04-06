@@ -45,14 +45,15 @@ export const POST: RequestHandler = async ({ locals }) => {
 		}, { status: 400 });
 	}
 
-	// Clear cached set IDs and re-trigger conversion synchronously
+	// Clear cached set IDs and trigger conversion in background
 	for (const m of round.matches) m.startggSetId = undefined;
 	tournament.startggSync!.pendingPhaseReset = undefined;
 	tournament.startggSync!.cacheReady = false;
 	await saveTournament(tournament);
 
-	// Run conversion synchronously so set IDs are ready when the user starts reporting
-	await triggerConversionAndCache(tournament, roundNumber, phaseGroupId).catch(() => {});
+	// Run conversion in background — UI shows "Preparing set IDs" banner immediately
+	// and polls until cacheReady = true
+	triggerConversionAndCache(tournament, roundNumber, phaseGroupId).catch(() => {});
 
 	return Response.json({ ok: true, roundNumber });
 };

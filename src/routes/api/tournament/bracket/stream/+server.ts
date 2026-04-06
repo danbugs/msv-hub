@@ -38,22 +38,16 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 			.map((m) => m.station!)
 	);
 
-	// Clear stream from ALL bracket matches. If a match had the stream station,
-	// assign it a regular station from its bracket's range.
-	for (const [bName, b] of Object.entries(tournament.brackets) as ['main' | 'redemption', typeof bracket][]) {
-		const pool = bName === 'redemption' ? redemptionPool : mainPool;
+	// Swap stations: old stream match gets the new stream match's station, new stream match gets stream station
+	const targetOldStation = targetMatch.station;
+
+	for (const b of Object.values(tournament.brackets)) {
 		for (const m of b.matches) {
-			if (m.isStream) {
+			if (m.isStream && m.id !== targetMatch.id) {
 				m.isStream = false;
-				if (m.station === streamStn && !m.winnerId) {
-					// Find next available station in this bracket's pool
-					for (const s of pool) {
-						if (!usedStations.has(s)) {
-							m.station = s;
-							usedStations.add(s);
-							break;
-						}
-					}
+				// Give the old stream match the new stream match's old station
+				if (m.station === streamStn && !m.winnerId && targetOldStation !== undefined) {
+					m.station = targetOldStation;
 				}
 			}
 		}
