@@ -9,6 +9,8 @@
 	let searchQuery = $state('');
 	let selectedEntrantId = $state<string | null>(null);
 	let showBracket = $state<'main' | 'redemption'>('main');
+	// Track which Swiss rounds are expanded (persists across auto-refresh)
+	let expandedRounds = $state(new Set<number>());
 
 	function getEntrant(id?: string): Entrant | undefined {
 		if (!id || !tournament) return undefined;
@@ -389,14 +391,21 @@
 					<h2 class="text-base font-bold text-white mb-3">Swiss Rounds</h2>
 					<div class="space-y-4">
 						{#each [...tournament.rounds].reverse() as round}
-							<details open={round.status === 'active'}>
-								<summary class="cursor-pointer select-none flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-white">
+							{@const isOpen = expandedRounds.has(round.number) || round.status === 'active'}
+							<div>
+								<button onclick={() => {
+									const next = new Set(expandedRounds);
+									if (next.has(round.number)) next.delete(round.number); else next.add(round.number);
+									expandedRounds = next;
+								}} class="cursor-pointer select-none flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-white w-full text-left">
+									<span class="text-gray-600">{isOpen ? '▾' : '▸'}</span>
 									<span>Round {round.number}</span>
 									<span class="rounded-full px-2 py-0.5 text-xs {round.status === 'active' ? 'bg-violet-900/50 text-violet-300' : 'bg-gray-800 text-gray-500'}">{round.status}</span>
 									{#if round.byePlayerId}
 										<span class="text-xs text-yellow-400">BYE: {getEntrant(round.byePlayerId)?.gamerTag}</span>
 									{/if}
-								</summary>
+								</button>
+								{#if isOpen}
 								<div class="mt-2 space-y-1 pl-2">
 									{#each round.matches as match}
 										{@const top = getEntrant(match.topPlayerId)}
@@ -419,7 +428,8 @@
 										</div>
 									{/each}
 								</div>
-							</details>
+								{/if}
+							</div>
 						{/each}
 					</div>
 				</div>

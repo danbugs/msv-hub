@@ -571,11 +571,41 @@
 		{/if}
 
 	<!-- Swiss summary (expandable) -->
-	{#if tournament?.finalStandings}
+	{#if tournament?.rounds?.length}
 		<details class="mt-8 rounded-lg border border-gray-800 bg-gray-900">
-			<summary class="cursor-pointer px-4 py-3 text-sm font-medium text-gray-300">Swiss Results & Final Standings</summary>
-			<div class="px-4 pb-4">
-				<div class="grid gap-6 sm:grid-cols-2">
+			<summary class="cursor-pointer px-4 py-3 text-sm font-medium text-gray-300">Swiss Rounds & Final Standings</summary>
+			<div class="px-4 pb-4 space-y-4">
+				<!-- Swiss rounds -->
+				<div>
+					<h3 class="text-sm font-semibold text-white mb-2">Swiss Rounds</h3>
+					{#each [...tournament.rounds].reverse() as round}
+						<details class="mb-2">
+							<summary class="cursor-pointer text-xs font-medium text-gray-400 hover:text-white">
+								Round {round.number} <span class="text-gray-600">({round.status})</span>
+							</summary>
+							<div class="mt-1 space-y-0.5 pl-2">
+								{#each round.matches as match}
+									<div class="flex items-center gap-2 text-xs py-0.5">
+										<span class="text-gray-600 w-12 shrink-0 text-right">{match.isStream ? 'STREAM' : `Stn ${match.station}`}</span>
+										<span class="{match.winnerId === match.topPlayerId ? 'text-green-300 font-medium' : match.winnerId ? 'text-gray-500' : 'text-white'} flex-1 truncate">
+											{getEntrant(match.topPlayerId)?.gamerTag ?? '?'}
+										</span>
+										<span class="text-gray-600 shrink-0">
+											{#if match.topScore !== undefined}{match.topScore}–{match.bottomScore}{:else}vs{/if}
+										</span>
+										<span class="{match.winnerId === match.bottomPlayerId ? 'text-green-300 font-medium' : match.winnerId ? 'text-gray-500' : 'text-white'} flex-1 truncate text-right">
+											{getEntrant(match.bottomPlayerId)?.gamerTag ?? '?'}
+										</span>
+									</div>
+								{/each}
+							</div>
+						</details>
+					{/each}
+				</div>
+
+				<!-- Final standings -->
+				{#if tournament.finalStandings}
+				<div class="grid gap-6 sm:grid-cols-2 border-t border-gray-800 pt-4">
 					<div>
 						<h4 class="text-sm font-medium text-violet-400 mb-2">Main Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'main').length})</h4>
 						{#each tournament.finalStandings.filter((s) => s.bracket === 'main') as s}
@@ -599,6 +629,7 @@
 						{/each}
 					</div>
 				</div>
+				{/if}
 			</div>
 		</details>
 	{/if}
