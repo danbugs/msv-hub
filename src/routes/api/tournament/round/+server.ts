@@ -15,7 +15,7 @@ import {
 import type { SwissRound, SwissMatch } from '$lib/types/tournament';
 
 /** POST — start next round (generate pairings) or regenerate current round */
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const tournament = await getActiveTournament();
@@ -303,7 +303,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		tournament.startggSync.cacheReady = false;
 		await saveTournament(tournament);
 
-		triggerConversionAndCache(tournament, nextRound, pgId).catch(() => {});
+		// Run conversion in background. On Vercel, use waitUntil to keep function alive.
+		const conversionPromise = triggerConversionAndCache(tournament, nextRound, pgId).catch(() => {});
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const ctx = (platform as any)?.context;
+			if (ctx?.waitUntil) ctx.waitUntil(conversionPromise);
+		} catch { /* not on Vercel — fire-and-forget */ }
 	}
 
 	// Optionally announce the new round to a Discord channel.

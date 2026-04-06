@@ -45,15 +45,17 @@ export const POST: RequestHandler = async ({ locals }) => {
 		}, { status: 400 });
 	}
 
-	// Clear cached set IDs and trigger conversion in background
+	// Clear cached set IDs and run conversion synchronously
 	for (const m of round.matches) m.startggSetId = undefined;
 	tournament.startggSync!.pendingPhaseReset = undefined;
 	tournament.startggSync!.cacheReady = false;
 	await saveTournament(tournament);
 
-	// Run conversion in background — UI shows "Preparing set IDs" banner immediately
-	// and polls until cacheReady = true
-	triggerConversionAndCache(tournament, roundNumber, phaseGroupId).catch(() => {});
+	// Run conversion synchronously — the UI button shows "Re-syncing..." during this.
+	// Must be synchronous because Vercel kills background work after response is sent.
+	await triggerConversionAndCache(tournament, roundNumber, phaseGroupId).catch((e) => {
+		console.error(`[phase-reset] triggerConversionAndCache failed: ${e}`);
+	});
 
 	return Response.json({ ok: true, roundNumber });
 };
