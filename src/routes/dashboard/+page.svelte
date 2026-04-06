@@ -61,8 +61,8 @@
 							<li>Go to <strong class="text-gray-200">Attendees</strong> and add the weekly TOs. Aim for <strong class="text-gray-200">3 TOs per event (no more than 4)</strong>.</li>
 							<li>If short on TOs, ping volunteers and offer them priority registration.</li>
 							<li>When adding a TO, register them for <strong class="text-gray-200">all three events</strong> (Swiss, Main Bracket, Redemption Bracket).</li>
-							<li>In custom options, mark whether the TO is bringing a setup (usually yes) and that it is not past the registration deadline.</li>
-							<li>Confirm the TO consents to being livestreamed.</li>
+							<li>In custom options, select whether the TO is bringing a setup (TOs usually should) and select that it is not past Wednesday.</li>
+							<li>Mark that the TO consents to the event being livestreamed.</li>
 						</ol>
 						<p class="font-medium text-white">Microsoft registration:</p>
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
@@ -90,9 +90,9 @@
 							<li>Check the <strong class="text-gray-200">previous event's waitlist</strong>. Find the last person who was tagged (non-inclusive).</li>
 							<li>Take note of the <strong class="text-gray-200">next 8 people</strong> and whether they are bringing a setup.</li>
 							<li>Go to the latest <strong class="text-gray-200">priority-registration</strong> forum post and ping those 8 people. Note in the message that they have until end of day to reply. Check a previous post for the standard message format.</li>
-							<li><strong class="text-gray-200">At end of day:</strong> add everyone who responded yes as <strong class="text-gray-200">attendees to the StartGG tournament</strong>, noting whether they are bringing a setup.</li>
-							<li>Set <strong class="text-gray-200">Registration</strong> to admins-only so you can re-open at 8:30 AM on Wednesday.</li>
-							<li>Set <strong class="text-gray-200">Homepage</strong> to public and discoverable, and <strong class="text-gray-200">Events</strong> to public with brackets and seeding visible.</li>
+							<li><strong class="text-gray-200">At end of day:</strong> add everyone who responded yes as <strong class="text-gray-200">attendees to the StartGG tournament</strong>. When adding them, register for all three events and correctly mark in the custom options whether they are bringing a setup.</li>
+							<li>Go to the tournament dashboard and set <strong class="text-gray-200">Registration</strong> to admins-only so you can re-open it at 8:30 AM on Wednesday.</li>
+							<li>Set the <strong class="text-gray-200">Homepage</strong> to public and discoverable, and <strong class="text-gray-200">Events</strong> visibility to public with brackets and seeding visible.</li>
 						</ol>
 					</div>
 				{/if}
@@ -124,8 +124,8 @@
 						</ol>
 						<p class="font-medium text-amber-300">After registration is live:</p>
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Check who registered fastest: go to <strong class="text-gray-200">Attendees</strong> on StartGG and export the list. Find the fastest registration after 8:30 AM (ignore priority registrations from before that time).</li>
-							<li>Go to the <strong class="text-gray-200">fastest-registration</strong> forum on Discord and post who won. Update the leaderboard.</li>
+							<li>Check the fastest registrant: go to the StartGG event dashboard → <strong class="text-gray-200">Attendees</strong> → <strong class="text-gray-200">Export attendee list</strong>. The export includes registration timestamps. Find the fastest registration after 8:30 AM (disregard anyone who registered before that, e.g., priority registrations).</li>
+							<li>Go to the <strong class="text-gray-200">fastest-registration</strong> forum on Discord and post who won this week. Update the leaderboard.</li>
 						</ol>
 					</div>
 				{/if}
@@ -183,14 +183,13 @@
 				{#if expandedStep === 'pre-tourney-check'}
 					<div class="mt-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4 text-sm text-gray-300 space-y-3">
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Count how many people are <strong class="text-gray-200">bringing setups</strong>. Don't forget to include Tony's setup in the total.</li>
+							<li>Go to the StartGG event dashboard → <strong class="text-gray-200">Attendees</strong> (admin view) → <strong class="text-gray-200">Export attendee list</strong>. Count how many attendees marked "bringing a setup" in the custom options. Don't forget to include Tony's setup in the total.</li>
 							<li>If you have fewer than <strong class="text-gray-200">16 setups</strong>, post in <strong class="text-gray-200">#announcements</strong>. Refer to a previous setup-request message for the template. The message should:
 								<ul class="list-disc list-inside ml-4 mt-1 space-y-1">
-									<li>Thank people who are already bringing setups by name.</li>
-									<li>Remind them not to forget their equipment.</li>
-									<li>Ask everyone else to consider pledging a setup.</li>
-									<li>Be specific about how many more setups are needed to reach 16.</li>
-									<li>Ask people to let you know in <strong class="text-gray-200">#talk-to-a-to</strong> if they can bring one.</li>
+									<li>Mention you are <strong class="text-gray-200">X setups under the preferred 16</strong> to run Swiss.</li>
+									<li>Ping everyone who is bringing a setup and ask them not to forget their equipment.</li>
+									<li>Ping everyone who is not bringing a setup and ask them to consider pledging.</li>
+									<li>Ask people to mention in <strong class="text-gray-200">#talk-to-a-to</strong> if they can pledge a setup.</li>
 								</ul>
 							</li>
 						</ol>
