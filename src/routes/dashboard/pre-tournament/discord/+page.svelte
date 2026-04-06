@@ -256,6 +256,28 @@
 	}
 
 	// ---------------------------------------------------------------------------
+	// Test triggers (all post to test channels)
+	// ---------------------------------------------------------------------------
+
+	let testRunning = $state('');
+	let testResult = $state<{ ok: boolean; msg: string } | null>(null);
+
+	async function runTest(action: string) {
+		testRunning = action;
+		testResult = null;
+		const res = await fetch('/api/discord/test-trigger', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ action })
+		});
+		const data = await res.json();
+		testResult = res.ok
+			? { ok: true, msg: data.message ?? JSON.stringify(data) }
+			: { ok: false, msg: data.error ?? 'Failed' };
+		testRunning = '';
+	}
+
+	// ---------------------------------------------------------------------------
 	// Derived helpers
 	// ---------------------------------------------------------------------------
 
@@ -732,6 +754,46 @@
 				<p class="mt-2 text-xs {resetWaitlistResult.ok ? 'text-green-400' : 'text-red-400'}">{resetWaitlistResult.msg}</p>
 			{/if}
 		</div>
+	</section>
+
+	<!-- =========================================================
+	     Section 5: Testing
+	     ========================================================= -->
+	<section class="mt-10">
+		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Testing</h2>
+		<p class="mt-1 text-xs text-gray-500">
+			All test actions post to <strong>#talk-to-balrog</strong> or the test waitlist channel — never to real channels.
+		</p>
+
+		<div class="mt-4 grid gap-2 sm:grid-cols-2">
+			<button onclick={() => runTest('announcement')} disabled={!!testRunning}
+				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
+				<div class="text-sm font-medium text-white">Test Announcement</div>
+				<div class="mt-0.5 text-xs text-gray-500">Posts announcement to #talk-to-balrog</div>
+			</button>
+			<button onclick={() => runTest('attendee-check')} disabled={!!testRunning}
+				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
+				<div class="text-sm font-medium text-white">Test Attendee Check</div>
+				<div class="mt-0.5 text-xs text-gray-500">Checks entrant count (no posting)</div>
+			</button>
+			<button onclick={() => runTest('waitlist-test')} disabled={!!testRunning}
+				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
+				<div class="text-sm font-medium text-white">Test Waitlist Post</div>
+				<div class="mt-0.5 text-xs text-gray-500">Creates forum post in test channel</div>
+			</button>
+			<button onclick={() => runTest('motivational')} disabled={!!testRunning}
+				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
+				<div class="text-sm font-medium text-white">Test Motivational</div>
+				<div class="mt-0.5 text-xs text-gray-500">Posts random message to #talk-to-balrog</div>
+			</button>
+		</div>
+
+		{#if testRunning}
+			<p class="mt-2 text-xs text-gray-400 animate-pulse">Running {testRunning}...</p>
+		{/if}
+		{#if testResult}
+			<p class="mt-2 text-xs {testResult.ok ? 'text-green-400' : 'text-red-400'}">{testResult.msg}</p>
+		{/if}
 	</section>
 
 	{/if}

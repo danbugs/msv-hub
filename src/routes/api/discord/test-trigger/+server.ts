@@ -25,18 +25,19 @@ const TEST_WAITLIST_CHANNEL = '1317322581938016317';
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-	const { action } = await request.json() as { action: string };
+	const { action, eventSlug: overrideSlug } = await request.json() as { action: string; eventSlug?: string };
 	const config = await getDiscordConfig();
+	const effectiveSlug = overrideSlug?.trim() || config.eventSlug;
 
 	if (action === 'announcement') {
-		if (!config.eventSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
-		const message = buildAnnouncementMessage(config.eventSlug, config.attendeeCap, config.announcementTemplate);
+		if (!effectiveSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
+		const message = buildAnnouncementMessage(effectiveSlug, config.attendeeCap, config.announcementTemplate);
 		await sendMessage(TALK_TO_BALROG, `[TEST] ${message}`);
 		return Response.json({ ok: true, action: 'announcement', message: 'Sent to #talk-to-balrog' });
 	}
 
 	if (action === 'attendee-check') {
-		if (!config.eventSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
+		if (!effectiveSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
 		const token = env.STARTGG_TOKEN;
 		if (!token) return Response.json({ error: 'STARTGG_TOKEN not set' }, { status: 500 });
 		const res = await fetch(STARTGG_API, {
@@ -44,7 +45,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
 			body: JSON.stringify({
 				query: 'query($slug:String!){event(slug:$slug){numEntrants}}',
-				variables: { slug: config.eventSlug }
+				variables: { slug: effectiveSlug }
 			})
 		});
 		const json = await res.json();
@@ -59,8 +60,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	if (action === 'waitlist-test') {
 		// Creates a test waitlist post in the test channel (not the real waitlist channel)
-		if (!config.eventSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
-		const title = truncateTo100(`[TEST] Waitlist for ${shortenSlug(config.eventSlug)}`);
+		if (!effectiveSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
+		const title = truncateTo100(`[TEST] Waitlist for ${shortenSlug(effectiveSlug)}`);
 		const content =
 			`[TEST] Answer in the thread if you'd like to be added to the waitlist!\n\n` +
 			`Top 8 of this waitlist get priority registration for next week.\n\n` +
