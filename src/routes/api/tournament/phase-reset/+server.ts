@@ -8,7 +8,7 @@ import { triggerConversionAndCache } from '$lib/server/startgg-reporter';
  * Re-seeds the phase group with the current MSV Hub pairings, then re-triggers
  * preview→real conversion so set IDs are ready for reporting.
  */
-export const POST: RequestHandler = async ({ locals }) => {
+export const POST: RequestHandler = async ({ locals, platform }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const tournament = await getActiveTournament();
@@ -45,17 +45,21 @@ export const POST: RequestHandler = async ({ locals }) => {
 		}, { status: 400 });
 	}
 
-	// Clear cached set IDs and run conversion synchronously
+	// Clear cached set IDs
 	for (const m of round.matches) m.startggSetId = undefined;
 	tournament.startggSync!.pendingPhaseReset = undefined;
 	tournament.startggSync!.cacheReady = false;
 	await saveTournament(tournament);
 
-	// Run conversion synchronously — the UI button shows "Re-syncing..." during this.
-	// Must be synchronous because Vercel kills background work after response is sent.
-	await triggerConversionAndCache(tournament, roundNumber, phaseGroupId).catch((e) => {
+	// Run conversion via waitUntil (keeps function alive after response on Vercel)
+	const conversionPromise = triggerConversionAndCache(tournament, roundNumber, phaseGroupId).catch((e) => {
 		console.error(`[phase-reset] triggerConversionAndCache failed: ${e}`);
 	});
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const ctx = (platform as any)?.context;
+		if (ctx?.waitUntil) ctx.waitUntil(conversionPromise);
+	} catch { /* not on Vercel */ }
 
 	return Response.json({ ok: true, roundNumber });
 };

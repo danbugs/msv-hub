@@ -154,10 +154,10 @@ export async function triggerConversionAndCache(
 	const startTime = Date.now();
 	console.log(`[conversion] Starting for round ${roundNumber}, PG ${phaseGroupId}`);
 
-	// Fetch sets — retry if empty (phase might still be resetting on StartGG)
+	// Fetch sets — retry with increasing waits (re-seeding can take 30s+ to generate sets)
 	let nodes: GqlNode[] = [];
-	for (let attempt = 0; attempt < 5; attempt++) {
-		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 2000));
+	for (let attempt = 0; attempt < 10; attempt++) {
+		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, attempt <= 3 ? 3000 : 5000));
 		try {
 			const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
 			nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
