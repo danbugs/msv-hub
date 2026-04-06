@@ -178,6 +178,21 @@
 	async function startSwiss() {
 		if (!result) return;
 		startingSwiss = true; error = '';
+
+		// Step 1: Apply seeding to StartGG
+		const applyRes = await fetch('/api/seeder/apply', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ targetSlug: result.targetSlug, entrants: result.entrants })
+		});
+		if (!applyRes.ok) {
+			const data = await applyRes.json();
+			error = `Failed to apply seeding: ${data.error ?? 'Unknown error'}`;
+			startingSwiss = false;
+			return;
+		}
+
+		// Step 2: Create the tournament
 		const slug = result.targetSlug.replace(/\//g, '-');
 		const name = result.targetSlug.split('/').pop() ?? slug;
 		const res = await fetch('/api/tournament', {

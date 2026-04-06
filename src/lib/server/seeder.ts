@@ -454,7 +454,7 @@ function avoidMatchups(entrants: Entrant[], toAvoid: Set<string>): void {
 
 // ── Apply seeding to StartGG ────────────────────────────────────────────
 
-async function applySeeding(
+export async function applySeeding(
 	targetSlug: string,
 	entrants: Entrant[],
 	log: (msg: string) => void,
