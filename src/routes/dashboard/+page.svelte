@@ -23,10 +23,9 @@
 	<h1 class="text-2xl font-bold text-white">Dashboard</h1>
 	<p class="mt-1 text-gray-400">Microspacing Vancouver — Tournament Operations</p>
 
-	<!-- ── Weekly timeline ── -->
 	<div class="mt-8 space-y-0">
 
-		<!-- ── TUESDAY: StartGG Setup ─────────────────────────── -->
+		<!-- ══ TUESDAY ══════════════════════════════════════════ -->
 		<div class="flex gap-4">
 			<div class="flex flex-col items-center">
 				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-700 bg-violet-900/40 text-xs font-bold text-violet-300">T</div>
@@ -35,51 +34,51 @@
 			<div class="pb-6 pt-1 min-w-0 flex-1">
 				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Tuesday — Setup</p>
 
-				<!-- StartGG Setup Instructions -->
+				<!-- ① Create Event on StartGG -->
 				<button onclick={() => toggle('startgg-setup')}
 					class="w-full text-left rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
 					<div class="font-medium text-white">① Create Event on StartGG</div>
-					<div class="mt-0.5 text-sm text-gray-400">Create the next event, configure settings, add TOs</div>
+					<div class="mt-0.5 text-sm text-gray-400">Create the next event, configure visibility, and add TOs</div>
 				</button>
 				{#if expandedStep === 'startgg-setup'}
 					<div class="mt-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4 text-sm text-gray-300 space-y-3">
 						<p class="font-medium text-white">Create the event:</p>
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
 							<li>Go to <strong class="text-gray-200">start.gg</strong> and create a new tournament.</li>
-							<li>Set the tournament name, add the Discord join link as the contact type.</li>
+							<li>Set the tournament name and add the Discord join link as the contact type.</li>
 							<li>Set the start date to <strong class="text-gray-200">6 PM Monday</strong> and end date to <strong class="text-gray-200">11 PM Monday</strong>.</li>
 							<li>Select <strong class="text-gray-200">Copy settings from previous event</strong> and link it to the Microspacing Hub.</li>
 						</ol>
 						<p class="font-medium text-white">Configure the event dashboard:</p>
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Set <strong class="text-gray-200">Homepage</strong> to public (link only).</li>
+							<li>Set <strong class="text-gray-200">Homepage</strong> visibility to public (link only).</li>
 							<li>Set <strong class="text-gray-200">Events</strong> to public with brackets and seeding hidden.</li>
 							<li>Set <strong class="text-gray-200">Registration</strong> to public and <strong class="text-gray-200">Attendees</strong> to public.</li>
-							<li>In <strong class="text-gray-200">Details</strong>, set the short slug to <code class="bg-gray-800 px-1 rounded text-xs text-violet-300">microspacing-van</code>.</li>
+							<li>Under <strong class="text-gray-200">Details</strong>, set the short slug to <code class="bg-gray-800 px-1 rounded text-xs text-violet-300">microspacing-van</code>.</li>
 						</ol>
 						<p class="font-medium text-white">Add TOs:</p>
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Go to <strong class="text-gray-200">Attendees</strong> and add the weekly TOs. Aim for 3 TOs per event.</li>
-							<li>If needed, ping volunteers for help and give them priority registration.</li>
-							<li>When adding TOs, select <strong class="text-gray-200">all three events</strong> (Swiss, Main Bracket, Redemption Bracket).</li>
+							<li>Go to <strong class="text-gray-200">Attendees</strong> and add the weekly TOs. Aim for <strong class="text-gray-200">3 TOs per event (no more than 4)</strong>.</li>
+							<li>If short on TOs, ping volunteers and offer them priority registration.</li>
+							<li>When adding a TO, register them for <strong class="text-gray-200">all three events</strong> (Swiss, Main Bracket, Redemption Bracket).</li>
 							<li>In custom options, mark whether the TO is bringing a setup (usually yes) and that it is not past the registration deadline.</li>
 							<li>Confirm the TO consents to being livestreamed.</li>
 						</ol>
-						<p class="font-medium text-white">Notify the team:</p>
+						<p class="font-medium text-white">Microsoft registration:</p>
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
 							<li>Post in the Microsoft Microspacing chat that registration is live.</li>
 						</ol>
 					</div>
 				{/if}
 
-				<!-- Discord Setup -->
+				<!-- ② Discord Setup -->
 				<a href="/dashboard/pre-tournament/discord"
 					class="mt-2 block rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
 					<div class="font-medium text-white">② Discord Setup</div>
 					<div class="mt-0.5 text-sm text-gray-400">Configure the announcement, waitlist monitoring, and pre-tournament forum posts</div>
 				</a>
 
-				<!-- Priority Registration Instructions -->
+				<!-- ③ Priority Registration -->
 				<button onclick={() => toggle('pri-reg')}
 					class="mt-2 w-full text-left rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
 					<div class="font-medium text-white">③ Priority Registration</div>
@@ -89,34 +88,84 @@
 					<div class="mt-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4 text-sm text-gray-300 space-y-3">
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
 							<li>Check the <strong class="text-gray-200">previous event's waitlist</strong>. Find the last person who was tagged (non-inclusive).</li>
-							<li>Take note of the <strong class="text-gray-200">next 8 people</strong> after that tag and whether they are bringing a setup.</li>
-							<li>Go to the latest <strong class="text-gray-200">priority-registration</strong> forum post and ping those 8 people. Note in the message that they have until end of day to reply. Check a previous forum post for the default message format.</li>
-							<li><strong class="text-gray-200">At end of day:</strong> add everyone who responded yes, noting whether they are bringing a setup.</li>
-							<li>In the tournament dashboard, set <strong class="text-gray-200">Registration</strong> to admins-only so you can re-open at 8:30 AM tomorrow.</li>
-							<li>Set the <strong class="text-gray-200">Homepage</strong> to public and discoverable, and <strong class="text-gray-200">Events</strong> to public with brackets and seeding visible.</li>
+							<li>Take note of the <strong class="text-gray-200">next 8 people</strong> and whether they are bringing a setup.</li>
+							<li>Go to the latest <strong class="text-gray-200">priority-registration</strong> forum post and ping those 8 people. Note in the message that they have until end of day to reply. Check a previous post for the standard message format.</li>
+							<li><strong class="text-gray-200">At end of day:</strong> add everyone who responded yes as <strong class="text-gray-200">attendees to the StartGG tournament</strong>, noting whether they are bringing a setup.</li>
+							<li>Set <strong class="text-gray-200">Registration</strong> to admins-only so you can re-open at 8:30 AM on Wednesday.</li>
+							<li>Set <strong class="text-gray-200">Homepage</strong> to public and discoverable, and <strong class="text-gray-200">Events</strong> to public with brackets and seeding visible.</li>
 						</ol>
 					</div>
 				{/if}
 			</div>
 		</div>
 
-		<!-- ── TUE → MON gap: Seeding ───────────────────── -->
+		<!-- ══ WEDNESDAY ════════════════════════════════════════ -->
+		<div class="flex gap-4">
+			<div class="flex flex-col items-center">
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-700 bg-violet-900/40 text-xs font-bold text-violet-300">W</div>
+				<div class="mt-1 w-px flex-1 bg-gray-800"></div>
+			</div>
+			<div class="pb-6 pt-1 min-w-0 flex-1">
+				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Wednesday — Registration Day</p>
+
+				<!-- ④ Open Registration -->
+				<button onclick={() => toggle('open-reg')}
+					class="w-full text-left rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
+					<div class="font-medium text-white">④ Open Registration</div>
+					<div class="mt-0.5 text-sm text-gray-400">Open reg at 8:30 AM, verify announcement, check fastest registrant</div>
+				</button>
+				{#if expandedStep === 'open-reg'}
+					<div class="mt-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4 text-sm text-gray-300 space-y-3">
+						<p class="font-medium text-amber-300">At 8:30 AM:</p>
+						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
+							<li>Go to the event dashboard and set <strong class="text-gray-200">Registration</strong> to public.</li>
+							<li>Balrog should post the announcement automatically. If not, go to <a href="/dashboard/pre-tournament/discord" class="text-violet-400 hover:text-violet-300">Discord Setup</a> → Automation → <strong class="text-gray-200">Send Now</strong>.</li>
+							<li>If the announcement has issues, the waitlist likely will too. <strong class="text-gray-200">Pause the bot</strong> and monitor manually for when the event caps to post the waitlist.</li>
+						</ol>
+						<p class="font-medium text-amber-300">After registration is live:</p>
+						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
+							<li>Check who registered fastest: go to <strong class="text-gray-200">Attendees</strong> on StartGG and export the list. Find the fastest registration after 8:30 AM (ignore priority registrations from before that time).</li>
+							<li>Go to the <strong class="text-gray-200">fastest-registration</strong> forum on Discord and post who won. Update the leaderboard.</li>
+						</ol>
+					</div>
+				{/if}
+			</div>
+		</div>
+
+		<!-- ══ WED → MON: Seeding + Drop-out Monitoring ════════ -->
 		<div class="flex gap-4">
 			<div class="flex flex-col items-center">
 				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-700 bg-gray-900 text-xs font-bold text-gray-500">↓</div>
 				<div class="mt-1 w-px flex-1 bg-gray-800"></div>
 			</div>
 			<div class="pb-6 pt-1 min-w-0 flex-1">
-				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Tue → Mon</p>
+				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Wed → Mon</p>
+
 				<a href="/dashboard/pre-tournament/seed"
 					class="block rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
 					<div class="font-medium text-white">Seed Event</div>
-					<div class="mt-0.5 text-sm text-gray-400">Elo-based seeding with jitter control, or import from existing StartGG event</div>
+					<div class="mt-0.5 text-sm text-gray-400">Elo-based seeding with jitter control, or import from an existing StartGG event</div>
 				</a>
+
+				<button onclick={() => toggle('dropout-monitor')}
+					class="mt-2 w-full text-left rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
+					<div class="font-medium text-white">Monitor Drop-outs</div>
+					<div class="mt-0.5 text-sm text-gray-400">Check remove-me-from-bracket and coordinate waitlist replacements</div>
+				</button>
+				{#if expandedStep === 'dropout-monitor'}
+					<div class="mt-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4 text-sm text-gray-300 space-y-3">
+						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
+							<li>Monitor the <strong class="text-gray-200">#remove-me-from-bracket</strong> channel for players dropping out.</li>
+							<li>When someone drops, check the <strong class="text-gray-200">waitlist forum post</strong> for the next person in line.</li>
+							<li>Ping the replacement in <strong class="text-gray-200">#remove-me-from-bracket</strong> to confirm they can attend. Note whether they are bringing a setup.</li>
+							<li>Once confirmed, remove the drop-out from the StartGG event and add the replacement.</li>
+						</ol>
+					</div>
+				{/if}
 			</div>
 		</div>
 
-		<!-- ── MONDAY: Tournament Day ─────────────────────── -->
+		<!-- ══ MONDAY: Tournament Day ══════════════════════════ -->
 		<div class="flex gap-4">
 			<div class="flex flex-col items-center">
 				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-700 bg-violet-900/40 text-xs font-bold text-violet-300">M</div>
@@ -125,24 +174,25 @@
 			<div class="pb-6 pt-1 min-w-0 flex-1">
 				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Monday — Tournament Day</p>
 
-				<!-- Wednesday morning instructions -->
-				<button onclick={() => toggle('mon-morning')}
+				<!-- Pre-tournament setup check -->
+				<button onclick={() => toggle('pre-tourney-check')}
 					class="w-full text-left rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
-					<div class="font-medium text-white">Morning Checklist</div>
-					<div class="mt-0.5 text-sm text-gray-400">Open registration, verify announcement, check fastest registrant</div>
+					<div class="font-medium text-white">Pre-Tournament Check</div>
+					<div class="mt-0.5 text-sm text-gray-400">Verify setup count, ping for more setups if needed</div>
 				</button>
-				{#if expandedStep === 'mon-morning'}
+				{#if expandedStep === 'pre-tourney-check'}
 					<div class="mt-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4 text-sm text-gray-300 space-y-3">
-						<p class="font-medium text-amber-300">At 8:30 AM:</p>
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Go to the event dashboard and set <strong class="text-gray-200">Registration</strong> to public.</li>
-							<li>Balrog should post the announcement automatically. If not, go to <a href="/dashboard/pre-tournament/discord" class="text-violet-400 hover:text-violet-300">Discord Setup</a> → Automation → press <strong class="text-gray-200">Send Now</strong>.</li>
-							<li>If the announcement has problems, the waitlist likely will too — <strong class="text-gray-200">pause the bot</strong> and monitor manually for when the event caps.</li>
-						</ol>
-						<p class="font-medium text-amber-300">After registration is live:</p>
-						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Check who registered fastest: go to <strong class="text-gray-200">Attendees</strong> on StartGG and export the list. Find the fastest registration after 8:30 AM (ignore priority registrations).</li>
-							<li>Go to the <strong class="text-gray-200">fastest-registration</strong> forum on Discord and post who won. Update the leaderboard.</li>
+							<li>Count how many people are <strong class="text-gray-200">bringing setups</strong>. Don't forget to include Tony's setup in the total.</li>
+							<li>If you have fewer than <strong class="text-gray-200">16 setups</strong>, post in <strong class="text-gray-200">#announcements</strong>. Refer to a previous setup-request message for the template. The message should:
+								<ul class="list-disc list-inside ml-4 mt-1 space-y-1">
+									<li>Thank people who are already bringing setups by name.</li>
+									<li>Remind them not to forget their equipment.</li>
+									<li>Ask everyone else to consider pledging a setup.</li>
+									<li>Be specific about how many more setups are needed to reach 16.</li>
+									<li>Ask people to let you know in <strong class="text-gray-200">#talk-to-a-to</strong> if they can bring one.</li>
+								</ul>
+							</li>
 						</ol>
 					</div>
 				{/if}
@@ -218,7 +268,7 @@
 			</div>
 		</div>
 
-		<!-- ── MON → TUE: Post-tournament ───────────── -->
+		<!-- ══ MON → TUE: Post-tournament ══════════════════════ -->
 		<div class="flex gap-4">
 			<div class="flex flex-col items-center">
 				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-700 bg-gray-900 text-xs font-bold text-gray-500">↓</div>
@@ -234,7 +284,7 @@
 			</div>
 		</div>
 
-		<!-- ── ALWAYS ON ─────────────────────────────────── -->
+		<!-- ══ ALWAYS ON ═══════════════════════════════════════ -->
 		<div class="flex gap-4">
 			<div class="flex flex-col items-center">
 				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-700 bg-gray-900 text-xs font-bold text-gray-500">∞</div>
