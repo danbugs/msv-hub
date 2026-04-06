@@ -551,21 +551,20 @@
 					{#each [mainPlayers[mainPlayers.length - 1]] as lastMain}
 						{#each [tournament.finalStandings.find((s) => s.bracket === 'redemption')] as firstRed}
 							{#if lastMain && firstRed && lastMain.wins === firstRed.wins && lastMain.losses === firstRed.losses}
-								{@const diff = lastMain.totalScore - firstRed.totalScore}
-								{@const mainBetterWins = lastMain.winPoints > firstRed.winPoints}
-								{@const mainBetterLosses = lastMain.lossPoints > firstRed.lossPoints}
-								{@const mainHigherSeed = lastMain.initialSeed < firstRed.initialSeed}
-								{@const mainMoreCinderella = lastMain.cinderellaBonus > firstRed.cinderellaBonus}
+								{@const diff = Math.round(lastMain.totalScore - firstRed.totalScore)}
+								{@const reasons = (() => {
+									const r = [];
+									if (lastMain.winPoints > firstRed.winPoints) r.push('beat higher-seeded opponents');
+									if (lastMain.lossPoints > firstRed.lossPoints) r.push('lost to stronger players');
+									if (lastMain.initialSeed < firstRed.initialSeed && r.length === 0) r.push(`had a higher initial seed (#${lastMain.initialSeed} vs #${firstRed.initialSeed})`);
+									if (lastMain.cinderellaBonus > firstRed.cinderellaBonus) r.push('overperformed their seeding (underdog bonus)');
+									return r;
+								})()}
 								<div class="mt-4 rounded-lg border border-amber-700 bg-amber-900/20 p-3 text-sm text-amber-300 space-y-2">
 									<p><strong>{firstRed.gamerTag}</strong> ({firstRed.wins}-{firstRed.losses}, seed #{firstRed.initialSeed}) was placed in Redemption
 									over <strong>{lastMain.gamerTag}</strong> ({lastMain.wins}-{lastMain.losses}, seed #{lastMain.initialSeed}) who made Main.</p>
 									<p class="text-xs text-amber-400">
-										Both went {lastMain.wins}-{lastMain.losses}. <strong>{lastMain.gamerTag}</strong> earned <strong>{diff.toFixed(0)} more points</strong> because:
-										{#if mainBetterWins}they beat higher-seeded opponents.{/if}
-										{#if mainBetterLosses}their losses were to stronger players.{/if}
-										{#if mainHigherSeed && !mainBetterWins && !mainBetterLosses}they had a higher initial seed (#{lastMain.initialSeed} vs #{firstRed.initialSeed}).{/if}
-										{#if mainMoreCinderella}they overperformed their seeding (underdog bonus).{/if}
-										{#if !mainBetterWins && !mainBetterLosses && !mainHigherSeed && !mainMoreCinderella}margin was very small ({diff.toFixed(1)} pts).{/if}
+										Both went {lastMain.wins}-{lastMain.losses}. <strong>{lastMain.gamerTag}</strong> earned <strong>{diff} more point{diff !== 1 ? 's' : ''}</strong>{reasons.length > 0 ? ` because they ${reasons.join(' and ')}` : ''}.
 									</p>
 									<p class="text-xs text-gray-500">
 										Score: {lastMain.gamerTag} {lastMain.totalScore.toFixed(0)} pts vs {firstRed.gamerTag} {firstRed.totalScore.toFixed(0)} pts
