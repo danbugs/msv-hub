@@ -330,42 +330,7 @@
 <main class="mx-auto max-w-3xl px-4 py-8">
 	<a href="/dashboard" class="text-sm text-violet-400 hover:text-violet-300">&larr; Dashboard</a>
 	<h1 class="mt-4 text-2xl font-bold text-white">Discord Setup</h1>
-	<p class="mt-1 text-gray-400">
-		Lock threads, create forum posts, and announce events — replacing Balrog's
-		<code class="rounded bg-gray-800 px-1 py-0.5 text-xs text-violet-300">!do_pre_tournament_setup</code>.
-	</p>
-
-	<!-- Send to channel -->
-	<div class="mt-4">
-		<div class="flex gap-2">
-			<select
-				bind:value={pingChannel}
-				class="rounded-lg border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-300 focus:border-violet-500 focus:outline-none"
-			>
-				{#each SEND_CHANNELS as ch}
-					<option value={ch.value}>{ch.label}</option>
-				{/each}
-			</select>
-			<input
-				type="text"
-				bind:value={pingMessage}
-				placeholder="Send a message…"
-				onkeydown={(e) => e.key === 'Enter' && sendPing()}
-				class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none"
-			/>
-			<button
-				type="button"
-				onclick={sendPing}
-				disabled={pingRunning || !pingMessage.trim()}
-				class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors"
-			>
-				{pingRunning ? 'Sending…' : 'Send'}
-			</button>
-		</div>
-		{#if pingResult}
-			<p class="mt-1.5 text-xs {pingResult.ok ? 'text-green-400' : 'text-red-400'}">{pingResult.msg}</p>
-		{/if}
-	</div>
+	<p class="mt-1 text-gray-400">Configure event, automation, and pre-tournament tasks.</p>
 
 	{#if configLoading}
 		<div class="mt-8 flex items-center gap-2 text-gray-400">
@@ -374,14 +339,14 @@
 		</div>
 	{:else}
 
-	<!-- Current event status card (!check_current_event) -->
+	<!-- ── Status Card ── -->
 	<div class="mt-6 rounded-xl border {config.paused ? 'border-amber-800 bg-amber-900/10' : config.eventSlug ? 'border-violet-800 bg-violet-900/10' : 'border-dashed border-gray-700 bg-gray-900/50'} p-4">
 		<div class="flex items-start justify-between gap-4">
-			<div class="min-w-0flex-1">
+			<div class="min-w-0 flex-1">
 				<div class="flex items-center gap-2">
 					<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Current Event</p>
 					{#if config.paused}
-						<span class="rounded-full bg-amber-900/40 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-amber-400 border border-amber-700">PAUSED</span>
+						<span class="rounded-full bg-amber-900/40 px-2 py-0.5 text-xs font-semibold text-amber-400 border border-amber-700">PAUSED</span>
 					{:else if config.eventSlug}
 						<span class="flex items-center gap-1 text-xs text-green-400">
 							<span class="inline-block h-1.5 w-1.5 rounded-full bg-green-400"></span>Active
@@ -392,47 +357,41 @@
 					<p class="mt-1 font-mono text-sm text-white break-all">{config.eventSlug}</p>
 					<div class="mt-1.5 flex flex-wrap gap-3 text-xs text-gray-400">
 						<span>Cap: <span class="text-gray-200">{config.attendeeCap}</span></span>
-						<span>Reg: <span class="text-gray-200">{days.find(d => d.value === config.registrationDay)?.label} {String(config.registrationHour).padStart(2,'0')}:{String(config.registrationMinute).padStart(2,'0')} PST</span></span>
-						{#if config.updatedAt}
-							<span>Updated: <span class="text-gray-200">{new Date(config.updatedAt).toLocaleString()}</span></span>
-						{/if}
+						<span>Announcement: <span class="text-gray-200">{nextAnnouncement}</span></span>
+						<span>Waitlist: <span class="text-gray-200">{config.waitlistCreated ? 'Created' : 'Monitoring (Wed)'}</span></span>
 					</div>
 				{:else}
-					<p class="mt-1 text-sm text-gray-500">No event configured yet.</p>
+					<p class="mt-1 text-sm text-gray-500">No event configured — set one below.</p>
 				{/if}
 			</div>
 			<div class="flex shrink-0 flex-col items-end gap-2">
-				<button
-					type="button"
-					onclick={loadConfig}
-					class="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-violet-600 hover:text-violet-400 transition-colors"
-				>
+				<button onclick={loadConfig}
+					class="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-violet-600 hover:text-violet-400 transition-colors">
 					Refresh
 				</button>
-				<button
-					type="button"
-					onclick={togglePause}
-					disabled={pauseRunning}
+				<button onclick={togglePause} disabled={pauseRunning}
 					class="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50
 						{config.paused
-							? 'border-green-700 bg-green-900/20 text-green-300 hover:border-green-600 hover:bg-green-900/30'
-							: 'border-amber-700 bg-amber-900/20 text-amber-300 hover:border-amber-600 hover:bg-amber-900/30'}"
-				>
+							? 'border-green-700 bg-green-900/20 text-green-300 hover:border-green-600'
+							: 'border-amber-700 bg-amber-900/20 text-amber-300 hover:border-amber-600'}">
 					{pauseRunning ? '…' : config.paused ? 'Resume Bot' : 'Pause Bot'}
 				</button>
 			</div>
 		</div>
-		{#if pauseError}
-			<p class="mt-2 text-xs text-red-400">{pauseError}</p>
-		{/if}
+		{#if pauseError}<p class="mt-2 text-xs text-red-400">{pauseError}</p>{/if}
 	</div>
 
-	<!-- =========================================================
-	     Section 1: Config
-	     ========================================================= -->
-	<section class="mt-8">
-		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Event Configuration</h2>
-		<p class="mt-1 text-xs text-gray-500">Saved to Redis — persists across sessions.</p>
+	<!-- ── Timeline ── -->
+	<div class="mt-8 space-y-0">
+
+	<!-- ── Step 1: Event Configuration ── -->
+	<div class="flex gap-4">
+		<div class="flex flex-col items-center">
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-700 bg-violet-900/40 text-xs font-bold text-violet-300">1</div>
+			<div class="mt-1 w-px flex-1 bg-gray-800"></div>
+		</div>
+		<div class="pb-6 pt-1 min-w-0 flex-1">
+		<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Event Configuration</p>
 
 		<div class="mt-4 space-y-4">
 			<div>
@@ -565,17 +524,18 @@
 				{/if}
 			</div>
 		</div>
-	</section>
+	</div>
+	</div>
 
-	<!-- =========================================================
-	     Section 2: Pre-tournament setup
-	     ========================================================= -->
-	<section class="mt-10">
-		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Pre-Tournament Setup</h2>
-		<p class="mt-1 text-xs text-gray-500">
-			Equivalent to <code class="text-gray-400">!do_pre_tournament_setup</code>. Locks old threads and
-			creates new forum posts for top-8 graphic, drop-outs, and priority registration.
-		</p>
+	<!-- ── Step 2: Pre-Tournament Setup ── -->
+	<div class="flex gap-4">
+		<div class="flex flex-col items-center">
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-700 bg-violet-900/40 text-xs font-bold text-violet-300">2</div>
+			<div class="mt-1 w-px flex-1 bg-gray-800"></div>
+		</div>
+		<div class="pb-6 pt-1 min-w-0 flex-1">
+		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Pre-Tournament Setup</p>
+		<p class="mb-3 text-xs text-gray-500">Lock old threads, create forum posts for top-8 graphic, drop-outs, and priority registration.</p>
 
 		{#if !config.eventSlug}
 			<div class="mt-4 rounded-lg border border-yellow-800 bg-yellow-900/20 p-3 text-sm text-yellow-400">
@@ -654,147 +614,146 @@
 				{/if}
 			</div>
 		{/if}
-	</section>
+	</div>
+	</div>
 
-	<!-- =========================================================
-	     Section 3: Registration Announcement
-	     ========================================================= -->
-	<section class="mt-10">
-		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Registration Announcement</h2>
+	<!-- ── Step 3: Automation (Announcement + Waitlist) ── -->
+	<div class="flex gap-4">
+		<div class="flex flex-col items-center">
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-700 bg-violet-900/40 text-xs font-bold text-violet-300">3</div>
+			<div class="mt-1 w-px flex-1 bg-gray-800"></div>
+		</div>
+		<div class="pb-6 pt-1 min-w-0 flex-1">
+		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Automation</p>
 
-		<!-- Next announcement indicator -->
-		<div class="mt-2 flex items-center gap-2 text-xs text-gray-500">
-			<span class="inline-block h-1.5 w-1.5 rounded-full bg-violet-500"></span>
-			Next scheduled: <span class="text-gray-300">{nextAnnouncement}</span>
-			<span class="text-gray-600">(sent automatically by cron)</span>
+		<!-- Announcement -->
+		<div class="rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+			<div class="flex items-center justify-between">
+				<div>
+					<p class="text-sm font-medium text-white">Registration Announcement</p>
+					<div class="mt-1 flex items-center gap-2 text-xs text-gray-500">
+						<span class="inline-block h-1.5 w-1.5 rounded-full bg-violet-500"></span>
+						{nextAnnouncement} <span class="text-gray-600">(automatic via Vercel cron)</span>
+					</div>
+				</div>
+				<div>
+
+		{#if config.eventSlug}
+					<button onclick={sendAnnouncementNow} disabled={announceRunning}
+						class="rounded-lg border border-amber-700 bg-amber-900/20 px-3 py-1.5 text-xs font-medium text-amber-300 hover:border-amber-600 disabled:opacity-50 transition-colors">
+						{announceRunning ? 'Sending…' : 'Send Now'}
+					</button>
+				{/if}
+				</div>
+			</div>
+			{#if announceError}<p class="mt-2 text-xs text-red-400">{announceError}</p>{/if}
+			{#if announceDone}<p class="mt-2 text-xs text-green-400">Sent to #announcements.</p>{/if}
 		</div>
 
-		<p class="mt-2 text-xs text-gray-500">
-			The cron fires this automatically. Use the button below only for emergency manual sends.
-		</p>
-
-		{#if !config.eventSlug}
-			<div class="mt-4 rounded-lg border border-yellow-800 bg-yellow-900/20 p-3 text-sm text-yellow-400">
-				Set and save an event slug above before sending an announcement.
-			</div>
-		{:else}
-			<div class="mt-4">
-				<button
-					type="button"
-					onclick={sendAnnouncementNow}
-					disabled={announceRunning}
-					class="rounded-lg border border-amber-700 bg-amber-900/20 px-5 py-2 text-sm font-medium text-amber-300 hover:border-amber-600 hover:bg-amber-900/30 disabled:opacity-50 transition-colors"
-				>
-					{announceRunning ? 'Sending…' : 'Send Now (manual override)'}
-				</button>
-				<p class="mt-1 text-xs text-gray-600">Posts directly to the announcement channel — use sparingly.</p>
-			</div>
-		{/if}
-
-		{#if announceError}
-			<div class="mt-4 rounded-lg border border-red-800 bg-red-900/30 p-3 text-sm text-red-400">
-				{announceError}
-			</div>
-		{/if}
-
-		{#if announceDone}
-			<div class="mt-4 rounded-lg border border-green-700 bg-green-900/20 p-3 text-sm text-green-400">
-				Announcement sent to the announcement channel.
-			</div>
-		{/if}
-
-	</section>
-
-	<!-- =========================================================
-	     Section 4: Attendee Monitoring
-	     ========================================================= -->
-	<section class="mt-10">
-		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Attendee Monitoring</h2>
-		<p class="mt-1 text-xs text-gray-500">
-			Checks StartGG every 5 min on Wednesdays (via QStash). When entrants reach the cap, a waitlist thread is auto-created once.
-		</p>
-
-		<div class="mt-4 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
-			<div class="flex items-center justify-between gap-4">
+		<!-- Waitlist Monitoring -->
+		<div class="mt-3 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+			<div class="flex items-center justify-between">
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Status</p>
-					{#if !config.eventSlug}
-						<span class="mt-1 inline-flex items-center gap-1.5 text-sm text-gray-500">
-							<span class="inline-block h-2 w-2 rounded-full bg-gray-600"></span>No event set
-						</span>
-					{:else if config.paused}
-						<span class="mt-1 inline-flex items-center gap-1.5 text-sm text-amber-400">
-							<span class="inline-block h-2 w-2 rounded-full bg-amber-500"></span>Paused
-						</span>
-					{:else if config.waitlistCreated}
-						<span class="mt-1 inline-flex items-center gap-1.5 text-sm text-blue-400">
-							<span class="inline-block h-2 w-2 rounded-full bg-blue-500"></span>Waitlist created
-						</span>
-					{:else}
-						<span class="mt-1 inline-flex items-center gap-1.5 text-sm text-green-400">
-							<span class="inline-block h-2 w-2 animate-pulse rounded-full bg-green-500"></span>Active (checks on Wednesdays)
-						</span>
-					{/if}
+					<p class="text-sm font-medium text-white">Waitlist Monitoring</p>
+					<p class="mt-1 text-xs text-gray-500">Checks every 5 min on Wednesdays via QStash. Auto-creates waitlist forum when cap is hit.</p>
+					<div class="mt-1.5">
+						{#if !config.eventSlug}
+							<span class="inline-flex items-center gap-1.5 text-xs text-gray-500">
+								<span class="inline-block h-1.5 w-1.5 rounded-full bg-gray-600"></span>No event set
+							</span>
+						{:else if config.paused}
+							<span class="inline-flex items-center gap-1.5 text-xs text-amber-400">
+								<span class="inline-block h-1.5 w-1.5 rounded-full bg-amber-500"></span>Paused
+							</span>
+						{:else if config.waitlistCreated}
+							<span class="inline-flex items-center gap-1.5 text-xs text-blue-400">
+								<span class="inline-block h-1.5 w-1.5 rounded-full bg-blue-500"></span>Waitlist created
+							</span>
+						{:else}
+							<span class="inline-flex items-center gap-1.5 text-xs text-green-400">
+								<span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-500"></span>Active
+							</span>
+						{/if}
+					</div>
 				</div>
-
-				{#if config.eventSlug}
-					<button
-						type="button"
-						onclick={resetWaitlistFlag}
-						disabled={resetWaitlistRunning || !config.waitlistCreated}
-						class="shrink-0 rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-violet-600 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
-						title={!config.waitlistCreated ? 'Waitlist flag is not set — nothing to reset' : 'Reset so the monitor will create a new waitlist thread'}
-					>
-						{resetWaitlistRunning ? 'Resetting…' : 'Reset Waitlist Flag'}
+				{#if config.eventSlug && config.waitlistCreated}
+					<button onclick={resetWaitlistFlag} disabled={resetWaitlistRunning}
+						class="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-violet-600 hover:text-violet-400 disabled:opacity-40 transition-colors">
+						{resetWaitlistRunning ? 'Resetting…' : 'Reset Flag'}
 					</button>
 				{/if}
 			</div>
-
 			{#if resetWaitlistResult}
 				<p class="mt-2 text-xs {resetWaitlistResult.ok ? 'text-green-400' : 'text-red-400'}">{resetWaitlistResult.msg}</p>
 			{/if}
 		</div>
-	</section>
+	</div>
+	</div>
 
-	<!-- =========================================================
-	     Section 5: Testing
-	     ========================================================= -->
-	<section class="mt-10">
-		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Testing</h2>
-		<p class="mt-1 text-xs text-gray-500">
-			All test actions post to <strong>#talk-to-balrog</strong> or the test waitlist channel — never to real channels.
-		</p>
+	<!-- ── Step 4: Testing ── -->
+	<div class="flex gap-4">
+		<div class="flex flex-col items-center">
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-700 bg-gray-900 text-xs font-bold text-gray-500">T</div>
+			<div class="mt-1 w-px flex-1 bg-gray-800"></div>
+		</div>
+		<div class="pb-6 pt-1 min-w-0 flex-1">
+		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Testing</p>
+		<p class="mb-3 text-xs text-gray-500">All tests post to #talk-to-balrog or the test waitlist channel — never real channels.</p>
 
-		<div class="mt-4 grid gap-2 sm:grid-cols-2">
+		<div class="grid gap-2 sm:grid-cols-2">
 			<button onclick={() => runTest('announcement')} disabled={!!testRunning}
 				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
 				<div class="text-sm font-medium text-white">Test Announcement</div>
-				<div class="mt-0.5 text-xs text-gray-500">Posts announcement to #talk-to-balrog</div>
+				<div class="mt-0.5 text-xs text-gray-500">Posts to #talk-to-balrog</div>
 			</button>
 			<button onclick={() => runTest('attendee-check')} disabled={!!testRunning}
 				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
 				<div class="text-sm font-medium text-white">Test Attendee Check</div>
-				<div class="mt-0.5 text-xs text-gray-500">Checks entrant count (no posting)</div>
+				<div class="mt-0.5 text-xs text-gray-500">Checks count, no posting</div>
 			</button>
 			<button onclick={() => runTest('waitlist-test')} disabled={!!testRunning}
 				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
-				<div class="text-sm font-medium text-white">Test Waitlist Post</div>
-				<div class="mt-0.5 text-xs text-gray-500">Creates forum post in test channel</div>
+				<div class="text-sm font-medium text-white">Test Waitlist</div>
+				<div class="mt-0.5 text-xs text-gray-500">Forum post in test channel</div>
 			</button>
 			<button onclick={() => runTest('motivational')} disabled={!!testRunning}
 				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
 				<div class="text-sm font-medium text-white">Test Motivational</div>
-				<div class="mt-0.5 text-xs text-gray-500">Posts random message to #talk-to-balrog</div>
+				<div class="mt-0.5 text-xs text-gray-500">Posts to #talk-to-balrog</div>
 			</button>
 		</div>
+		{#if testRunning}<p class="mt-2 text-xs text-gray-400 animate-pulse">Running {testRunning}...</p>{/if}
+		{#if testResult}<p class="mt-2 text-xs {testResult.ok ? 'text-green-400' : 'text-red-400'}">{testResult.msg}</p>{/if}
+	</div>
+	</div>
 
-		{#if testRunning}
-			<p class="mt-2 text-xs text-gray-400 animate-pulse">Running {testRunning}...</p>
-		{/if}
-		{#if testResult}
-			<p class="mt-2 text-xs {testResult.ok ? 'text-green-400' : 'text-red-400'}">{testResult.msg}</p>
-		{/if}
-	</section>
+	<!-- ── Tools ── -->
+	<div class="flex gap-4">
+		<div class="flex flex-col items-center">
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-700 bg-gray-900 text-xs font-bold text-gray-500">∞</div>
+		</div>
+		<div class="pb-2 pt-1 min-w-0 flex-1">
+		<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Tools</p>
+		<div class="flex gap-2">
+			<select bind:value={pingChannel}
+				class="rounded-lg border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-300 focus:border-violet-500 focus:outline-none">
+				{#each SEND_CHANNELS as ch}
+					<option value={ch.value}>{ch.label}</option>
+				{/each}
+			</select>
+			<input type="text" bind:value={pingMessage} placeholder="Send a message…"
+				onkeydown={(e) => e.key === 'Enter' && sendPing()}
+				class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none" />
+			<button onclick={sendPing} disabled={pingRunning || !pingMessage.trim()}
+				class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors">
+				{pingRunning ? '…' : 'Send'}
+			</button>
+		</div>
+		{#if pingResult}<p class="mt-1.5 text-xs {pingResult.ok ? 'text-green-400' : 'text-red-400'}">{pingResult.msg}</p>{/if}
+	</div>
+	</div>
+
+	</div><!-- end timeline -->
 
 	{/if}
 </main>
