@@ -152,42 +152,52 @@ export async function triggerConversionAndCache(
 	phaseGroupId: number
 ): Promise<void> {
 	const startTime = Date.now();
+	console.log(`[conversion] Starting for round ${roundNumber}, PG ${phaseGroupId}`);
+
+	// Fetch sets — retry if empty (phase might still be resetting on StartGG)
 	let nodes: GqlNode[] = [];
-	try {
-		const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
-		nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
-	} catch { /* best effort */ }
+	for (let attempt = 0; attempt < 5; attempt++) {
+		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 2000));
+		try {
+			const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
+			nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
+		} catch { /* retry */ }
+		if (nodes.length > 0) break;
+		console.log(`[conversion] Attempt ${attempt + 1}: 0 sets returned, retrying...`);
+	}
+	console.log(`[conversion] Got ${nodes.length} sets`);
 
-	// ALWAYS trigger conversion via dummy report + reset.
-	// Even if sets are real (not preview), a dummy report + reset ensures we have fresh IDs
-	// after a phase reset on StartGG.
-	if (nodes.length > 0) {
-		const dummySet = nodes.find((n) =>
-			n.slots?.length >= 2 && n.slots[0]?.entrant?.id && n.slots[1]?.entrant?.id
-		);
-		if (dummySet) {
-			const hasPreview = String(dummySet.id).startsWith('preview_');
-			const dummyWinnerId = Number(dummySet.slots[0].entrant!.id);
-			const reportResult = await reportSet(String(dummySet.id), dummyWinnerId, {})
-				.catch(() => ({ ok: false as const }));
-			if (reportResult.ok) {
-				const realSetId = reportResult.reportedSetId ?? String(dummySet.id);
-				await resetSet(realSetId).catch(() => {});
-			}
+	// ALWAYS do a dummy report + reset — no conditions, no checks
+	const dummySet = nodes.find((n) =>
+		n.slots?.length >= 2 && n.slots[0]?.entrant?.id && n.slots[1]?.entrant?.id
+	);
+	if (dummySet) {
+		const dummyWinnerId = Number(dummySet.slots[0].entrant!.id);
+		console.log(`[conversion] Dummy report on set ${dummySet.id}, winner ${dummyWinnerId}`);
+		const reportResult = await reportSet(String(dummySet.id), dummyWinnerId, {})
+			.catch((e) => { console.log(`[conversion] Dummy report error: ${e}`); return { ok: false as const }; });
+		console.log(`[conversion] Dummy report result: ok=${reportResult.ok}`);
+		if (reportResult.ok) {
+			const realSetId = reportResult.reportedSetId ?? String(dummySet.id);
+			console.log(`[conversion] Resetting set ${realSetId}`);
+			await resetSet(realSetId).catch(() => {});
+		}
 
-			// If preview sets, wait for real IDs (conversion takes 5-30s)
-			if (hasPreview) {
-				nodes = [];
-				for (let retry = 1; retry <= 10; retry++) {
-					await new Promise<void>((r) => setTimeout(r, retry <= 3 ? 2000 : 4000));
-					try {
-						const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
-						nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
-					} catch { /* continue */ }
-					if (nodes.length > 0) break;
-				}
+		// Wait for real IDs if we had preview sets
+		if (String(dummySet.id).startsWith('preview_')) {
+			console.log('[conversion] Waiting for preview→real conversion...');
+			nodes = [];
+			for (let retry = 1; retry <= 10; retry++) {
+				await new Promise<void>((r) => setTimeout(r, retry <= 3 ? 2000 : 4000));
+				try {
+					const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
+					nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
+				} catch { /* continue */ }
+				if (nodes.length > 0) { console.log(`[conversion] Got ${nodes.length} real sets after ${retry} retries`); break; }
 			}
 		}
+	} else {
+		console.log('[conversion] No suitable set found for dummy report');
 	}
 
 	// Safe merge: re-load latest state so we never overwrite concurrent match results
