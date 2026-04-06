@@ -457,7 +457,7 @@ export function assignBracketStations(
 	// Build station pool for this bracket (excluding stream station)
 	const allRegular = Array.from({ length: settings.numStations }, (_, i) => i + 1)
 		.filter((s) => s !== settings.streamStation);
-	const halfIdx = Math.ceil(allRegular.length / 2);
+	const halfIdx = Math.floor(allRegular.length / 2);
 	const stationPool = bracketName === 'redemption' ? allRegular.slice(halfIdx) : allRegular.slice(0, halfIdx);
 
 	// Collect stations already in use by active (unreported) matches

@@ -40,7 +40,12 @@
 		{ value: 'general',        label: '#general' },
 		{ value: 'announcements',  label: '#announcements' }
 	];
-	let roundAnnounceChannel = $state('announcements');
+	let roundAnnounceChannel = $state(
+		typeof localStorage !== 'undefined' ? localStorage.getItem('msv-announce-channel') ?? '' : ''
+	);
+	$effect(() => {
+		if (typeof localStorage !== 'undefined') localStorage.setItem('msv-announce-channel', roundAnnounceChannel);
+	});
 
 	async function startNextRound(regenerate = false) {
 		loading = true;
@@ -472,6 +477,7 @@
 						<table class="w-full text-sm">
 							<thead>
 								<tr class="border-b border-gray-700 text-left text-gray-400">
+									<th class="px-2 py-2 text-right w-10">#</th>
 									<th class="px-2 py-2">Tag</th>
 									<th class="px-2 py-2 text-right">Seed</th>
 									<th class="px-2 py-2 text-right">W</th>
@@ -493,8 +499,9 @@
 										}
 										return { ...e, wins, losses };
 									})
-									.sort((a, b) => b.wins - a.wins || a.losses - b.losses || a.initialSeed - b.initialSeed) as entrant}
+									.sort((a, b) => b.wins - a.wins || a.losses - b.losses || a.initialSeed - b.initialSeed) as entrant, idx}
 									<tr class="border-b border-gray-800">
+										<td class="px-2 py-1.5 text-right font-mono text-gray-500">{idx + 1}</td>
 										<td class="px-2 py-1.5 text-white">{entrant.gamerTag}</td>
 										<td class="px-2 py-1.5 text-right font-mono text-gray-400">#{entrant.initialSeed}</td>
 										<td class="px-2 py-1.5 text-right font-mono text-green-400">{entrant.wins}</td>
@@ -539,6 +546,28 @@
 						{/each}
 					</div>
 				</div>
+				<!-- 3-2 player in redemption warning -->
+				{#each [tournament.finalStandings.filter((s) => s.bracket === 'main')] as mainPlayers}
+					{#each [mainPlayers[mainPlayers.length - 1]] as lastMain}
+						{#each [tournament.finalStandings.find((s) => s.bracket === 'redemption')] as firstRed}
+							{#if lastMain && firstRed && lastMain.wins === firstRed.wins && lastMain.losses === firstRed.losses}
+								<div class="mt-4 rounded-lg border border-amber-700 bg-amber-900/20 p-3 text-sm text-amber-300">
+									<strong>{firstRed.gamerTag}</strong> ({firstRed.wins}-{firstRed.losses}) was placed in Redemption
+									despite having the same record as <strong>{lastMain.gamerTag}</strong> ({lastMain.wins}-{lastMain.losses}) in Main.
+									The tiebreaker was total points: {lastMain.gamerTag} scored {lastMain.totalScore.toFixed(0)} vs {firstRed.gamerTag}'s {firstRed.totalScore.toFixed(0)}.
+									{#if firstRed.cinderellaBonus > 0}(+{firstRed.cinderellaBonus.toFixed(0)} Cinderella){/if}
+								</div>
+							{/if}
+						{/each}
+					{/each}
+
+					<!-- Split recommendation -->
+					<div class="mt-4 rounded-lg border border-violet-700 bg-violet-900/20 p-3 text-sm text-violet-300">
+						<strong>Next step:</strong> Go to StartGG's Bracket Setup and assign the top {mainPlayers.length} players
+						to the <strong>Main Bracket</strong> event and the remaining {tournament.finalStandings.filter(s => s.bracket === 'redemption').length} players
+						to the <strong>Redemption Bracket</strong> event. Then go to Brackets below to push seeding and start reporting.
+					</div>
+				{/each}
 				<a href="/dashboard/tournament/brackets" class="mt-4 inline-block text-sm text-violet-400 hover:text-violet-300">
 					Go to Brackets &rarr;
 				</a>

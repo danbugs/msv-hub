@@ -70,8 +70,8 @@ function ensureSync(tournament: TournamentState): StartggSyncState {
 }
 
 function addError(sync: StartggSyncState, matchId: string, message: string) {
-	// Keep only the 20 most recent errors
-	sync.errors = [{ matchId, message, ts: Date.now() }, ...sync.errors].slice(0, 20);
+	const actionable = `${message}. Try re-reporting matches that aren't showing as reported on StartGG.`;
+	sync.errors = [{ matchId, message: actionable, ts: Date.now() }, ...sync.errors].slice(0, 20);
 }
 
 function clearErrorsForMatch(sync: StartggSyncState, matchId: string) {
@@ -157,13 +157,15 @@ export async function triggerConversionAndCache(
 		nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
 	} catch { /* best effort */ }
 
-	// If sets are still preview, trigger conversion via dummy report + reset
-	const hasPreview = nodes.some((n) => String(n.id).startsWith('preview_'));
-	if (hasPreview && nodes.length > 0) {
+	// ALWAYS trigger conversion via dummy report + reset.
+	// Even if sets are real (not preview), a dummy report + reset ensures we have fresh IDs
+	// after a phase reset on StartGG.
+	if (nodes.length > 0) {
 		const dummySet = nodes.find((n) =>
 			n.slots?.length >= 2 && n.slots[0]?.entrant?.id && n.slots[1]?.entrant?.id
 		);
 		if (dummySet) {
+			const hasPreview = String(dummySet.id).startsWith('preview_');
 			const dummyWinnerId = Number(dummySet.slots[0].entrant!.id);
 			const reportResult = await reportSet(String(dummySet.id), dummyWinnerId, {})
 				.catch(() => ({ ok: false as const }));
@@ -172,15 +174,17 @@ export async function triggerConversionAndCache(
 				await resetSet(realSetId).catch(() => {});
 			}
 
-			// Wait for real IDs (conversion takes 5-30s)
-			nodes = [];
-			for (let retry = 1; retry <= 10; retry++) {
-				await new Promise<void>((r) => setTimeout(r, retry <= 3 ? 2000 : 4000));
-				try {
-					const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
-					nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
-				} catch { /* continue */ }
-				if (nodes.length > 0) break;
+			// If preview sets, wait for real IDs (conversion takes 5-30s)
+			if (hasPreview) {
+				nodes = [];
+				for (let retry = 1; retry <= 10; retry++) {
+					await new Promise<void>((r) => setTimeout(r, retry <= 3 ? 2000 : 4000));
+					try {
+						const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
+						nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
+					} catch { /* continue */ }
+					if (nodes.length > 0) break;
+				}
 			}
 		}
 	}

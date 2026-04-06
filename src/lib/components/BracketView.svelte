@@ -185,21 +185,45 @@
 	}
 
 	const layout = $derived(computeLayout(bracket));
-	const roundColumns = $derived(
-		[...new Map(layout.matchPositions.map((mp) => [mp.x, mp.match])).entries()].sort((a, b) => a[0] - b[0])
+	// Separate winners and losers round labels (they can share x-positions)
+	const winnersRoundLabels = $derived(
+		[...new Map(
+			layout.matchPositions
+				.filter((mp) => mp.match.round > 0 || mp.match.id.includes('-GFR-'))
+				.map((mp) => [mp.x, mp.match] as [number, BracketMatch])
+		).entries()].sort((a, b) => a[0] - b[0])
+	);
+	const losersRoundLabels = $derived(
+		[...new Map(
+			layout.matchPositions
+				.filter((mp) => mp.match.round < 0 && !mp.match.id.includes('-GFR-'))
+				.map((mp) => [mp.x, mp.match] as [number, BracketMatch])
+		).entries()].sort((a, b) => a[0] - b[0])
+	);
+	const losersSectionY = $derived(
+		layout.matchPositions.filter((mp) => mp.match.round < 0).reduce((min, mp) => Math.min(min, mp.y), Infinity)
 	);
 </script>
 
 <div class="overflow-x-auto rounded-xl border border-gray-800 bg-gray-950 p-4">
-	<!-- Round labels -->
-	<div class="relative" style="width: {layout.width}px; height: 20px; margin-bottom: 4px">
-		{#each roundColumns as [x, match]}
+	<!-- Winners round labels -->
+	<div class="relative" style="width: {layout.width}px; height: 16px; margin-bottom: 2px">
+		{#each winnersRoundLabels as [x, match]}
 			<div class="absolute text-xs text-gray-500 font-medium truncate" style="left: {x}px; width: {CARD_W}px">
 				{getRoundName(match.round, match.id.includes('-GFR-'))}
 			</div>
 		{/each}
 	</div>
 	<div class="relative" style="width: {layout.width}px; height: {layout.height}px">
+		<!-- Losers round labels (inside bracket at losers section y) -->
+		{#if losersRoundLabels.length > 0 && losersSectionY < Infinity}
+			{#each losersRoundLabels as [x, match]}
+				<div class="absolute text-xs text-gray-500 font-medium truncate pointer-events-none"
+					style="left: {x}px; top: {losersSectionY - 20}px; width: {CARD_W}px">
+					{getRoundName(match.round, false)}
+				</div>
+			{/each}
+		{/if}
 		<svg class="absolute inset-0 pointer-events-none overflow-visible"
 			width={layout.width} height={layout.height}>
 			{#each layout.connectors as c}

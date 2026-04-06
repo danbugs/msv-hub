@@ -26,7 +26,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	// Build station pools same as initial assignment (exclude stream, split evenly)
 	const allRegular = Array.from({ length: tournament.settings.numStations }, (_, i) => i + 1)
 		.filter((s) => s !== streamStn);
-	const halfIdx = Math.ceil(allRegular.length / 2);
+	const halfIdx = Math.floor(allRegular.length / 2);
 	const mainPool = new Set(allRegular.slice(0, halfIdx));
 	const redemptionPool = new Set(allRegular.slice(halfIdx));
 

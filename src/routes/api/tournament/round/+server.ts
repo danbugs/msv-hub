@@ -70,7 +70,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const streamStn = tournament.settings.streamStation;
 		// Build pool of all regular stations (excluding stream)
 		const allRegularStations = Array.from({ length: totalStations }, (_, i) => i + 1).filter(s => s !== streamStn);
-		const halfIdx = Math.ceil(allRegularStations.length / 2);
+		const halfIdx = Math.floor(allRegularStations.length / 2);
 		const mainStations = allRegularStations.slice(0, halfIdx);
 		const redemptionStations = allRegularStations.slice(halfIdx);
 

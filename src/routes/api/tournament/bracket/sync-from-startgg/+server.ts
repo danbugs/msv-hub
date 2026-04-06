@@ -85,15 +85,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let bracket = generateBracket(bracketName, players, standings);
 
 	// Step 4: Apply StartGG results to the fresh bracket
-	// Sort sets by completion order (unreported last)
-	const reportedSets = (sets as GqlRecord[])
-		.filter((s) => s.winnerId)
-		.sort((a, b) => (a.completedAt ?? 0) - (b.completedAt ?? 0));
+	// Multiple passes — each pass processes sets whose players are already placed in the bracket.
+	// After each pass, advancePlayer places players for the next round.
+	const reportedSets = (sets as GqlRecord[]).filter((s) => s.winnerId);
 
 	let synced = 0;
 	let notFound = 0;
+	const applied = new Set<string>();
+
+	for (let pass = 0; pass < 20; pass++) {
+		let progressThisPass = 0;
 
 	for (const set of reportedSets) {
+		if (applied.has(String(set.id))) continue;
 		const slots = set.slots ?? [];
 		const sgWinnerId = Number(set.winnerId);
 		const sgE1 = Number(slots[0]?.entrant?.id);
@@ -111,9 +115,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			((m.topPlayerId === msvE1 && m.bottomPlayerId === msvE2) ||
 			 (m.topPlayerId === msvE2 && m.bottomPlayerId === msvE1))
 		);
-		if (!match) { notFound++; continue; }
+		if (!match) { continue; } // Not ready yet — try next pass
 
-		// Extract scores from displayScore (e.g., "1Test 3 - 2Test 1" → 3, 1)
+		// Extract scores from displayScore
 		let topScore: number | undefined;
 		let bottomScore: number | undefined;
 		const displayScore = set.displayScore as string | undefined;
@@ -123,7 +127,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				const s1 = Number(parts[0].replace(/[^0-9]/g, ''));
 				const s2 = Number(parts[1].replace(/[^0-9]/g, ''));
 				if (!isNaN(s1) && !isNaN(s2)) {
-					// Figure out which score belongs to top/bottom
 					if (msvE1 === match.topPlayerId) { topScore = s1; bottomScore = s2; }
 					else { topScore = s2; bottomScore = s1; }
 				}
@@ -132,15 +135,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		try {
 			bracket = reportBracketMatch(bracket, match.id, msvWinner, undefined, undefined, topScore, bottomScore);
-			// Copy StartGG set ID
 			const updatedMatch = bracket.matches.find((m: BracketMatch) => m.id === match.id);
 			if (updatedMatch) updatedMatch.startggSetId = String(set.id);
+			applied.add(String(set.id));
 			synced++;
+			progressThisPass++;
 		} catch {
-			notFound++;
+			// Match might not be ready yet — try next pass
 		}
 	}
 
+	if (progressThisPass === 0) break; // No progress — all remaining sets can't be applied
+	}
+
+	notFound = reportedSets.length - synced;
 	tournament.brackets[bracketName] = bracket;
 
 	// Clear errors for this bracket
