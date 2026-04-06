@@ -22,16 +22,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		avoidEvents: body.avoidEvents
 			? String(body.avoidEvents).split(',').map((s: string) => s.trim()).filter(Boolean)
 			: undefined,
-		jitter: body.jitter !== undefined ? Number(body.jitter) : 20.0,
+		jitter: body.jitter !== undefined ? Number(body.jitter) : 5.0,
 		seed: body.seed !== undefined && body.seed !== '' ? Number(body.seed) : undefined,
 		apply: body.apply === true
 	};
 
-	if (!input.targetNumber || !input.seasonStart) {
-		return new Response(JSON.stringify({ error: 'targetNumber and seasonStart are required' }), {
+	if (!input.targetNumber) {
+		return new Response(JSON.stringify({ error: 'targetNumber is required' }), {
 			status: 400,
 			headers: { 'Content-Type': 'application/json' }
 		});
+	}
+	// Auto-compute seasonStart if not provided (last 10 events)
+	if (!input.seasonStart) {
+		input.seasonStart = Math.max(1, input.targetNumber - 10);
 	}
 
 	const ac = new AbortController();
