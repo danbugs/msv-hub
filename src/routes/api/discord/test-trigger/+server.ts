@@ -1,14 +1,15 @@
 /**
  * POST /api/discord/test-trigger
  *
- * Manually triggers the announcement or attendee check for testing.
+ * Manually triggers Discord actions for testing.
+ * All test actions post to #talk-to-balrog or the test waitlist channel.
  * Requires session auth (not cron secret).
  *
- * Body: { action: 'announcement' | 'attendee-check' | 'motivational' }
+ * Body: { action: 'announcement' | 'attendee-check' | 'waitlist-test' | 'motivational' }
  */
 
 import type { RequestHandler } from './$types';
-import { sendMessage, buildAnnouncementMessage } from '$lib/server/discord';
+import { sendMessage, buildAnnouncementMessage, createForumPost, shortenSlug, truncateTo100 } from '$lib/server/discord';
 import {
 	getDiscordConfig,
 	getCommunityConfig,
@@ -18,9 +19,8 @@ import {
 import { env } from '$env/dynamic/private';
 
 const STARTGG_API = 'https://api.start.gg/gql/alpha';
-const WAITLIST_CHANNEL_ID = '1193295598166737118';
-const ANNOUNCE_CHANNEL_ID = '1066863301885173800';
-const GENERAL_CHANNEL_ID = '1066863005591162961';
+const TALK_TO_BALROG = '1317322917129879562';
+const TEST_WAITLIST_CHANNEL = '1317322581938016317';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -31,10 +31,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (action === 'announcement') {
 		if (!config.eventSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
 		const message = buildAnnouncementMessage(config.eventSlug, config.attendeeCap, config.announcementTemplate);
-		// Test sends to #talk-to-balrog, not #announcements
-		const TALK_TO_BALROG = '1317322917129879562';
 		await sendMessage(TALK_TO_BALROG, `[TEST] ${message}`);
-		return Response.json({ ok: true, action: 'announcement', message: 'Sent to #talk-to-balrog (test)' });
+		return Response.json({ ok: true, action: 'announcement', message: 'Sent to #talk-to-balrog' });
 	}
 
 	if (action === 'attendee-check') {
@@ -59,16 +57,27 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
+	if (action === 'waitlist-test') {
+		// Creates a test waitlist post in the test channel (not the real waitlist channel)
+		if (!config.eventSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
+		const title = truncateTo100(`[TEST] Waitlist for ${shortenSlug(config.eventSlug)}`);
+		const content =
+			`[TEST] Answer in the thread if you'd like to be added to the waitlist!\n\n` +
+			`Top 8 of this waitlist get priority registration for next week.\n\n` +
+			`Please, let me know if you are bringing a setup. For example, "Dantotto setup"`;
+		await createForumPost(TEST_WAITLIST_CHANNEL, title, content);
+		await sendMessage(TALK_TO_BALROG, `[TEST] 📢 Event just capped! Waitlist posted to test channel.`);
+		return Response.json({ ok: true, action: 'waitlist-test', message: 'Waitlist post created in test channel' });
+	}
+
 	if (action === 'motivational') {
 		const communityConfig = await getCommunityConfig();
 		const messages = communityConfig.motivationalMessages;
 		if (!messages.length) return Response.json({ error: 'No motivational messages configured' }, { status: 400 });
 		const pick = messages[Math.floor(Math.random() * messages.length)];
-		// Test sends to #talk-to-balrog, not #general
-		const TALK_TO_BALROG = '1317322917129879562';
 		await sendMessage(TALK_TO_BALROG, `[TEST] ${pick}`);
-		return Response.json({ ok: true, action: 'motivational', message: pick, note: 'Sent to #talk-to-balrog (test)' });
+		return Response.json({ ok: true, action: 'motivational', message: pick });
 	}
 
-	return Response.json({ error: 'Unknown action' }, { status: 400 });
+	return Response.json({ error: 'Unknown action. Use: announcement, attendee-check, waitlist-test, motivational' }, { status: 400 });
 };

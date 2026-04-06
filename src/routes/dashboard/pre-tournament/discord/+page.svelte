@@ -689,7 +689,7 @@
 	<section class="mt-10">
 		<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Attendee Monitoring</h2>
 		<p class="mt-1 text-xs text-gray-500">
-			Checks StartGG every 5 min. When entrants reach the cap, a waitlist thread is auto-created once.
+			Checks StartGG every 5 min on Wednesdays (via QStash). When entrants reach the cap, a waitlist thread is auto-created once.
 		</p>
 
 		<div class="mt-4 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
@@ -710,7 +710,7 @@
 						</span>
 					{:else}
 						<span class="mt-1 inline-flex items-center gap-1.5 text-sm text-green-400">
-							<span class="inline-block h-2 w-2 animate-pulse rounded-full bg-green-500"></span>Monitoring
+							<span class="inline-block h-2 w-2 animate-pulse rounded-full bg-green-500"></span>Active (checks on Wednesdays)
 						</span>
 					{/if}
 				</div>
