@@ -57,6 +57,8 @@ export interface SeederResult {
 	entrants: Entrant[];
 	pairings: [Entrant, Entrant][];
 	unresolvedCollisions: [Entrant, Entrant][];
+	/** All previous matchup pairs to avoid (playerIdA-playerIdB keys) */
+	avoidPairs: string[];
 	targetSlug: string;
 	logs: string[];
 }
@@ -612,5 +614,5 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback, signal?
 		log('Dry run complete. Use Apply to push seeding to StartGG.');
 	}
 
-	return { entrants, pairings, unresolvedCollisions, targetSlug, logs };
+	return { entrants, pairings, unresolvedCollisions, avoidPairs: [...toAvoid], targetSlug, logs };
 }

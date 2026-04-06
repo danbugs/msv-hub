@@ -30,9 +30,10 @@
 
 	let abortController: AbortController | null = null;
 	let result = $state<{
-		entrants: { seedNum: number; gamerTag: string; elo: number; jitteredElo: number; isNewcomer: boolean }[];
-		pairings: { top: { seedNum: number; gamerTag: string }; bottom: { seedNum: number; gamerTag: string } }[];
+		entrants: { seedNum: number; gamerTag: string; elo: number; jitteredElo: number; isNewcomer: boolean; playerId?: number }[];
+		pairings: { top: { seedNum: number; gamerTag: string; playerId?: number }; bottom: { seedNum: number; gamerTag: string; playerId?: number } }[];
 		unresolvedCollisions: { top: { gamerTag: string }; bottom: { gamerTag: string } }[];
+		avoidPairs: string[];
 		targetSlug: string;
 		logs: string[];
 	} | null>(null);
@@ -141,20 +142,25 @@
 		const pairings = [];
 		for (let i = 0; i < half; i++) {
 			pairings.push({
-				top: { seedNum: entrants[i].seedNum, gamerTag: entrants[i].gamerTag },
-				bottom: { seedNum: entrants[i + half].seedNum, gamerTag: entrants[i + half].gamerTag }
+				top: { seedNum: entrants[i].seedNum, gamerTag: entrants[i].gamerTag, playerId: entrants[i].playerId },
+				bottom: { seedNum: entrants[i + half].seedNum, gamerTag: entrants[i + half].gamerTag, playerId: entrants[i + half].playerId }
 			});
 		}
 		return pairings;
 	}
 
-	function isCollision(top: string, bottom: string): boolean {
-		if (!result) return false;
-		return result.unresolvedCollisions.some(
-			(c) => (c.top.gamerTag === top && c.bottom.gamerTag === bottom) ||
-			        (c.top.gamerTag === bottom && c.bottom.gamerTag === top)
-		);
+	/** Check if a pairing is a rematch from last week using the full avoidance set */
+	function isCollision(topPlayerId: number | undefined, bottomPlayerId: number | undefined): boolean {
+		if (!result?.avoidPairs?.length || !topPlayerId || !bottomPlayerId) return false;
+		const k1 = `${Math.min(topPlayerId, bottomPlayerId)}:${Math.max(topPlayerId, bottomPlayerId)}`;
+		return result.avoidPairs.includes(k1);
 	}
+
+	/** Count current collisions in pairings */
+	let collisionCount = $derived.by(() => {
+		if (!result) return 0;
+		return result.pairings.filter((p) => isCollision(p.top.playerId, p.bottom.playerId)).length;
+	});
 
 	async function startFromEvent() {
 		if (!eventUrl.trim()) return;
@@ -217,26 +223,13 @@
 			<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Generate Seeding</p>
 
 			<form onsubmit={(e) => { e.preventDefault(); runSeeder(); }} class="space-y-4">
-				<div class="grid gap-4 sm:grid-cols-2">
-					<div>
-						<label for="target" class="block text-sm font-medium text-gray-300">
-							What {mode === 'micro' ? 'Microspacing' : 'Macrospacing'} # are you seeding?
-						</label>
-						<input id="target" type="number"
-							value={targetNumber}
-							oninput={(e) => onTargetChange((e.target as HTMLInputElement).value)}
-							required placeholder="e.g. 134" class={inputClass} />
-						<p class="mt-1 text-xs text-gray-500">Uses the previous 10 events for Elo history.</p>
-					</div>
-					<div class="flex items-end">
-						<div class="flex-1">
-							<label for="mode" class="block text-sm font-medium text-gray-300">Mode</label>
-							<select id="mode" bind:value={mode} class={inputClass}>
-								<option value="micro">Micro</option>
-								<option value="macro">Macro</option>
-							</select>
-						</div>
-					</div>
+				<div>
+					<label for="target" class="block text-sm font-medium text-gray-300">Event number</label>
+					<input id="target" type="number"
+						value={targetNumber}
+						oninput={(e) => onTargetChange((e.target as HTMLInputElement).value)}
+						required placeholder="e.g. 134" class="mt-1 w-48 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none" />
+					<p class="mt-1 text-xs text-gray-500">Uses the previous 10 events for Elo history.</p>
 				</div>
 
 				<button type="button" onclick={() => showAdvanced = !showAdvanced}
@@ -246,6 +239,13 @@
 
 				{#if showAdvanced}
 					<div class="grid gap-4 sm:grid-cols-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+						<div>
+							<label for="mode" class="block text-sm font-medium text-gray-300">Mode</label>
+							<select id="mode" bind:value={mode} class={inputClass}>
+								<option value="micro">Micro</option>
+								<option value="macro">Macro</option>
+							</select>
+						</div>
 						<div>
 							<label for="season-start" class="block text-sm font-medium text-gray-300">Season Start</label>
 							<p class="text-xs text-gray-500 mb-1">First event # for Elo. Default: target - 10.</p>
@@ -366,13 +366,13 @@
 					<div class="space-y-1 max-h-[28rem] overflow-y-auto">
 						{#each result.pairings as { top, bottom }}
 							<div class="flex items-center gap-2 rounded px-3 py-1.5 text-sm
-								{isCollision(top.gamerTag, bottom.gamerTag) ? 'bg-red-900/30 border border-red-800' : 'bg-gray-900'}">
+								{isCollision(top.playerId, bottom.playerId) ? 'bg-red-900/30 border border-red-800' : 'bg-gray-900'}">
 								<span class="w-6 text-right font-mono text-xs text-gray-500">{top.seedNum}</span>
 								<span class="flex-1 text-white truncate">{top.gamerTag}</span>
 								<span class="text-gray-600 text-xs">vs</span>
 								<span class="flex-1 text-right text-white truncate">{bottom.gamerTag}</span>
 								<span class="w-6 font-mono text-xs text-gray-500">{bottom.seedNum}</span>
-								{#if isCollision(top.gamerTag, bottom.gamerTag)}
+								{#if isCollision(top.playerId, bottom.playerId)}
 									<span class="text-xs text-red-400" title="Rematch from last week">⚠</span>
 								{/if}
 							</div>
@@ -386,9 +386,9 @@
 							</div>
 						{/if}
 					</div>
-					{#if result.unresolvedCollisions.length > 0}
+					{#if collisionCount > 0}
 						<div class="mt-3 rounded-lg border border-yellow-700 bg-yellow-900/20 p-3 text-xs text-yellow-400">
-							⚠ {result.unresolvedCollisions.length} rematch{result.unresolvedCollisions.length > 1 ? 'es' : ''} from last week
+							⚠ {collisionCount} rematch{collisionCount > 1 ? 'es' : ''} from last week — drag seeds to resolve
 						</div>
 					{/if}
 				</div>

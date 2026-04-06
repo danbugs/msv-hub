@@ -55,6 +55,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					entrants: result.entrants,
 					pairings: result.pairings.map(([a, b]) => ({ top: a, bottom: b })),
 					unresolvedCollisions: result.unresolvedCollisions.map(([a, b]) => ({ top: a, bottom: b })),
+					avoidPairs: result.avoidPairs,
 					targetSlug: result.targetSlug,
 					logs: result.logs
 				});
