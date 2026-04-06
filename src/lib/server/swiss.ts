@@ -782,7 +782,9 @@ export function generateBracket(
 	name: string,
 	players: { entrantId: string; seed: number }[],
 	allStandings: FinalStanding[],
-	settings?: TournamentSettings
+	settings?: TournamentSettings,
+	/** Map of entrantId → opponent entrantId from the last Swiss round (for rematch avoidance) */
+	lastRoundOpponents?: Map<string, string>
 ): BracketState {
 	const n = players.length;
 	// Pad to next power of 2 for bracket structure
@@ -790,10 +792,43 @@ export function generateBracket(
 	const numFirstRoundMatches = bracketSize / 2;
 
 	// Use standard bracket seeding order (same as StartGG):
-	// Seeds are placed so 1 and 2 are in opposite halves, 1 plays bracketSize in R1, etc.
-	// This ensures top seeds only meet in later rounds.
 	const standardOrder = getStandardBracketOrder(bracketSize);
-	const sortedPlayers = [...players].sort((a, b) => a.seed - b.seed);
+	let sortedPlayers = [...players].sort((a, b) => a.seed - b.seed);
+
+	// Avoid Swiss last-round rematches in bracket R1 by swapping within safe zones.
+	// A "safe swap" swaps two players whose seeds are in the same bracket half
+	// (same quarter for 16+ players) so they don't affect which round they'd meet top seeds.
+	if (lastRoundOpponents && lastRoundOpponents.size > 0) {
+		const order = standardOrder;
+		for (let i = 0; i < numFirstRoundMatches; i++) {
+			const topIdx = order[i * 2];
+			const botIdx = order[i * 2 + 1];
+			if (topIdx >= sortedPlayers.length || botIdx >= sortedPlayers.length) continue;
+			const topId = sortedPlayers[topIdx].entrantId;
+			const botId = sortedPlayers[botIdx].entrantId;
+			const topOpp = lastRoundOpponents.get(topId);
+			if (topOpp !== botId) continue; // No rematch — skip
+
+			// Rematch detected! Try swapping bottom player with adjacent seeds in the same match group.
+			// The "match group" is pairs that feed into the same R2 match (i and i^1).
+			const partnerMatchIdx = i % 2 === 0 ? i + 1 : i - 1;
+			if (partnerMatchIdx < 0 || partnerMatchIdx >= numFirstRoundMatches) continue;
+			const partnerBotIdx = order[partnerMatchIdx * 2 + 1];
+			if (partnerBotIdx >= sortedPlayers.length) continue;
+			const partnerBotId = sortedPlayers[partnerBotIdx].entrantId;
+			// Check the swap doesn't create a NEW rematch in the partner match
+			const partnerTopIdx = order[partnerMatchIdx * 2];
+			const partnerTopId = partnerTopIdx < sortedPlayers.length ? sortedPlayers[partnerTopIdx].entrantId : undefined;
+			const partnerTopOpp = partnerTopId ? lastRoundOpponents.get(partnerTopId) : undefined;
+			if (partnerTopOpp === botId) continue; // Swap would create a new rematch
+			// Also check the swap doesn't create a rematch in OUR match
+			if (topOpp === partnerBotId) continue; // Still a rematch after swap... wait, topOpp IS botId, and we're swapping botId with partnerBotId
+			// Do the swap
+			const newPlayers = [...sortedPlayers];
+			[newPlayers[botIdx], newPlayers[partnerBotIdx]] = [newPlayers[partnerBotIdx], newPlayers[botIdx]];
+			sortedPlayers = newPlayers;
+		}
+	}
 
 	const matches: BracketMatch[] = [];
 	let matchCounter = 0;

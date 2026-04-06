@@ -569,5 +569,38 @@
 				</div>
 			{/if}
 		{/if}
+
+	<!-- Swiss summary (expandable) -->
+	{#if tournament?.finalStandings}
+		<details class="mt-8 rounded-lg border border-gray-800 bg-gray-900">
+			<summary class="cursor-pointer px-4 py-3 text-sm font-medium text-gray-300">Swiss Results & Final Standings</summary>
+			<div class="px-4 pb-4">
+				<div class="grid gap-6 sm:grid-cols-2">
+					<div>
+						<h4 class="text-sm font-medium text-violet-400 mb-2">Main Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'main').length})</h4>
+						{#each tournament.finalStandings.filter((s) => s.bracket === 'main') as s}
+							<div class="flex items-center gap-2 text-xs py-0.5">
+								<span class="w-5 text-right font-mono text-gray-500">{s.rank}.</span>
+								<span class="text-white">{s.gamerTag}</span>
+								<span class="text-gray-500">{s.wins}-{s.losses}</span>
+								{#if s.cinderellaBonus > 0}<span class="text-yellow-400">+{s.cinderellaBonus.toFixed(0)}C</span>{/if}
+							</div>
+						{/each}
+					</div>
+					<div>
+						<h4 class="text-sm font-medium text-red-400 mb-2">Redemption Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'redemption').length})</h4>
+						{#each tournament.finalStandings.filter((s) => s.bracket === 'redemption') as s}
+							<div class="flex items-center gap-2 text-xs py-0.5">
+								<span class="w-5 text-right font-mono text-gray-500">{s.rank}.</span>
+								<span class="text-white">{s.gamerTag}</span>
+								<span class="text-gray-500">{s.wins}-{s.losses}</span>
+								{#if s.cinderellaBonus > 0}<span class="text-yellow-400">+{s.cinderellaBonus.toFixed(0)}C</span>{/if}
+							</div>
+						{/each}
+					</div>
+				</div>
+			</div>
+		</details>
+	{/if}
 	{/if}
 </main>

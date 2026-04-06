@@ -553,15 +553,24 @@
 							{#if lastMain && firstRed && lastMain.wins === firstRed.wins && lastMain.losses === firstRed.losses}
 								<div class="mt-4 rounded-lg border border-amber-700 bg-amber-900/20 p-3 text-sm text-amber-300 space-y-2">
 									<p><strong>{firstRed.gamerTag}</strong> ({firstRed.wins}-{firstRed.losses}) was placed in Redemption
-									despite having the same record as <strong>{lastMain.gamerTag}</strong> ({lastMain.wins}-{lastMain.losses}) in Main.</p>
-									<p class="text-xs text-amber-400">
-										<strong>{lastMain.gamerTag}</strong>: {lastMain.totalScore.toFixed(0)} pts
-										(base {lastMain.basePoints.toFixed(0)} + win quality {lastMain.winPoints.toFixed(0)} + loss quality {lastMain.lossPoints.toFixed(0)}{lastMain.cinderellaBonus > 0 ? ` + Cinderella ${lastMain.cinderellaBonus.toFixed(0)}` : ''})
-									</p>
-									<p class="text-xs text-amber-400">
-										<strong>{firstRed.gamerTag}</strong>: {firstRed.totalScore.toFixed(0)} pts
-										(base {firstRed.basePoints.toFixed(0)} + win quality {firstRed.winPoints.toFixed(0)} + loss quality {firstRed.lossPoints.toFixed(0)}{firstRed.cinderellaBonus > 0 ? ` + Cinderella ${firstRed.cinderellaBonus.toFixed(0)}` : ''})
-									</p>
+									despite having the same record as <strong>{lastMain.gamerTag}</strong> ({lastMain.wins}-{lastMain.losses}) in Main.
+									The tiebreaker is total points:</p>
+									<div class="text-xs text-amber-400 space-y-1 ml-2">
+										<p><strong>{lastMain.gamerTag}</strong> — <strong>{lastMain.totalScore.toFixed(0)} pts</strong>
+											= {lastMain.wins} wins × 100
+											+ {lastMain.basePoints.toFixed(0)} base
+											+ {lastMain.winPoints.toFixed(0)} win quality
+											+ {lastMain.lossPoints.toFixed(0)} loss quality
+											{lastMain.cinderellaBonus > 0 ? `+ ${lastMain.cinderellaBonus.toFixed(0)} Cinderella` : ''}
+										</p>
+										<p><strong>{firstRed.gamerTag}</strong> — <strong>{firstRed.totalScore.toFixed(0)} pts</strong>
+											= {firstRed.wins} wins × 100
+											+ {firstRed.basePoints.toFixed(0)} base
+											+ {firstRed.winPoints.toFixed(0)} win quality
+											+ {firstRed.lossPoints.toFixed(0)} loss quality
+											{firstRed.cinderellaBonus > 0 ? `+ ${firstRed.cinderellaBonus.toFixed(0)} Cinderella` : ''}
+										</p>
+									</div>
 								</div>
 							{/if}
 						{/each}

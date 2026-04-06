@@ -151,6 +151,7 @@ export async function triggerConversionAndCache(
 	roundNumber: number,
 	phaseGroupId: number
 ): Promise<void> {
+	const startTime = Date.now();
 	let nodes: GqlNode[] = [];
 	try {
 		const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
@@ -198,6 +199,11 @@ export async function triggerConversionAndCache(
 		const entrantMap = new Map(fresh.entrants.map((e) => [e.id, e]));
 		applyNodesToRound(nodes, round, entrantMap);
 	}
+
+	// Ensure the "Preparing" banner shows for at least 3 seconds so the user
+	// sees confirmation that the conversion ran.
+	const elapsed = Date.now() - startTime;
+	if (elapsed < 3000) await new Promise<void>((r) => setTimeout(r, 3000 - elapsed));
 
 	const sync = ensureSync(fresh);
 	sync.cacheReady = true;

@@ -58,9 +58,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const mainPlayers = finalStandings.filter((s) => s.bracket === 'main').map((s) => ({ entrantId: s.entrantId, seed: s.rank }));
 		const redemptionPlayers = finalStandings.filter((s) => s.bracket === 'redemption').map((s, i) => ({ entrantId: s.entrantId, seed: i + 1 }));
 
+		// Build last Swiss round opponent map for bracket rematch avoidance
+		const lastSwissRound = tournament.rounds.filter((r) => r.status === 'completed').at(-1);
+		const lastRoundOpponents = new Map<string, string>();
+		if (lastSwissRound) {
+			for (const m of lastSwissRound.matches) {
+				if (m.topPlayerId && m.bottomPlayerId) {
+					lastRoundOpponents.set(m.topPlayerId, m.bottomPlayerId);
+					lastRoundOpponents.set(m.bottomPlayerId, m.topPlayerId);
+				}
+			}
+		}
+
 		tournament.brackets = {
-			main: generateBracket('main', mainPlayers, finalStandings),
-			redemption: generateBracket('redemption', redemptionPlayers, finalStandings)
+			main: generateBracket('main', mainPlayers, finalStandings, undefined, lastRoundOpponents),
+			redemption: generateBracket('redemption', redemptionPlayers, finalStandings, undefined, lastRoundOpponents)
 		};
 		tournament.phase = 'brackets';
 
