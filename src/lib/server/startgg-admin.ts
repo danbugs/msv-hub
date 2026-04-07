@@ -256,6 +256,30 @@ export async function assignBracketSplit(
 }
 
 /**
+ * Fetch real set IDs from the admin REST endpoint — available instantly after conversion.
+ * Returns sets with real integer IDs even during the GQL API's conversion window.
+ */
+export async function fetchAdminPhaseGroupSets(
+	phaseGroupId: number
+): Promise<{ id: number; entrant1Id: number; entrant2Id: number; winnerId: number | null }[]> {
+	const cookie = await getSessionCookie();
+	const res = await fetch(
+		`${PHASE_REST_URL.replace('/phase', '/admin/phase_group')}/${phaseGroupId}?id=${phaseGroupId}&admin=true&expand=%5B%22sets%22%5D&reset=false`,
+		{ headers: { 'Cookie': cookie, 'Client-Version': '20' } }
+	);
+	if (!res.ok) return [];
+	const data = await res.json();
+	const sets = data?.entities?.sets;
+	if (!Array.isArray(sets)) return [];
+	return sets.map((s: Record<string, unknown>) => ({
+		id: Number(s.id),
+		entrant1Id: Number(s.entrant1Id),
+		entrant2Id: Number(s.entrant2Id),
+		winnerId: s.winnerId ? Number(s.winnerId) : null
+	}));
+}
+
+/**
  * Restart a phase on StartGG — resets all sets and un-starts the pool.
  * This replaces the manual "go to StartGG and reset the phase" step.
  */

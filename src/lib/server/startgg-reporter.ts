@@ -7,6 +7,7 @@
  */
 
 import { findSetInPhaseGroup, findSetByEntrants, reportSet, resetSet, gql, PHASE_GROUP_SETS_QUERY, PHASE_GROUP_SEEDS_QUERY, fetchAllEntrants } from '$lib/server/startgg';
+import { fetchAdminPhaseGroupSets } from '$lib/server/startgg-admin';
 import { saveTournament, getActiveTournament } from '$lib/server/store';
 import type { TournamentState, SwissMatch, BracketMatch, StartggSyncState } from '$lib/types/tournament';
 
@@ -167,7 +168,7 @@ export async function triggerConversionAndCache(
 	}
 	console.log(`[conversion] Got ${nodes.length} sets`);
 
-	// ALWAYS do a dummy report + reset — no conditions, no checks
+	// Dummy report to trigger preview→real conversion
 	const dummySet = nodes.find((n) =>
 		n.slots?.length >= 2 && n.slots[0]?.entrant?.id && n.slots[1]?.entrant?.id
 	);
@@ -179,13 +180,26 @@ export async function triggerConversionAndCache(
 		console.log(`[conversion] Dummy report result: ok=${reportResult.ok}`);
 		if (reportResult.ok) {
 			const realSetId = reportResult.reportedSetId ?? String(dummySet.id);
-			console.log(`[conversion] Resetting set ${realSetId}`);
 			await resetSet(realSetId).catch(() => {});
 		}
 
-		// Wait for real IDs if we had preview sets
-		if (String(dummySet.id).startsWith('preview_')) {
-			console.log('[conversion] Waiting for preview→real conversion...');
+		// Use admin REST endpoint to get real IDs INSTANTLY (no waiting!)
+		console.log('[conversion] Fetching real IDs via admin REST...');
+		const adminSets = await fetchAdminPhaseGroupSets(phaseGroupId).catch(() => []);
+		if (adminSets.length > 0) {
+			console.log(`[conversion] Got ${adminSets.length} real sets instantly via admin REST`);
+			// Convert admin sets to GqlNode format for caching
+			nodes = adminSets.map((s) => ({
+				id: s.id,
+				winnerId: s.winnerId,
+				slots: [
+					{ entrant: { id: s.entrant1Id } },
+					{ entrant: { id: s.entrant2Id } }
+				]
+			})) as GqlNode[];
+		} else {
+			// Fallback: wait for GQL API (slower)
+			console.log('[conversion] Admin REST returned 0 sets, falling back to GQL wait...');
 			nodes = [];
 			for (let retry = 1; retry <= 10; retry++) {
 				await new Promise<void>((r) => setTimeout(r, retry <= 3 ? 2000 : 4000));
@@ -193,7 +207,7 @@ export async function triggerConversionAndCache(
 					const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
 					nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
 				} catch { /* continue */ }
-				if (nodes.length > 0) { console.log(`[conversion] Got ${nodes.length} real sets after ${retry} retries`); break; }
+				if (nodes.length > 0) break;
 			}
 		}
 	} else {
