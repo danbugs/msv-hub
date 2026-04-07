@@ -718,7 +718,13 @@ export function calculateFinalStandings(
 	}
 
 	for (const [, group] of recordGroups) {
-		group.sort((a, b) => b.totalScore - a.totalScore || a.initialSeed - b.initialSeed);
+		// Sort by total score, but use initial seed when scores are within 3 points
+		// (small differences come from pairing luck, not actual performance).
+		group.sort((a, b) => {
+			const scoreDiff = b.totalScore - a.totalScore;
+			if (Math.abs(scoreDiff) <= 3) return a.initialSeed - b.initialSeed;
+			return scoreDiff;
+		});
 	}
 
 	const sortedKeys = [...recordGroups.keys()].sort((a, b) => {
