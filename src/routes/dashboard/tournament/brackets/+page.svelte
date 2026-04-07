@@ -319,17 +319,16 @@
 	{#if tournament && !tournament.startggSync?.splitConfirmed}
 		<div class="mt-4 rounded-lg border border-amber-800 bg-amber-900/20 px-4 py-3">
 			<p class="text-sm text-amber-300">
-				<span class="font-semibold">StartGG:</span> Go to StartGG and assign the correct players to the
-				<strong>Main Bracket</strong> and <strong>Redemption Bracket</strong> events (see split below).
-				Then click <strong>Split Done</strong> to push seeding and start reporting.
+				<span class="font-semibold">StartGG:</span> Click <strong>Run Bracket Split</strong> to automatically assign players
+				to Main and Redemption bracket events on StartGG, push seeding, and start reporting.
 			</p>
 			<div class="mt-2 flex items-center gap-3">
 				<button
 					onclick={confirmSplit}
 					disabled={splitConfirming}
-					class="rounded-lg bg-amber-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
+					class="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50 transition-colors"
 				>
-					{splitConfirming ? 'Pushing seeding...' : 'Split Done'}
+					{splitConfirming ? 'Assigning players & seeding...' : 'Run Bracket Split'}
 				</button>
 				{#if splitResult}
 					<span class="text-xs text-gray-400">

@@ -576,9 +576,8 @@
 
 					<!-- Split recommendation -->
 					<div class="mt-4 rounded-lg border border-violet-700 bg-violet-900/20 p-3 text-sm text-violet-300">
-						<strong>Next step:</strong> Go to StartGG's Bracket Setup and assign the top {mainPlayers.length} players
-						to the <strong>Main Bracket</strong> event and the remaining {tournament.finalStandings.filter(s => s.bracket === 'redemption').length} players
-						to the <strong>Redemption Bracket</strong> event. Then go to Brackets below to push seeding and start reporting.
+						<strong>Next step:</strong> Go to Brackets and click <strong>Run Bracket Split</strong>.
+						This will automatically assign {mainPlayers.length} players to Main and {tournament.finalStandings.filter(s => s.bracket === 'redemption').length} players to Redemption on StartGG, push seeding, and prepare for reporting.
 					</div>
 				{/each}
 				<a href="/dashboard/tournament/brackets" class="mt-4 inline-block text-sm text-violet-400 hover:text-violet-300">
