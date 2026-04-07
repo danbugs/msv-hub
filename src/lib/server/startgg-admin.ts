@@ -8,6 +8,7 @@ import { gql, EVENT_PHASES_QUERY, fetchPhaseGroups } from './startgg';
 
 const PROD_GQL = 'https://www.start.gg/api/-/gql';
 const LOGIN_URL = 'https://www.start.gg/api/-/rest/user/login';
+const PHASE_REST_URL = 'https://www.start.gg/api/-/rest/phase';
 
 let cachedSession: { cookie: string; expiresAt: number } | null = null;
 
@@ -252,4 +253,68 @@ export async function assignBracketSplit(
 
 	_log(`Done: ${mainOk} main, ${redemptionOk} redemption, ${failed} failed`);
 	return { mainOk, redemptionOk, failed, errors };
+}
+
+/**
+ * Add entrants to a Swiss phase (round) using the internal REST API.
+ * This is needed because players are only added to Swiss Round 1 at registration —
+ * subsequent rounds need to be populated manually (or via this API).
+ */
+export async function addEntrantsToPhase(
+	eventId: number,
+	destPhaseId: number,
+	entrantIds: number[]
+): Promise<{ ok: boolean; error?: string }> {
+	if (!entrantIds.length) return { ok: true };
+
+	const cookie = await getSessionCookie();
+	const now = Math.floor(Date.now() / 1000);
+
+	const initialEntrants: Record<string, boolean> = {};
+	for (const id of entrantIds) initialEntrants[String(id)] = true;
+
+	const res = await fetch(`${PHASE_REST_URL}/${destPhaseId}`, {
+		method: 'PUT',
+		headers: {
+			'Content-Type': 'application/json',
+			'Cookie': cookie,
+			'Client-Version': '20'
+		},
+		body: JSON.stringify({
+			eventId,
+			groupTypeId: 4,
+			isDefault: false,
+			destPhaseLinks: [{
+				phaseInputId: null,
+				name: null,
+				endSeed: null,
+				phaseInputIdx: null,
+				updatedAt: now,
+				originPhaseId: null,
+				startSeed: null,
+				destPhaseId,
+				seedMode: null,
+				maintainMatchup: false,
+				isDefault: false,
+				originLosses: null,
+				entrantIds,
+				expand: [],
+				type: 3,
+				createdAt: now,
+				destSeedOrder: 0,
+				outputType: 1,
+				numSeeds: 0,
+				destBracketSide: 1,
+				originPlacement: null,
+				initialEntrants
+			}]
+		})
+	});
+
+	if (!res.ok) {
+		const text = await res.text().catch(() => '');
+		return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+	}
+
+	return { ok: true };
 }

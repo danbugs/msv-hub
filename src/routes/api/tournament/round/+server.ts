@@ -4,6 +4,7 @@ import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
 import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
+import { addEntrantsToPhase } from '$lib/server/startgg-admin';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -170,6 +171,15 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 				}
 			} catch { /* best effort */ }
 		}
+		// Add all entrants to Final Standings phase (they're only in R1 by default)
+		if (tournament.startggFinalStandingsPhaseId && tournament.startggEventId) {
+			const allEntrantIds = tournament.entrants
+				.map((e) => e.startggEntrantId)
+				.filter((id): id is number => id !== undefined);
+			await addEntrantsToPhase(tournament.startggEventId, tournament.startggFinalStandingsPhaseId, allEntrantIds)
+				.catch((e) => console.error(`[StartGG] Failed to add entrants to Final Standings: ${e}`));
+		}
+
 		let finalStandingsSynced = false;
 		if (tournament.startggFinalStandingsPhaseId && tournament.startggFinalStandingsPhaseGroupId) {
 			const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
@@ -257,6 +267,22 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const pgId = roundGroup?.id;
 	const roundPhaseId = roundGroup?.phaseId ?? tournament.startggPhase1Id;
 	if (nextRound > 1 && roundPhaseId && pgId) {
+		// Add all entrants to this round's phase (they're only in R1 by default)
+		if (tournament.startggEventId) {
+			const allEntrantIds = tournament.entrants
+				.map((e) => e.startggEntrantId)
+				.filter((id): id is number => id !== undefined);
+			if (allEntrantIds.length) {
+				const addResult = await addEntrantsToPhase(tournament.startggEventId, roundPhaseId, allEntrantIds)
+					.catch((e) => ({ ok: false as const, error: String(e) }));
+				if (addResult.ok) {
+					console.log(`[StartGG] Added ${allEntrantIds.length} entrants to round ${nextRound} phase ${roundPhaseId}`);
+				} else {
+					console.error(`[StartGG] Failed to add entrants to round ${nextRound}: ${addResult.error}`);
+				}
+			}
+		}
+
 		const entrantMap2 = new Map(tournament.entrants.map((e) => [e.id, e]));
 		const sgPairings = assignedMatches
 			.map((m): [number, number] | null => {
