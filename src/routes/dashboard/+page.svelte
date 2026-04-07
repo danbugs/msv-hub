@@ -61,8 +61,8 @@
 							<li>Go to <strong class="text-gray-200">Attendees</strong> and add the weekly TOs. Aim for <strong class="text-gray-200">3 TOs per event (no more than 4)</strong>.</li>
 							<li>If short on TOs, ping volunteers and offer them priority registration.</li>
 							<li>When adding a TO, register them for <strong class="text-gray-200">all three events</strong> (Swiss, Main Bracket, Redemption Bracket).</li>
-							<li>In custom options, select whether the TO is bringing a setup (TOs usually should). Leave the "past Wednesday" checkbox <strong class="text-gray-200">unchecked</strong> to indicate this is a priority registration (not past the deadline).</li>
-							<li>Mark that the TO consents to the event being livestreamed.</li>
+							<li>In custom options, select whether the TO is bringing a setup (TOs usually should). Select <strong class="text-gray-200">no</strong> to it being "past Wednesday 8:30 AM".</li>
+							<li>Mark that the TO consents to being livestreamed during the event.</li>
 						</ol>
 						<p class="font-medium text-white">Microsoft registration:</p>
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">

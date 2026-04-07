@@ -19,6 +19,7 @@
 
 	let { bracket, entrants, onReport, onCall, onStream }: Props = $props();
 
+	let showProjected = $state(false);
 	let now = $state(Date.now());
 	onMount(() => {
 		const id = setInterval(() => { now = Date.now(); }, 1000);
@@ -39,6 +40,82 @@
 		if (!id) return undefined;
 		return entrants.find((e) => e.id === id);
 	}
+
+	/** Compute projected players for unplayed matches (higher seed always wins) */
+	const projectedPlayers = $derived.by(() => {
+		if (!showProjected) return new Map<string, { top?: string; bottom?: string }>();
+		const seedMap = new Map(bracket.players.map((p) => [p.entrantId, p.seed]));
+		const projected = new Map<string, { top?: string; bottom?: string }>();
+
+		// Clone match state
+		const matchState = new Map(bracket.matches.map((m) => [m.id, {
+			topPlayerId: m.topPlayerId,
+			bottomPlayerId: m.bottomPlayerId,
+			winnerId: m.winnerId,
+			loserId: m.topPlayerId && m.bottomPlayerId && m.winnerId
+				? (m.winnerId === m.topPlayerId ? m.bottomPlayerId : m.topPlayerId)
+				: undefined,
+			winnerNextMatchId: m.winnerNextMatchId,
+			winnerNextSlot: m.winnerNextSlot,
+			loserNextMatchId: m.loserNextMatchId,
+			loserNextSlot: m.loserNextSlot,
+		}]));
+
+		// Simulate: process matches in round order (positive first, then negative)
+		const sortedIds = bracket.matches
+			.map((m) => m.id)
+			.sort((a, b) => {
+				const ma = matchState.get(a)!;
+				const mb = matchState.get(b)!;
+				const ra = bracket.matches.find((m) => m.id === a)!.round;
+				const rb = bracket.matches.find((m) => m.id === b)!.round;
+				// Process positive rounds first (ascending), then negative (ascending by abs)
+				if (ra > 0 && rb > 0) return ra - rb;
+				if (ra > 0 && rb < 0) return -1;
+				if (ra < 0 && rb > 0) return 1;
+				return Math.abs(ra) - Math.abs(rb);
+			});
+
+		for (const matchId of sortedIds) {
+			const ms = matchState.get(matchId)!;
+			if (!ms.topPlayerId || !ms.bottomPlayerId) continue;
+			if (ms.winnerId) {
+				// Already reported — advance as-is
+			} else {
+				// Project: higher seed wins
+				const topSeed = seedMap.get(ms.topPlayerId) ?? Infinity;
+				const botSeed = seedMap.get(ms.bottomPlayerId) ?? Infinity;
+				ms.winnerId = topSeed <= botSeed ? ms.topPlayerId : ms.bottomPlayerId;
+				ms.loserId = topSeed <= botSeed ? ms.bottomPlayerId : ms.topPlayerId;
+				projected.set(matchId, { top: ms.topPlayerId, bottom: ms.bottomPlayerId });
+			}
+			// Advance winner
+			if (ms.winnerNextMatchId) {
+				const next = matchState.get(ms.winnerNextMatchId);
+				if (next) {
+					if (ms.winnerNextSlot === 'top') next.topPlayerId = ms.winnerId;
+					else next.bottomPlayerId = ms.winnerId;
+				}
+			}
+			// Advance loser
+			if (ms.loserNextMatchId && ms.loserId) {
+				const next = matchState.get(ms.loserNextMatchId);
+				if (next) {
+					if (ms.loserNextSlot === 'top') next.topPlayerId = ms.loserId;
+					else next.bottomPlayerId = ms.loserId;
+				}
+			}
+		}
+
+		// Build projection map: for each match that doesn't have players yet, show projected players
+		const result = new Map<string, { top?: string; bottom?: string }>();
+		for (const m of bracket.matches) {
+			const ms = matchState.get(m.id)!;
+			if (!m.topPlayerId && ms.topPlayerId) result.set(m.id, { ...result.get(m.id), top: ms.topPlayerId });
+			if (!m.bottomPlayerId && ms.bottomPlayerId) result.set(m.id, { ...result.get(m.id), bottom: ms.bottomPlayerId });
+		}
+		return result;
+	});
 
 	function getRoundName(round: number, isGFR: boolean): string {
 		if (isGFR) return 'Grand Final Reset';
@@ -205,6 +282,13 @@
 	);
 </script>
 
+<div class="mb-2">
+	<label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
+		<input type="checkbox" bind:checked={showProjected}
+			class="rounded border-gray-600 bg-gray-800 text-violet-600 focus:ring-violet-500" />
+		Show Projected
+	</label>
+</div>
 <div class="overflow-x-auto rounded-xl border border-gray-800 bg-gray-950 p-4">
 	<!-- Winners round labels -->
 	<div class="relative" style="width: {layout.width}px; height: 16px; margin-bottom: 2px">
@@ -236,8 +320,13 @@
 		</svg>
 
 		{#each layout.matchPositions as { match, x, y }}
-			{@const top = getEntrant(match.topPlayerId)}
-			{@const bot = getEntrant(match.bottomPlayerId)}
+			{@const proj = projectedPlayers.get(match.id)}
+			{@const topId = match.topPlayerId ?? proj?.top}
+			{@const botId = match.bottomPlayerId ?? proj?.bottom}
+			{@const top = getEntrant(topId)}
+			{@const bot = getEntrant(botId)}
+			{@const topIsProjected = !match.topPlayerId && !!proj?.top}
+			{@const botIsProjected = !match.bottomPlayerId && !!proj?.bottom}
 			{@const ready = !match.winnerId && !!match.topPlayerId && !!match.bottomPlayerId}
 			{@const called = ready && !!match.calledAt}
 
@@ -252,7 +341,7 @@
 					<span class="text-xs text-gray-500 w-6 text-right shrink-0">
 						{top ? `#${top.initialSeed}` : ''}
 					</span>
-					<span class="flex-1 truncate text-sm {match.winnerId === match.topPlayerId ? 'text-green-300 font-medium' : 'text-white'}">
+					<span class="flex-1 truncate text-sm {topIsProjected ? 'text-amber-600 italic' : match.winnerId === match.topPlayerId ? 'text-green-300 font-medium' : 'text-white'}">
 						{top?.gamerTag ?? (match.topPlayerId ? '?' : '—')}
 					</span>
 					{#if match.topScore !== undefined}
@@ -269,7 +358,7 @@
 					<span class="text-xs text-gray-500 w-6 text-right shrink-0">
 						{bot ? `#${bot.initialSeed}` : ''}
 					</span>
-					<span class="flex-1 truncate text-sm {match.winnerId === match.bottomPlayerId ? 'text-green-300 font-medium' : 'text-white'}">
+					<span class="flex-1 truncate text-sm {botIsProjected ? 'text-amber-600 italic' : match.winnerId === match.bottomPlayerId ? 'text-green-300 font-medium' : 'text-white'}">
 						{bot?.gamerTag ?? (match.bottomPlayerId ? '?' : '—')}
 					</span>
 					{#if match.bottomScore !== undefined}
