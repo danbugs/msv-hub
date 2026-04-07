@@ -284,12 +284,12 @@
 				<div class="mt-4 rounded-lg border border-amber-700 bg-amber-950/60 px-4 py-3">
 					<p class="text-sm text-amber-200">
 						<span class="font-semibold">StartGG:</span> Pairings for round {pr.roundNumber} were updated due to a misreport fix.
-						Go to StartGG and <strong>reset the Swiss Round {pr.roundNumber} phase</strong>, then click the button below to re-sync.
+						Click below to restart the phase on StartGG and re-sync pairings.
 					</p>
 					<div class="mt-2 flex items-center gap-3">
 						<button onclick={confirmPhaseReset} disabled={phaseResetting}
 							class="rounded-lg bg-amber-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-colors">
-							{phaseResetting ? 'Re-syncing...' : 'Phase Reset Done'}
+							{phaseResetting ? 'Restarting & re-syncing...' : 'Restart & Re-sync'}
 						</button>
 					</div>
 				</div>

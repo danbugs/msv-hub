@@ -2,11 +2,11 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { pushPairingsToPhaseGroup } from '$lib/server/startgg';
 import { triggerConversionAndCache } from '$lib/server/startgg-reporter';
+import { restartPhase } from '$lib/server/startgg-admin';
 
 /**
- * POST — "Phase Reset Done": user has manually reset the phase on StartGG.
- * Re-seeds the phase group with the current MSV Hub pairings, then re-triggers
- * preview→real conversion so set IDs are ready for reporting.
+ * POST — Automatically restarts the phase on StartGG, re-seeds with current pairings,
+ * and re-triggers conversion. No manual step needed on StartGG.
  */
 export const POST: RequestHandler = async ({ locals, platform }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -21,7 +21,17 @@ export const POST: RequestHandler = async ({ locals, platform }) => {
 	const round = tournament.rounds.find((r) => r.number === roundNumber);
 	if (!round) return Response.json({ error: `Round ${roundNumber} not found` }, { status: 404 });
 
-	// Build pairings from current round matches
+	// Step 1: Restart the phase on StartGG (resets all sets, un-starts the pool)
+	console.log(`[phase-reset] Restarting phase ${phaseId} for round ${roundNumber}...`);
+	const restartResult = await restartPhase(phaseId).catch((e) => ({ ok: false as const, error: String(e) }));
+	if (!restartResult.ok) {
+		return Response.json({
+			error: `Phase restart failed: ${restartResult.error}`
+		}, { status: 400 });
+	}
+	console.log(`[phase-reset] Phase ${phaseId} restarted`);
+
+	// Step 2: Re-seed with current MSV Hub pairings
 	const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
 	const sgPairings = round.matches
 		.map((m): [number, number] | null => {
@@ -35,25 +45,23 @@ export const POST: RequestHandler = async ({ locals, platform }) => {
 		? entrantMap.get(round.byePlayerId)?.startggEntrantId
 		: undefined;
 
-	// Re-seed
 	const seedResult = await pushPairingsToPhaseGroup(phaseId, phaseGroupId, sgPairings, byeEntrantId)
 		.catch((e) => ({ ok: false as const, error: String(e) }));
 
 	if (!seedResult.ok) {
-		return Response.json({
-			error: `Re-seed failed: ${seedResult.error}. Make sure you reset the phase on StartGG first.`
-		}, { status: 400 });
+		console.error(`[phase-reset] Re-seed failed: ${seedResult.error}`);
+	} else {
+		console.log(`[phase-reset] Re-seed successful`);
 	}
 
-	// Clear cached set IDs
+	// Step 3: Clear cached set IDs and trigger conversion
 	for (const m of round.matches) m.startggSetId = undefined;
 	tournament.startggSync!.pendingPhaseReset = undefined;
 	tournament.startggSync!.cacheReady = false;
 	await saveTournament(tournament);
 
-	// Run conversion via waitUntil (keeps function alive after response on Vercel)
 	const conversionPromise = triggerConversionAndCache(tournament, roundNumber, phaseGroupId).catch((e) => {
-		console.error(`[phase-reset] triggerConversionAndCache failed: ${e}`);
+		console.error(`[phase-reset] conversion failed: ${e}`);
 	});
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any

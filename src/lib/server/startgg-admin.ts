@@ -256,6 +256,31 @@ export async function assignBracketSplit(
 }
 
 /**
+ * Restart a phase on StartGG — resets all sets and un-starts the pool.
+ * This replaces the manual "go to StartGG and reset the phase" step.
+ */
+export async function restartPhase(phaseId: number): Promise<{ ok: boolean; error?: string }> {
+	const cookie = await getSessionCookie();
+	const res = await fetch(`${PHASE_REST_URL}/${phaseId}/restart`, {
+		method: 'PUT',
+		headers: {
+			'Content-Type': 'application/json',
+			'Cookie': cookie,
+			'Client-Version': '20'
+		},
+		body: JSON.stringify({
+			linkedStates: [{ entityKey: 'phase', id: phaseId, action: 'PHASE_UPDATE' }]
+		})
+	});
+
+	if (!res.ok) {
+		const text = await res.text().catch(() => '');
+		return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+	}
+	return { ok: true };
+}
+
+/**
  * Add entrants to a Swiss phase (round) using the internal REST API.
  * This is needed because players are only added to Swiss Round 1 at registration —
  * subsequent rounds need to be populated manually (or via this API).
