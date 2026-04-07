@@ -241,11 +241,9 @@
 			{@const ready = !match.winnerId && !!match.topPlayerId && !!match.bottomPlayerId}
 			{@const called = ready && !!match.calledAt}
 
-			<div class="absolute rounded-lg border bg-gray-900 overflow-hidden"
-				style="left: {x}px; top: {y}px; width: {CARD_W}px"
-				class:border-green-600={called}
-				class:border-violet-600={match.isStream && ready && !called}
-				class:border-gray-700={!match.isStream && !called}>
+			<div class="absolute rounded-lg border overflow-hidden
+					{called ? 'border-green-500 bg-green-950/40 ring-1 ring-green-500/30' : match.isStream && ready ? 'border-violet-600 bg-gray-900' : match.winnerId ? 'border-gray-700 bg-gray-900/80' : 'border-gray-700 bg-gray-900'}"
+				style="left: {x}px; top: {y}px; width: {CARD_W}px">
 
 				<!-- Top player -->
 				<div class="flex items-center gap-1.5 px-2 py-1.5 border-b border-gray-800
@@ -309,10 +307,11 @@
 									{#if called && match.calledAt}{elapsed(match.calledAt)}{:else}{called ? 'Called' : 'Call'}{/if}
 								</button>
 							{/if}
-							{#if onStream && ready && !match.isStream}
+							{#if onStream && ready}
 								<button onclick={() => onStream!(match)}
-									class="rounded px-2 py-0.5 text-xs text-gray-500 hover:text-violet-400 hover:bg-violet-900/20 transition-colors"
-									title="Set as stream match">
+									class="rounded px-2 py-0.5 text-xs transition-colors
+										{match.isStream ? 'text-violet-400 bg-violet-900/30 hover:bg-red-900/20 hover:text-red-400' : 'text-gray-500 hover:text-violet-400 hover:bg-violet-900/20'}"
+									title={match.isStream ? 'Remove from stream' : 'Set as stream match'}>
 									📺
 								</button>
 							{/if}

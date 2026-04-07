@@ -998,6 +998,10 @@ function normalizeSeedOrder(matches: BracketMatch[], players: { entrantId: strin
 	const seedMap = new Map(players.map((p) => [p.entrantId, p.seed]));
 	for (const m of matches) {
 		if (!m.topPlayerId || !m.bottomPlayerId || m.winnerId) continue;
+		// Don't normalize GF or GFR — top must be winners finalist, bottom must be losers finalist
+		if (m.id.includes('-GFR-')) continue;
+		const maxR = Math.max(...matches.filter((x) => x.round > 0 && !x.id.includes('-GFR-')).map((x) => x.round));
+		if (m.round === maxR && !m.winnerNextMatchId) continue; // This is GF
 		const topSeed = seedMap.get(m.topPlayerId) ?? Infinity;
 		const botSeed = seedMap.get(m.bottomPlayerId) ?? Infinity;
 		if (botSeed < topSeed) {

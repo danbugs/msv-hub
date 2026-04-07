@@ -14,19 +14,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const body = await request.json();
-	const { name, slug, entrants, numStations, streamStation } = body as {
+	const { name, slug, entrants, numStations, streamStation, numRounds: numRoundsOverride } = body as {
 		name: string;
 		slug: string;
 		entrants: { gamerTag: string; initialSeed: number }[];
 		numStations: number;
 		streamStation?: number;
+		numRounds?: number;
 	};
 
 	if (!name || !slug || !entrants?.length || !numStations) {
 		return Response.json({ error: 'name, slug, entrants, and numStations are required' }, { status: 400 });
 	}
 
-	const numRounds = calculateRecommendedRounds(entrants.length, numStations);
+	const numRounds = numRoundsOverride ?? calculateRecommendedRounds(entrants.length, numStations);
 	if (numRounds === null) {
 		return Response.json({ error: 'Too few stations for this number of players' }, { status: 400 });
 	}

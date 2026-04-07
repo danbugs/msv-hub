@@ -20,7 +20,7 @@
 	let currentStep = $state(1);
 	let startingSwiss = $state(false);
 	let numStations = $state('16');
-	let streamStation = $state('16');
+	let swissRounds = $state('');  // empty = auto (calculated from player count + stations)
 	let eventUrl = $state('');
 	let loadingEvent = $state(false);
 
@@ -168,7 +168,7 @@
 		const res = await fetch('/api/tournament/from-event', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ eventSlug: eventUrl.trim(), numStations: Number(numStations), streamStation: Number(streamStation) })
+			body: JSON.stringify({ eventSlug: eventUrl.trim(), numStations: Number(numStations), streamStation: 16 })
 		});
 		loadingEvent = false;
 		if (!res.ok) { const data = await res.json(); error = data.error ?? 'Failed'; }
@@ -201,7 +201,8 @@
 			body: JSON.stringify({
 				name, slug,
 				entrants: result.entrants.map((e) => ({ gamerTag: e.gamerTag, initialSeed: e.seedNum })),
-				numStations: Number(numStations), streamStation: Number(streamStation)
+				numStations: Number(numStations), streamStation: 16,
+				numRounds: swissRounds ? Number(swissRounds) : undefined
 			})
 		});
 		startingSwiss = false;
@@ -434,9 +435,10 @@
 						class="mt-1 w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-violet-500 focus:outline-none" />
 				</div>
 				<div>
-					<label for="stream-stn" class="block text-xs text-gray-400">Stream station #</label>
-					<input id="stream-stn" type="number" bind:value={streamStation} min="1"
-						class="mt-1 w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-violet-500 focus:outline-none" />
+					<label for="swiss-rounds" class="block text-xs text-gray-400">Swiss rounds</label>
+					<input id="swiss-rounds" type="number" bind:value={swissRounds} min="1" max="10"
+						placeholder="auto"
+						class="mt-1 w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
 				</div>
 				<button onclick={startSwiss} disabled={startingSwiss || !numStations}
 					class="rounded-lg bg-violet-600 px-5 py-2 font-medium text-white hover:bg-violet-500 disabled:opacity-50">
@@ -466,11 +468,6 @@
 					<div>
 						<label for="fe-stations" class="block text-xs text-gray-400">Stations</label>
 						<input id="fe-stations" type="number" bind:value={numStations} min="1"
-							class="mt-1 w-20 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-violet-500 focus:outline-none" />
-					</div>
-					<div>
-						<label for="fe-stream" class="block text-xs text-gray-400">Stream</label>
-						<input id="fe-stream" type="number" bind:value={streamStation} min="1"
 							class="mt-1 w-20 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-violet-500 focus:outline-none" />
 					</div>
 					<button onclick={startFromEvent} disabled={loadingEvent || !eventUrl.trim()}

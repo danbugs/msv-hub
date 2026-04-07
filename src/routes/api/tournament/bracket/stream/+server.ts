@@ -21,6 +21,26 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	const targetMatch = bracket.matches.find((m) => m.id === matchId);
 	if (!targetMatch) return Response.json({ error: 'Match not found' }, { status: 404 });
 
+	// If target is already stream, toggle it OFF (remove stream from all brackets)
+	if (targetMatch.isStream) {
+		const streamStn = tournament.settings.streamStation;
+		const allRegular = Array.from({ length: tournament.settings.numStations }, (_, i) => i + 1)
+			.filter((s) => s !== streamStn);
+		const halfIdx = Math.floor(allRegular.length / 2);
+		const pool = bracketName === 'redemption' ? allRegular.slice(halfIdx) : allRegular.slice(0, halfIdx);
+		const usedStations = new Set(
+			[...tournament.brackets.main.matches, ...tournament.brackets.redemption.matches]
+				.filter((m) => m.station !== undefined && m.station !== streamStn && !m.winnerId && m.id !== targetMatch.id)
+				.map((m) => m.station!)
+		);
+		targetMatch.isStream = false;
+		for (const s of pool) {
+			if (!usedStations.has(s)) { targetMatch.station = s; break; }
+		}
+		await saveTournament(tournament);
+		return Response.json({ ok: true, removed: true });
+	}
+
 	const streamStn = tournament.settings.streamStation;
 
 	// Build station pools same as initial assignment (exclude stream, split evenly)
