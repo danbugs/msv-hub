@@ -16,10 +16,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const body = await request.json();
-	const { eventSlug, numStations, streamStation } = body as {
+	const { eventSlug, numStations, streamStation, numRounds: numRoundsOverride } = body as {
 		eventSlug: string;
 		numStations: number;
 		streamStation?: number;
+		numRounds?: number;
 	};
 
 	if (!eventSlug || !numStations) {
@@ -57,7 +58,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'No seeds found in first phase' }, { status: 404 });
 	}
 
-	const numRounds = calculateRecommendedRounds(seeds.length, numStations);
+	const numRounds = numRoundsOverride ?? calculateRecommendedRounds(seeds.length, numStations);
 	if (numRounds === null) {
 		return Response.json({ error: 'Too few stations for this number of players' }, { status: 400 });
 	}

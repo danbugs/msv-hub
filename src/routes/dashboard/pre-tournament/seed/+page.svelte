@@ -168,7 +168,7 @@
 		const res = await fetch('/api/tournament/from-event', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ eventSlug: eventUrl.trim(), numStations: Number(numStations), streamStation: 16 })
+			body: JSON.stringify({ eventSlug: eventUrl.trim(), numStations: Number(numStations), streamStation: 16, numRounds: swissRounds ? Number(swissRounds) : undefined })
 		});
 		loadingEvent = false;
 		if (!res.ok) { const data = await res.json(); error = data.error ?? 'Failed'; }
@@ -469,6 +469,12 @@
 						<label for="fe-stations" class="block text-xs text-gray-400">Stations</label>
 						<input id="fe-stations" type="number" bind:value={numStations} min="1"
 							class="mt-1 w-20 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-violet-500 focus:outline-none" />
+					</div>
+					<div>
+						<label for="fe-rounds" class="block text-xs text-gray-400">Swiss rounds</label>
+						<input id="fe-rounds" type="number" bind:value={swissRounds} min="1" max="10"
+							placeholder="auto"
+							class="mt-1 w-20 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
 					</div>
 					<button onclick={startFromEvent} disabled={loadingEvent || !eventUrl.trim()}
 						class="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50">
