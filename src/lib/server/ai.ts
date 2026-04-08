@@ -32,6 +32,7 @@ export async function generateFastestRegMessage(
 ): Promise<string> {
 	const client = getClient();
 	const runnersUp = topRunners.length > 0 ? `\n\nTop 3 after: ${topRunners.join(', ')}` : '';
+	// Note: winner may be a Discord mention (<@id>) or gamer tag. topRunners are always gamer tags.
 
 	const response = await client.messages.create({
 		model: 'claude-haiku-4-5-20251001',

@@ -186,13 +186,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const runnersUp = publicRegs.slice(1, 4);
 		const eventLabel = extractEventLabel(effectiveSlug);
 		const winnerMention = mentionStr(winner.gamerTag, winner.discordId);
-		const runnerMentions = runnersUp.map((r) => mentionStr(r.gamerTag, r.discordId));
+		// Only ping the winner; runners-up just use gamer tags
+		const runnerTags = runnersUp.map((r) => r.gamerTag);
 
 		let funMessage: string;
 		try {
-			funMessage = await generateFastestRegMessage(winnerMention, eventLabel, runnerMentions);
+			funMessage = await generateFastestRegMessage(winnerMention, eventLabel, runnerTags);
 		} catch {
-			funMessage = `${winnerMention} wins fastest registrant for ${eventLabel}!\n\nTop 3 after: ${runnerMentions.join(', ')}`;
+			funMessage = `${winnerMention} wins fastest registrant for ${eventLabel}!\n\nTop 3 after: ${runnerTags.join(', ')}`;
 		}
 
 		if (!body.postToReal) {
