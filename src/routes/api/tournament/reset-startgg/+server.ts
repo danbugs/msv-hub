@@ -4,8 +4,9 @@ import { gql, EVENT_PHASES_QUERY } from '$lib/server/startgg';
 import { restartPhase, addEntrantsToPhase, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 
 /**
- * POST — Full StartGG reset: restart all Swiss phases, remove entrants from
- * later rounds and bracket events, leaving everyone only in Swiss Round 1.
+ * POST — Full StartGG reset: restart all phases (Swiss + bracket),
+ * remove entrants from later rounds and bracket events,
+ * leaving everyone only in Swiss Round 1.
  */
 export const POST: RequestHandler = async ({ locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -25,22 +26,29 @@ export const POST: RequestHandler = async ({ locals }) => {
 		return Response.json({ error: 'No StartGG event linked' }, { status: 400 });
 	}
 
-	// Step 1: Restart all Swiss phases (resets sets, un-starts pools)
-	log('Step 1: Restarting Swiss phases...');
-	const phaseData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
-		EVENT_PHASES_QUERY, { eventId: swissEventId }
-	);
-	const phases = phaseData?.event?.phases ?? [];
-	for (const phase of phases) {
-		log(`  Restarting ${phase.name} (${phase.id})...`);
-		const result = await restartPhase(phase.id).catch((e) => ({ ok: false, error: String(e) }));
-		log(`  ${result.ok ? '✓' : '✗ ' + result.error}`);
+	// Step 1: Restart ALL phases across ALL events (Swiss + Main + Redemption)
+	log('Step 1: Restarting all phases...');
+	const allEventIds = [swissEventId, mainEventId, redEventId].filter((id): id is number => !!id);
+	for (const eventId of allEventIds) {
+		const phaseData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
+			EVENT_PHASES_QUERY, { eventId }
+		);
+		const phases = phaseData?.event?.phases ?? [];
+		for (const phase of phases) {
+			log(`  Restarting ${phase.name} (${phase.id})...`);
+			const result = await restartPhase(phase.id).catch((e) => ({ ok: false, error: String(e) }));
+			log(`  ${result.ok ? '✓' : '✗ ' + result.error}`);
+		}
 	}
 
-	// Step 2: Clear entrants from all phases except Round 1
-	log('Step 2: Clearing entrants from later phases...');
-	const r1Phase = phases.find((p) => p.name.includes('Round 1'));
-	for (const phase of phases) {
+	// Step 2: Clear entrants from Swiss phases except Round 1
+	log('Step 2: Clearing entrants from later Swiss phases...');
+	const swissPhaseData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
+		EVENT_PHASES_QUERY, { eventId: swissEventId }
+	);
+	const swissPhases = swissPhaseData?.event?.phases ?? [];
+	const r1Phase = swissPhases.find((p) => p.name.includes('Round 1'));
+	for (const phase of swissPhases) {
 		if (phase.id === r1Phase?.id) continue;
 		log(`  Clearing ${phase.name}...`);
 		const result = await addEntrantsToPhase(swissEventId, phase.id, []).catch((e) => ({ ok: false, error: String(e) }));
@@ -48,22 +56,25 @@ export const POST: RequestHandler = async ({ locals }) => {
 	}
 
 	// Step 3: Remove all participants from bracket events (keep only Swiss)
-	if (mainEventId || redEventId) {
-		const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
-		if (tournamentSlug) {
-			log('Step 3: Removing participants from bracket events...');
-			const participants = await getTournamentParticipants(tournamentSlug);
-			let cleaned = 0;
-			for (const p of participants) {
-				const inMain = p.currentEventIds.includes(mainEventId ?? 0);
-				const inRed = p.currentEventIds.includes(redEventId ?? 0);
-				if (!inMain && !inRed) continue;
-				const result = await updateParticipantEvents(p.participantId, [swissEventId], []);
-				if (result.ok) cleaned++;
-				else log(`  ✗ ${p.gamerTag}: ${result.error}`);
+	const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
+	if (tournamentSlug && (mainEventId || redEventId)) {
+		log('Step 3: Removing participants from bracket events...');
+		const participants = await getTournamentParticipants(tournamentSlug);
+		let cleaned = 0;
+		let failed = 0;
+		for (const p of participants) {
+			const inMain = mainEventId ? p.currentEventIds.includes(mainEventId) : false;
+			const inRed = redEventId ? p.currentEventIds.includes(redEventId) : false;
+			if (!inMain && !inRed) continue;
+			const result = await updateParticipantEvents(p.participantId, [swissEventId], []);
+			if (result.ok) {
+				cleaned++;
+			} else {
+				failed++;
+				log(`  ✗ ${p.gamerTag}: ${result.error}`);
 			}
-			log(`  Removed ${cleaned} participants from bracket events`);
 		}
+		log(`  Removed ${cleaned} from brackets${failed > 0 ? `, ${failed} failed` : ''}`);
 	}
 
 	log('Done! StartGG is reset to Swiss Round 1.');
