@@ -105,6 +105,35 @@ export interface FastestRegLeaderboard {
 	updatedAt: number;
 }
 
+/**
+ * Parse existing leaderboard text (from a human-maintained Discord message)
+ * into FastestRegEntry[]. Looks for lines like "MSV#125) @Dom" or "MSV#125) <@123>"
+ */
+export function parseLeaderboardEntries(text: string): FastestRegEntry[] {
+	const entries: FastestRegEntry[] = [];
+	// Match lines like: MSV#125) @Dom  or  MSV#125) <@123456789>  or  MSV#125) Dom
+	const lineRegex = /(?:MSV|MaSV)#(\d+)\)\s*(.+)/gi;
+	let match;
+	while ((match = lineRegex.exec(text)) !== null) {
+		const eventLabel = `MSV#${match[1]}`;
+		let winnerRaw = match[2].trim();
+		let winnerTag = winnerRaw;
+		let winnerDiscordId = '';
+
+		// Extract Discord mention: <@123456789>
+		const mentionMatch = winnerRaw.match(/^<@(\d{17,20})>/);
+		if (mentionMatch) {
+			winnerDiscordId = mentionMatch[1];
+			winnerTag = winnerRaw.replace(/<@\d+>/, '').trim() || `User${mentionMatch[1].slice(-4)}`;
+		}
+		// Strip leading @ from plain text
+		if (winnerTag.startsWith('@')) winnerTag = winnerTag.slice(1);
+
+		entries.push({ eventLabel, winnerTag, winnerDiscordId, runnersUp: [] });
+	}
+	return entries;
+}
+
 const FASTEST_REG_KEY = 'discord:fastest_reg_leaderboard';
 
 export async function getFastestRegLeaderboard(): Promise<FastestRegLeaderboard | null> {

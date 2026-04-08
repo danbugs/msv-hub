@@ -211,11 +211,20 @@ async function postFastestRegistrant(
 	let lb = await getFastestRegLeaderboard();
 	let result = await tryPostToThread(lb);
 
-	// 2. If failed, find latest active thread in forum
+	// 2. If failed, find latest active thread and parse existing leaderboard
 	if (!result) {
 		const latestThread = await getLatestForumThread(guildId, FASTEST_REG_FORUM_ID);
 		if (latestThread) {
-			lb = { entries: [], threadId: latestThread.id, leaderboardMessageId: '', updatedAt: Date.now() };
+			const { getMessages } = await import('$lib/server/discord');
+			const { parseLeaderboardEntries } = await import('$lib/server/store');
+			const threadMsgs = await getMessages(latestThread.id, 50);
+			let existingEntries: FastestRegEntry[] = [];
+			for (const msg of threadMsgs) {
+				const parsed = parseLeaderboardEntries(msg.content);
+				if (parsed.length > existingEntries.length) existingEntries = parsed;
+			}
+			console.log(`[attendee-check] Parsed ${existingEntries.length} existing entries from thread ${latestThread.name}`);
+			lb = { entries: existingEntries, threadId: latestThread.id, leaderboardMessageId: '', updatedAt: Date.now() };
 			result = await tryPostToThread(lb);
 		}
 	}

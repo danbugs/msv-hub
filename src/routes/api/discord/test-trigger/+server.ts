@@ -252,11 +252,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		let posted = await postToThread(lb);
 
 		// 2. If failed (stale/deleted thread), find latest active thread in forum
+		//    and parse existing leaderboard entries from its messages
 		if (!posted) {
 			const { getLatestForumThread } = await import('$lib/server/discord');
+			const { parseLeaderboardEntries } = await import('$lib/server/store');
 			const latestThread = await getLatestForumThread(guildId, FASTEST_REG_FORUM_ID);
 			if (latestThread) {
-				lb = { entries: [], threadId: latestThread.id, leaderboardMessageId: '', updatedAt: Date.now() };
+				// Read messages to find existing leaderboard data
+				const threadMsgs = await getMessages(latestThread.id, 50);
+				let existingEntries: import('$lib/server/store').FastestRegEntry[] = [];
+				for (const msg of threadMsgs) {
+					const parsed = parseLeaderboardEntries(msg.content);
+					if (parsed.length > existingEntries.length) existingEntries = parsed;
+				}
+				console.log(`[test-trigger] Parsed ${existingEntries.length} existing entries from thread ${latestThread.name}`);
+				lb = { entries: existingEntries, threadId: latestThread.id, leaderboardMessageId: '', updatedAt: Date.now() };
 				posted = await postToThread(lb);
 			}
 		}
