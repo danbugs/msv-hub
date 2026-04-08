@@ -173,21 +173,40 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		};
 		const targetDow = DAY_MAP[config.registrationDay] ?? 3;
 		const regThreshold = config.registrationHour * 60 + config.registrationMinute;
+
+		// Parse "April 8 2026 8:30 AM" → add comma: "April 8, 2026 8:30 AM"
+		function parseRegTs(raw: string): Date | null {
+			if (!raw) return null;
+			const withComma = raw.replace(/^(\w+ \d{1,2}) (\d{4})/, '$1, $2');
+			let ts = new Date(withComma);
+			if (!isNaN(ts.getTime())) return ts;
+			ts = new Date(raw);
+			return isNaN(ts.getTime()) ? null : ts;
+		}
+
 		const publicRegs = attendees.filter((a) => {
-			if (!a.registeredAt) return false;
-			const ts = new Date(a.registeredAt);
-			if (isNaN(ts.getTime())) return false;
-			const pst = new Date(ts.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+			const ts = parseRegTs(a.registeredAt);
+			if (!ts) return false;
+			const pstStr = ts.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+			const pst = new Date(pstStr);
 			const dow = pst.getDay();
 			return dow === targetDow && pst.getHours() * 60 + pst.getMinutes() >= regThreshold;
 		});
 
 		if (publicRegs.length < 4) {
+			// Debug: show first 10 attendees with parsed dates for troubleshooting
+			const debug = attendees.slice(0, 10).map((a) => {
+				const ts = parseRegTs(a.registeredAt);
+				let pstInfo = 'unparseable';
+				if (ts) {
+					const pst = new Date(ts.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+					pstInfo = `dow=${pst.getDay()} ${pst.getHours()}:${String(pst.getMinutes()).padStart(2, '0')} (target: dow=${targetDow} >=${config.registrationHour}:${String(config.registrationMinute).padStart(2, '0')})`;
+				}
+				return { tag: a.gamerTag, raw: a.registeredAt, pst: pstInfo };
+			});
 			return Response.json({
 				error: `Only ${publicRegs.length} public registrants (need 4). Total attendees: ${attendees.length}`,
-				attendees: attendees.slice(0, 10).map((a) => ({
-					tag: a.gamerTag, registeredAt: a.registeredAt, discordId: a.discordId
-				}))
+				debug
 			}, { status: 400 });
 		}
 

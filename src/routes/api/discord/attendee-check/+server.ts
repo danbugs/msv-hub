@@ -71,13 +71,37 @@ const DAY_MAP: Record<string, number> = {
 };
 
 /**
+ * Parse a StartGG CSV date+time string like "April 8 2026 8:30 AM" or "4/8/2026 8:30 AM".
+ * new Date() can't reliably parse "April 8 2026" (no comma), so we normalize first.
+ */
+function parseRegTimestamp(raw: string): Date | null {
+	if (!raw) return null;
+
+	// Try adding comma after day number: "April 8 2026" → "April 8, 2026"
+	const withComma = raw.replace(/^(\w+ \d{1,2}) (\d{4})/, '$1, $2');
+	let ts = new Date(withComma);
+	if (!isNaN(ts.getTime())) return ts;
+
+	// Try as-is
+	ts = new Date(raw);
+	if (!isNaN(ts.getTime())) return ts;
+
+	return null;
+}
+
+/** Convert a Date to Pacific Time components. */
+function toPacific(d: Date): { dow: number; hour: number; minute: number } {
+	const pstStr = d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+	const pst = new Date(pstStr);
+	return { dow: pst.getDay(), hour: pst.getHours(), minute: pst.getMinutes() };
+}
+
+/**
  * Get the fastest registrants from the StartGG export CSV.
  *
  * The CSV rows are already in registration order (earliest first).
  * We filter out priority registrants — anyone who registered BEFORE
  * the configured public reg day+time (e.g. Wednesday 8:30 AM PST).
- *
- * Returns attendees in registration order with their Discord IDs.
  */
 async function findFastestRegistrants(
 	tournamentId: number,
@@ -88,23 +112,18 @@ async function findFastestRegistrants(
 	const attendees = await exportAttendees(tournamentId);
 	if (attendees.length === 0) return [];
 
-	const targetDow = DAY_MAP[regDay] ?? 3; // default to Wednesday
-	const regThresholdMinutes = regHour * 60 + regMinute; // e.g. 8:30 = 510
+	const targetDow = DAY_MAP[regDay] ?? 3;
+	const regThresholdMinutes = regHour * 60 + regMinute;
 
 	const results: { gamerTag: string; discordId: string; registeredAt: string }[] = [];
 
 	for (const a of attendees) {
-		if (!a.registeredAt) continue;
-		const ts = new Date(a.registeredAt);
-		if (isNaN(ts.getTime())) continue;
+		const ts = parseRegTimestamp(a.registeredAt);
+		if (!ts) continue;
 
-		// Convert to Pacific Time to compare against reg day+time
-		const pst = new Date(ts.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-		const dow = pst.getDay(); // 0=Sun
-		const attendeeMinutes = pst.getHours() * 60 + pst.getMinutes();
+		const { dow, hour, minute } = toPacific(ts);
 
-		// Only include if: same day-of-week as reg day AND time >= reg time
-		if (dow === targetDow && attendeeMinutes >= regThresholdMinutes) {
+		if (dow === targetDow && hour * 60 + minute >= regThresholdMinutes) {
 			results.push({
 				gamerTag: a.gamerTag,
 				discordId: a.discordId,
@@ -113,7 +132,6 @@ async function findFastestRegistrants(
 		}
 	}
 
-	// CSV is already in registration order, so results preserves that order
 	return results;
 }
 
