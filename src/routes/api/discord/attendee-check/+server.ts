@@ -184,16 +184,21 @@ async function postFastestRegistrant(
 	async function tryPostToThread(lb: Awaited<ReturnType<typeof getFastestRegLeaderboard>>): Promise<string | null> {
 		if (!lb?.threadId) return null;
 		try {
-			lb.entries.push(newEntry);
+			// Avoid duplicates on retry
+			if (!lb.entries.some((e) => e.eventLabel === newEntry.eventLabel)) {
+				lb.entries.push(newEntry);
+			}
 			const leaderboardText = buildLeaderboardText(lb.entries);
 
+			// Try to edit Balrog's tracked leaderboard message
 			let edited = false;
 			if (lb.leaderboardMessageId) {
 				try {
 					await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
 					edited = true;
-				} catch { /* not Balrog's message */ }
+				} catch { /* not Balrog's message or deleted */ }
 			}
+			// If can't edit, post a new leaderboard message (once, then track it)
 			if (!edited) {
 				const newMsgId = await sendMessageWithId(lb.threadId, leaderboardText);
 				lb.leaderboardMessageId = newMsgId;
@@ -201,9 +206,10 @@ async function postFastestRegistrant(
 
 			await sendMessage(lb.threadId, funMessage);
 			await saveFastestRegLeaderboard(lb);
-			return `posted to thread, ${edited ? 'edited' : 'posted new'} leaderboard (${eventLabel})`;
-		} catch {
-			return null; // thread probably deleted
+			return `posted to thread, ${edited ? 'edited' : 'new'} leaderboard (${eventLabel})`;
+		} catch (e) {
+			console.error(`[attendee-check] tryPostToThread failed: ${e}`);
+			return null;
 		}
 	}
 
