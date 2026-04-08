@@ -17,6 +17,7 @@ const AI_AVOIDANCE = `CRITICAL STYLE RULES — your message must sound human-wri
 - NEVER use em dashes (—). Use commas, periods, or "..." instead.
 - NEVER use these words/phrases: "delve", "tapestry", "landscape", "it's worth noting", "let's dive", "buckle up", "without further ado", "in the realm of", "game-changer", "revolutionize", "embark"
 - Don't start with "So..." or "Well..."
+- NEVER use negative/aggressive words even as hype: "disgusting", "filthy", "nasty", "sick", "insane", "destroyed", "obliterated". Keep it POSITIVE.
 - Don't use overly structured sentences. Be messy, casual.
 - Use contractions (don't, can't, won't). Never "do not" or "cannot".
 - Typos or informal grammar are OK and even encouraged.`;

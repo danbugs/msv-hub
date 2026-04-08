@@ -184,24 +184,27 @@ async function postFastestRegistrant(
 	const { getMessages: fetchMessages } = await import('$lib/server/discord');
 	const { parseLeaderboardEntries } = await import('$lib/server/store');
 
-	// Resolve which thread to post to
 	let lb = await getFastestRegLeaderboard();
 	let threadId = lb?.threadId ?? '';
 	let leaderboardMessageId = lb?.leaderboardMessageId ?? '';
 
-	// Verify thread is still valid
+	// Try to read the thread; if it fails, find the latest active one
+	let threadMsgs: Awaited<ReturnType<typeof fetchMessages>> = [];
 	if (threadId) {
-		try { await fetchMessages(threadId, 1); } catch { threadId = ''; leaderboardMessageId = ''; }
+		try { threadMsgs = await fetchMessages(threadId, 50); } catch { threadId = ''; leaderboardMessageId = ''; }
 	}
 	if (!threadId) {
 		const latestThread = await getLatestForumThread(guildId, FASTEST_REG_FORUM_ID);
-		if (latestThread) { threadId = latestThread.id; leaderboardMessageId = ''; }
+		if (latestThread) {
+			threadId = latestThread.id;
+			leaderboardMessageId = '';
+			try { threadMsgs = await fetchMessages(threadId, 50); } catch { threadId = ''; }
+		}
 	}
 
 	let result: string;
 
 	if (threadId) {
-		const threadMsgs = await fetchMessages(threadId, 50);
 
 		// Primary: Balrog's own leaderboard message (has all entries including Balrog's additions)
 		// Fallback: the OP (human-maintained, only has original entries)

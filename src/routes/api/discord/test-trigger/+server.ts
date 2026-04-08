@@ -224,10 +224,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		let threadId = lb?.threadId ?? '';
 		let leaderboardMessageId = lb?.leaderboardMessageId ?? '';
 
-		// Verify thread is still valid; if not, find the latest active one
+		// Try to read the thread; if it fails (deleted/503), find the latest active one
+		let threadMsgs: import('$lib/server/discord').DiscordMessage[] = [];
 		if (threadId) {
 			try {
-				await getMessages(threadId, 1); // throws if thread is deleted
+				threadMsgs = await getMessages(threadId, 50);
 			} catch {
 				threadId = '';
 				leaderboardMessageId = '';
@@ -238,11 +239,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			if (latestThread) {
 				threadId = latestThread.id;
 				leaderboardMessageId = '';
+				try {
+					threadMsgs = await getMessages(threadId, 50);
+				} catch { threadId = ''; }
 			}
 		}
 
 		if (threadId) {
-			const threadMsgs = await getMessages(threadId, 50);
 
 			// Primary source: Balrog's own leaderboard message (has all entries including ones Balrog added)
 			// Fallback: the OP (human-maintained, only has original entries)
