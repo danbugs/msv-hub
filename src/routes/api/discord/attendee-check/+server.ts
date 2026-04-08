@@ -174,7 +174,7 @@ async function postFastestRegistrant(
 		funMessage = `${winnerMention} wins fastest registrant for ${eventLabel}!\n\nTop 3 after: ${runnerTags.join(', ')}`;
 	}
 
-	// Load or create leaderboard
+	// Load leaderboard, or find the latest existing thread in the forum
 	let lb = await getFastestRegLeaderboard();
 
 	const newEntry: FastestRegEntry = {
@@ -184,52 +184,51 @@ async function postFastestRegistrant(
 		runnersUp: runnersUp.map((r) => ({ tag: r.gamerTag, discordId: r.discordId }))
 	};
 
+	// If no Redis record, look for the latest active thread in the forum
+	if (!lb?.threadId) {
+		const latestThread = await getLatestForumThread(guildId, FASTEST_REG_FORUM_ID);
+		if (latestThread) {
+			lb = { entries: [], threadId: latestThread.id, leaderboardMessageId: '', updatedAt: Date.now() };
+		}
+	}
+
 	if (lb && lb.threadId) {
-		// Add entry and update the leaderboard message
 		lb.entries.push(newEntry);
 		const leaderboardText = buildLeaderboardText(lb.entries);
 
-		// Try to edit Balrog's leaderboard message. If it fails (e.g. not Balrog's message),
+		// Try to edit Balrog's leaderboard message. If it fails (not Balrog's msg),
 		// post a new leaderboard reply and track that one instead.
 		let edited = false;
 		if (lb.leaderboardMessageId) {
 			try {
 				await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
 				edited = true;
-			} catch {
-				// Can't edit (probably not Balrog's message) — post new one
-			}
+			} catch { /* not Balrog's message */ }
 		}
 		if (!edited) {
 			const newMsgId = await sendMessageWithId(lb.threadId, leaderboardText);
 			lb.leaderboardMessageId = newMsgId;
 		}
 
-		// Post the fun reply
 		await sendMessage(lb.threadId, funMessage);
 		await saveFastestRegLeaderboard(lb);
 		return `posted to thread, ${edited ? 'edited' : 'posted new'} leaderboard (${eventLabel})`;
 	} else {
-		// No leaderboard exists — create a new forum thread
+		// No thread exists at all — create a new forum thread
 		const entries = [newEntry];
 		const leaderboardText = buildLeaderboardText(entries);
 
 		const threadName = truncateTo100(`Fastest Registrant — Season`);
 		const thread = await createForumPost(FASTEST_REG_FORUM_ID, threadName, leaderboardText);
-
-		// Post the fun announcement as a reply
 		await sendMessage(thread.id, funMessage);
 
-		// The first message in the thread was created by Balrog via createForumPost,
-		// so we can edit it. Fetch its ID.
 		const { getMessages } = await import('$lib/server/discord');
 		const msgs = await getMessages(thread.id, 1);
-		const firstMsgId = msgs[0]?.id ?? '';
 
 		await saveFastestRegLeaderboard({
 			entries,
 			threadId: thread.id,
-			leaderboardMessageId: firstMsgId,
+			leaderboardMessageId: msgs[0]?.id ?? '',
 			updatedAt: Date.now()
 		});
 		return `created new forum thread (${eventLabel})`;

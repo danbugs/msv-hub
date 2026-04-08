@@ -218,6 +218,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		let lb = await getFastestRegLeaderboard();
 
+		// If no Redis record, find the latest active thread in the forum
+		if (!lb?.threadId) {
+			const { getLatestForumThread } = await import('$lib/server/discord');
+			const latestThread = await getLatestForumThread(guildId, FASTEST_REG_FORUM_ID);
+			if (latestThread) {
+				lb = { entries: [], threadId: latestThread.id, leaderboardMessageId: '', updatedAt: Date.now() };
+			}
+		}
+
 		if (lb && lb.threadId) {
 			lb.entries.push(newEntry);
 			const leaderboardText = buildLeaderboardText(lb.entries);
