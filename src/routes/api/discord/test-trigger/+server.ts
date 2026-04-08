@@ -265,14 +265,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			const { parseLeaderboardEntries } = await import('$lib/server/store');
 			const latestThread = await getLatestForumThread(guildId, FASTEST_REG_FORUM_ID);
 			if (latestThread) {
+				// Read the OP (oldest message = smallest snowflake ID)
 				const threadMsgs = await getMessages(latestThread.id, 50);
-				let existingEntries: import('$lib/server/store').FastestRegEntry[] = [];
-				for (const msg of threadMsgs) {
-					const parsed = parseLeaderboardEntries(msg.content);
-					console.log(`[test-trigger] msg by ${msg.author.username}: ${msg.content.slice(0, 200)} → parsed ${parsed.length} entries`);
-					if (parsed.length > existingEntries.length) existingEntries = parsed;
-				}
-				console.log(`[test-trigger] Best parse: ${existingEntries.length} entries from thread ${latestThread.name}`);
+				const op = threadMsgs.length > 0
+					? threadMsgs.reduce((oldest, m) => BigInt(m.id) < BigInt(oldest.id) ? m : oldest)
+					: null;
+				const existingEntries = op ? parseLeaderboardEntries(op.content) : [];
+				console.log(`[test-trigger] OP: ${op?.content.slice(0, 200) ?? 'none'} → parsed ${existingEntries.length} entries`);
 				lb = { entries: existingEntries, threadId: latestThread.id, leaderboardMessageId: '', updatedAt: Date.now() };
 				posted = await postToThread(lb);
 			}

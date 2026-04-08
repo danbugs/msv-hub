@@ -223,13 +223,13 @@ async function postFastestRegistrant(
 		if (latestThread) {
 			const { getMessages } = await import('$lib/server/discord');
 			const { parseLeaderboardEntries } = await import('$lib/server/store');
+			// Read the OP (oldest message = smallest snowflake ID)
 			const threadMsgs = await getMessages(latestThread.id, 50);
-			let existingEntries: FastestRegEntry[] = [];
-			for (const msg of threadMsgs) {
-				const parsed = parseLeaderboardEntries(msg.content);
-				if (parsed.length > existingEntries.length) existingEntries = parsed;
-			}
-			console.log(`[attendee-check] Parsed ${existingEntries.length} existing entries from thread ${latestThread.name}`);
+			const op = threadMsgs.length > 0
+				? threadMsgs.reduce((oldest, m) => BigInt(m.id) < BigInt(oldest.id) ? m : oldest)
+				: null;
+			const existingEntries: FastestRegEntry[] = op ? parseLeaderboardEntries(op.content) : [];
+			console.log(`[attendee-check] OP parsed: ${existingEntries.length} entries from thread ${latestThread.name}`);
 			lb = { entries: existingEntries, threadId: latestThread.id, leaderboardMessageId: '', updatedAt: Date.now() };
 			result = await tryPostToThread(lb);
 		}
