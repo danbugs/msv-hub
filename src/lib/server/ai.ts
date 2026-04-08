@@ -38,21 +38,24 @@ export async function generateFastestRegMessage(
 	const response = await client.messages.create({
 		model: 'claude-haiku-4-5-20251001',
 		max_tokens: 100,
+		temperature: 1.0,
 		messages: [
 			{
 				role: 'user',
 				content: `You're posting in a Smash Bros local Discord (MSV). Someone won "fastest registrant" (first to register when reg opened).
 
-Write a VERY short message (1-2 sentences). Casual, a little goofy, like a friend posting. Use Smash Bros / fighting game references when possible (frame perfect, buffered input, read the opponent, tech skill, 0-to-death, etc.) but don't force it. Vary your style each time: pun on their name, game reference, short quip, simple congrats with personality. Max 1 emoji. No caps lock. No "ALERT" or "BREAKING". Keep it lowkey and fun.
+Write a VERY short message (1-2 sentences). Casual, a little goofy, like a friend posting. Max 1 emoji. No caps lock. No "ALERT" or "BREAKING". Keep it lowkey and fun.
 
 ${AI_AVOIDANCE}
 
-Examples of the vibe (don't copy these exactly, and NEVER repeat the same joke structure twice in a row):
-- "@Mossayef is our boy and he won fastest registrant for MSV#74!"
-- "HM ( @raphael ) ? More like, He Must have gotten fastest reg at MSV#70!"
-- "The 1 in his name stands for #1 fastest registrant! @BrenX1 wins fastest registrant for MSV#78!"
-- "@Captain L decided to not Captain Lose this one and took fastest registrant for MSV#75!"
-- "@xInferno frame-perfect cancelled registration and hit confirm for MSV#73!"
+IMPORTANT: You MUST pick ONE of these styles at random. Do NOT default to the same style every time:
+1. NAME PUN — make a pun or wordplay on the winner's name (e.g. "HM ( @raphael ) ? More like, He Must have gotten fastest reg!")
+2. GAME REFERENCE — use a Smash/FGC term (frame perfect, buffered input, 0-to-death, tech chase, spot dodge, parry, etc.) but pick a DIFFERENT term each time
+3. SIMPLE HYPE — just a casual congrats with personality (e.g. "@Mossayef is our boy and he won fastest registrant!")
+4. NARRATIVE — tell a tiny story (e.g. "@Captain L decided to not Captain Lose this one and took fastest registrant!")
+5. QUESTION/REACTION — act surprised or ask rhetorically (e.g. "wait, @BrenX1 again?? that's three in a row!")
+
+Pick style number: ${Math.floor(Math.random() * 5) + 1}
 
 Winner: @${winnerTag}
 Event: ${eventName}
@@ -83,6 +86,7 @@ export async function generateMotivationalMessage(): Promise<string> {
 	const response = await client.messages.create({
 		model: 'claude-haiku-4-5-20251001',
 		max_tokens: 100,
+		temperature: 1.0,
 		messages: [
 			{
 				role: 'user',
