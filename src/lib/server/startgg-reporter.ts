@@ -348,8 +348,10 @@ export async function reportSwissMatch(
 
 		// If we just reported a preview set, conversion happens server-side.
 		// Instantly cache all real IDs via the admin REST endpoint.
+		console.log(`[report] Set ${setId} reported ok, isPreview=${setId.startsWith('preview_')}`);
 		if (setId.startsWith('preview_')) {
 			const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
+			console.log(`[report] Triggering admin REST cache for PG ${pgId}`);
 			if (pgId) {
 				await cacheRealSetIds(tournament, roundNumber, pgId);
 			}

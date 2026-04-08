@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { getActiveTournament } from '$lib/server/store';
+import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { gql, EVENT_PHASES_QUERY } from '$lib/server/startgg';
 import { restartPhase, addEntrantsToPhase, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 
@@ -106,6 +106,17 @@ export const POST: RequestHandler = async ({ locals }) => {
 		log(`  Removed ${cleaned} from brackets${failed > 0 ? `, ${failed} failed` : ''}`);
 	}
 
-	log('Done! StartGG is reset to Swiss Round 1.');
+	// Step 4: Reset MSV Hub tournament state to Swiss Round 1
+	log('Step 4: Resetting MSV Hub state...');
+	tournament.phase = 'swiss';
+	tournament.currentRound = 0;
+	tournament.rounds = [];
+	tournament.finalStandings = undefined;
+	tournament.brackets = undefined;
+	tournament.startggSync = undefined;
+	await saveTournament(tournament);
+	log('MSV Hub reset to Swiss Round 1');
+
+	log('Done!');
 	return Response.json({ ok: true, logs });
 };
