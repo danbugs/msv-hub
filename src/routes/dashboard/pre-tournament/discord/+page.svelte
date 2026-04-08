@@ -719,7 +719,22 @@
 			<button onclick={() => runTest('motivational')} disabled={!!testRunning}
 				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
 				<div class="text-sm font-medium text-white">Test Motivational</div>
-				<div class="mt-0.5 text-xs text-gray-500">Posts to #talk-to-balrog</div>
+				<div class="mt-0.5 text-xs text-gray-500">Canned, posts to #talk-to-balrog</div>
+			</button>
+			<button onclick={() => runTest('motivational-ai')} disabled={!!testRunning}
+				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
+				<div class="text-sm font-medium text-white">Test AI Motivational</div>
+				<div class="mt-0.5 text-xs text-gray-500">Haiku-generated, #talk-to-balrog</div>
+			</button>
+			<button onclick={() => runTest('fastest-reg-test')} disabled={!!testRunning}
+				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
+				<div class="text-sm font-medium text-white">Test Fastest Reg AI</div>
+				<div class="mt-0.5 text-xs text-gray-500">Fake data, Haiku msg, #talk-to-balrog</div>
+			</button>
+			<button onclick={() => runTest('fastest-reg')} disabled={!!testRunning}
+				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
+				<div class="text-sm font-medium text-white">Fastest Reg (Real Data)</div>
+				<div class="mt-0.5 text-xs text-gray-500">Current event, posts to #talk-to-balrog</div>
 			</button>
 		</div>
 		{#if testRunning}<p class="mt-2 text-xs text-gray-400 animate-pulse">Running {testRunning}...</p>{/if}

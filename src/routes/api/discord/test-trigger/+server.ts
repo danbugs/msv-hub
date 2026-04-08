@@ -5,30 +5,68 @@
  * All test actions post to #talk-to-balrog or the test waitlist channel.
  * Requires session auth (not cron secret).
  *
- * Body: { action: 'announcement' | 'attendee-check' | 'waitlist-test' | 'motivational' }
+ * Body: { action: string, ... }
  */
 
 import type { RequestHandler } from './$types';
-import { sendMessage, buildAnnouncementMessage, createForumPost, shortenSlug, truncateTo100 } from '$lib/server/discord';
 import {
-	getDiscordConfig,
-	getCommunityConfig,
-	getLastMotivationalTs,
-	setLastMotivationalTs
+	sendMessage, sendMessageWithId, editMessage, buildAnnouncementMessage,
+	createForumPost, getLatestForumThread, getMessages, shortenSlug, truncateTo100
+} from '$lib/server/discord';
+import {
+	getDiscordConfig, getCommunityConfig,
+	getLastMotivationalTs, setLastMotivationalTs,
+	getFastestRegLeaderboard, saveFastestRegLeaderboard, buildLeaderboardText,
+	type FastestRegEntry
 } from '$lib/server/store';
+import { exportAttendees } from '$lib/server/startgg-admin';
+import { gql } from '$lib/server/startgg';
+import { generateFastestRegMessage, generateMotivationalMessage } from '$lib/server/ai';
 import { env } from '$env/dynamic/private';
 
 const STARTGG_API = 'https://api.start.gg/gql/alpha';
 const TALK_TO_BALROG = '1317322917129879562';
 const TEST_WAITLIST_CHANNEL = '1317322581938016317';
+const FASTEST_REG_FORUM_ID = '1193306596332290088';
+
+/** Resolve tournament ID from event slug. */
+async function resolveTournamentId(eventSlug: string): Promise<number | null> {
+	const slugMatch = eventSlug.match(/tournament\/([^/]+)/);
+	if (!slugMatch) return null;
+	const data = await gql<{ tournament: { id: number } }>(
+		'query($slug:String!){tournament(slug:$slug){id}}',
+		{ slug: slugMatch[1] }
+	);
+	return data?.tournament?.id ?? null;
+}
+
+function extractEventLabel(slug: string): string {
+	const match = slug.match(/microspacing-vancouver-(\d+)/i);
+	if (match) return `MSV#${match[1]}`;
+	return shortenSlug(slug);
+}
+
+function mentionStr(tag: string, discordId: string): string {
+	return discordId ? `<@${discordId}>` : tag;
+}
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-	const { action, eventSlug: overrideSlug } = await request.json() as { action: string; eventSlug?: string };
+	const body = await request.json() as {
+		action: string;
+		eventSlug?: string;
+		tournamentId?: number;
+		/** For manual fastest-reg: whether to post to real forum (true) or talk-to-balrog (false/default) */
+		postToReal?: boolean;
+	};
+	const { action } = body;
 	const config = await getDiscordConfig();
-	const effectiveSlug = overrideSlug?.trim() || config.eventSlug;
+	const effectiveSlug = body.eventSlug?.trim() || config.eventSlug;
 
+	// -----------------------------------------------------------------------
+	// Test announcement
+	// -----------------------------------------------------------------------
 	if (action === 'announcement') {
 		if (!effectiveSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
 		const message = buildAnnouncementMessage(effectiveSlug, config.attendeeCap, config.announcementTemplate);
@@ -36,6 +74,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ ok: true, action: 'announcement', message: 'Sent to #talk-to-balrog' });
 	}
 
+	// -----------------------------------------------------------------------
+	// Test attendee check (dry run)
+	// -----------------------------------------------------------------------
 	if (action === 'attendee-check') {
 		if (!effectiveSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
 		const token = env.STARTGG_TOKEN;
@@ -58,8 +99,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
+	// -----------------------------------------------------------------------
+	// Test waitlist
+	// -----------------------------------------------------------------------
 	if (action === 'waitlist-test') {
-		// Creates a test waitlist post in the test channel (not the real waitlist channel)
 		if (!effectiveSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
 		const title = truncateTo100(`[TEST] Waitlist for ${shortenSlug(effectiveSlug)}`);
 		const content =
@@ -71,6 +114,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ ok: true, action: 'waitlist-test', message: 'Waitlist post created in test channel' });
 	}
 
+	// -----------------------------------------------------------------------
+	// Test motivational (canned)
+	// -----------------------------------------------------------------------
 	if (action === 'motivational') {
 		const communityConfig = await getCommunityConfig();
 		const messages = communityConfig.motivationalMessages;
@@ -80,5 +126,135 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ ok: true, action: 'motivational', message: pick });
 	}
 
-	return Response.json({ error: 'Unknown action. Use: announcement, attendee-check, waitlist-test, motivational' }, { status: 400 });
+	// -----------------------------------------------------------------------
+	// Test AI motivational (Haiku-generated, posts to talk-to-balrog)
+	// -----------------------------------------------------------------------
+	if (action === 'motivational-ai') {
+		const message = await generateMotivationalMessage();
+		await sendMessage(TALK_TO_BALROG, message);
+		return Response.json({ ok: true, action: 'motivational-ai', message });
+	}
+
+	// -----------------------------------------------------------------------
+	// Test AI fastest-reg message (Haiku-generated, posts to talk-to-balrog)
+	// -----------------------------------------------------------------------
+	if (action === 'fastest-reg-test') {
+		const message = await generateFastestRegMessage(
+			'@TestPlayer',
+			'MSV#999',
+			['@Runner1', '@Runner2', '@Runner3']
+		);
+		await sendMessage(TALK_TO_BALROG, message);
+		return Response.json({ ok: true, action: 'fastest-reg-test', message });
+	}
+
+	// -----------------------------------------------------------------------
+	// Manual fastest-reg for a specific tournament
+	// Posts to the real forum (if postToReal=true) or talk-to-balrog (default).
+	// Provide eventSlug or tournamentId.
+	// -----------------------------------------------------------------------
+	if (action === 'fastest-reg') {
+		if (!effectiveSlug) return Response.json({ error: 'No event slug' }, { status: 400 });
+
+		let tournamentId = body.tournamentId ?? null;
+		if (!tournamentId) {
+			tournamentId = await resolveTournamentId(effectiveSlug);
+		}
+		if (!tournamentId) return Response.json({ error: 'Could not resolve tournament ID' }, { status: 400 });
+
+		const attendees = await exportAttendees(tournamentId);
+		if (attendees.length === 0) {
+			return Response.json({ error: 'Export returned 0 attendees' }, { status: 400 });
+		}
+
+		// Filter to public reg only (>= regHour:regMinute)
+		const regThreshold = config.registrationHour * 60 + config.registrationMinute;
+		const publicRegs = attendees.filter((a) => {
+			if (!a.registeredAt) return false;
+			const ts = new Date(a.registeredAt);
+			if (isNaN(ts.getTime())) return false;
+			const pst = new Date(ts.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+			return pst.getHours() * 60 + pst.getMinutes() >= regThreshold;
+		});
+
+		if (publicRegs.length < 4) {
+			return Response.json({
+				error: `Only ${publicRegs.length} public registrants (need 4). Total attendees: ${attendees.length}`,
+				attendees: attendees.slice(0, 10).map((a) => ({
+					tag: a.gamerTag, registeredAt: a.registeredAt, discordId: a.discordId
+				}))
+			}, { status: 400 });
+		}
+
+		const winner = publicRegs[0];
+		const runnersUp = publicRegs.slice(1, 4);
+		const eventLabel = extractEventLabel(effectiveSlug);
+		const winnerMention = mentionStr(winner.gamerTag, winner.discordId);
+		const runnerMentions = runnersUp.map((r) => mentionStr(r.gamerTag, r.discordId));
+
+		let funMessage: string;
+		try {
+			funMessage = await generateFastestRegMessage(winnerMention, eventLabel, runnerMentions);
+		} catch {
+			funMessage = `${winnerMention} wins fastest registrant for ${eventLabel}!\n\nTop 3 after: ${runnerMentions.join(', ')}`;
+		}
+
+		if (!body.postToReal) {
+			// Test mode — post to talk-to-balrog
+			await sendMessage(TALK_TO_BALROG, `[TEST fastest-reg for ${eventLabel}]\n\n${funMessage}`);
+			return Response.json({
+				ok: true, action: 'fastest-reg', test: true,
+				eventLabel, winner: winner.gamerTag,
+				runnersUp: runnersUp.map((r) => r.gamerTag),
+				message: funMessage
+			});
+		}
+
+		// Real mode — post to forum + update leaderboard
+		const guildId = env.DISCORD_GUILD_ID ?? '';
+		const newEntry: FastestRegEntry = {
+			eventLabel,
+			winnerTag: winner.gamerTag,
+			winnerDiscordId: winner.discordId,
+			runnersUp: runnersUp.map((r) => ({ tag: r.gamerTag, discordId: r.discordId }))
+		};
+
+		let lb = await getFastestRegLeaderboard();
+
+		if (lb && lb.threadId) {
+			lb.entries.push(newEntry);
+			const leaderboardText = buildLeaderboardText(lb.entries);
+			try {
+				await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
+			} catch (e) {
+				console.error(`[test-trigger] Failed to edit leaderboard: ${e}`);
+			}
+			await sendMessage(lb.threadId, funMessage);
+			await saveFastestRegLeaderboard(lb);
+		} else {
+			// Create new forum thread
+			const leaderboardText = buildLeaderboardText([newEntry]);
+			const threadName = truncateTo100(`Fastest Registrant — Season`);
+			const thread = await createForumPost(FASTEST_REG_FORUM_ID, threadName, leaderboardText);
+			await sendMessage(thread.id, funMessage);
+
+			const msgs = await getMessages(thread.id, 1);
+			await saveFastestRegLeaderboard({
+				entries: [newEntry],
+				threadId: thread.id,
+				leaderboardMessageId: msgs[0]?.id ?? '',
+				updatedAt: Date.now()
+			});
+		}
+
+		return Response.json({
+			ok: true, action: 'fastest-reg', test: false,
+			eventLabel, winner: winner.gamerTag,
+			runnersUp: runnersUp.map((r) => r.gamerTag)
+		});
+	}
+
+	return Response.json({
+		error: 'Unknown action. Use: announcement, attendee-check, waitlist-test, motivational, motivational-ai, fastest-reg-test, fastest-reg'
+	}, { status: 400 });
 };

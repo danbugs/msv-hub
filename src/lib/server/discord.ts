@@ -116,6 +116,32 @@ export async function sendMessage(channelId: string, content: string): Promise<v
 	}
 }
 
+/** Send a message and return its ID (for later editing). */
+export async function sendMessageWithId(channelId: string, content: string): Promise<string> {
+	const res = await discordFetch(`/channels/${channelId}/messages`, {
+		method: 'POST',
+		body: JSON.stringify({ content })
+	});
+	if (!res.ok) {
+		const body = await res.text();
+		throw new Error(`Failed to send message to ${channelId}: ${res.status} ${body}`);
+	}
+	const data = (await res.json()) as { id: string };
+	return data.id;
+}
+
+/** Edit an existing message in a channel/thread. */
+export async function editMessage(channelId: string, messageId: string, content: string): Promise<void> {
+	const res = await discordFetch(`/channels/${channelId}/messages/${messageId}`, {
+		method: 'PATCH',
+		body: JSON.stringify({ content })
+	});
+	if (!res.ok) {
+		const body = await res.text();
+		throw new Error(`Failed to edit message ${messageId} in ${channelId}: ${res.status} ${body}`);
+	}
+}
+
 /**
  * Find the most recent (latest) active thread in a forum channel.
  * Returns the thread ID, or null if no active threads exist.

@@ -1,20 +1,25 @@
 /**
- * POST /api/discord/attendee-check
+ * GET/POST /api/discord/attendee-check
  *
- * Called on a schedule (every 5 min).
- * Protected by Authorization: Bearer <CRON_SECRET> — NOT by session auth.
+ * Called on a schedule (every 5 min on Wednesdays after reg opens).
+ * Protected by Authorization: Bearer <CRON_SECRET>.
  *
  * Two jobs:
  * 1. Polls StartGG for numEntrants. When >= attendeeCap, creates waitlist thread.
  * 2. Detects fastest registrant after public reg opens and posts to Discord forum.
- *
- * Returns: { ok: boolean, fired: boolean, entrants: number }
  */
 
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { createForumPost, sendMessage, getLatestForumThread, shortenSlug, truncateTo100 } from '$lib/server/discord';
-import { getDiscordConfig, saveDiscordConfig } from '$lib/server/store';
+import {
+	createForumPost, sendMessage, sendMessageWithId, editMessage,
+	getLatestForumThread, shortenSlug, truncateTo100
+} from '$lib/server/discord';
+import {
+	getDiscordConfig, saveDiscordConfig,
+	getFastestRegLeaderboard, saveFastestRegLeaderboard, buildLeaderboardText,
+	type FastestRegEntry
+} from '$lib/server/store';
 import { exportAttendees } from '$lib/server/startgg-admin';
 import { gql } from '$lib/server/startgg';
 import { generateFastestRegMessage } from '$lib/server/ai';
@@ -50,9 +55,7 @@ async function fetchNumEntrants(slug: string): Promise<number | null> {
 	return (json.data?.event?.numEntrants as number | null | undefined) ?? null;
 }
 
-/**
- * Resolve tournament ID from event slug (e.g. "tournament/foo/event/bar" → tournament.id).
- */
+/** Resolve tournament ID from event slug. */
 async function resolveTournamentId(eventSlug: string): Promise<number | null> {
 	const slugMatch = eventSlug.match(/tournament\/([^/]+)/);
 	if (!slugMatch) return null;
@@ -64,41 +67,148 @@ async function resolveTournamentId(eventSlug: string): Promise<number | null> {
 }
 
 /**
- * Find the fastest registrant from the StartGG export.
- * Filters to registrations after the configured public reg time on the most recent
- * registration day, then sorts by timestamp ascending.
+ * Get the fastest registrants from the StartGG export CSV.
+ *
+ * The CSV rows are already in registration order (earliest first).
+ * We filter out priority registrants — anyone who registered BEFORE
+ * the configured public reg time (regHour:regMinute on regDay).
+ *
+ * Returns attendees in registration order with their Discord IDs.
  */
 async function findFastestRegistrants(
 	tournamentId: number,
-	regDay: string,
 	regHour: number,
 	regMinute: number
-): Promise<{ gamerTag: string; registeredAt: string }[]> {
+): Promise<{ gamerTag: string; discordId: string; registeredAt: string }[]> {
 	const attendees = await exportAttendees(tournamentId);
 	if (attendees.length === 0) return [];
 
-	// Parse all registration timestamps and filter for those after public reg opens
-	const withTime: { gamerTag: string; registeredAt: string; ts: Date }[] = [];
+	// The reg time threshold: regHour:regMinute on the registration day.
+	// We need to figure out the actual date. Parse from the first few registrations.
+	// Strategy: find registrations whose time is >= regHour:regMinute.
+	// Priority reg happens before that time on the same day or earlier days.
+	const regThresholdMinutes = regHour * 60 + regMinute; // e.g. 8:30 = 510
+
+	const results: { gamerTag: string; discordId: string; registeredAt: string }[] = [];
 
 	for (const a of attendees) {
 		if (!a.registeredAt) continue;
-		// registeredAt format from CSV: "MM/DD/YYYY HH:MM" or similar
 		const ts = new Date(a.registeredAt);
 		if (isNaN(ts.getTime())) continue;
-		withTime.push({ gamerTag: a.gamerTag, registeredAt: a.registeredAt, ts });
+
+		// Convert to Pacific Time to compare against reg time
+		const pst = new Date(ts.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+		const attendeeMinutes = pst.getHours() * 60 + pst.getMinutes();
+
+		// Only include if registered at or after the public reg time
+		// (on the same day — priority reg is earlier in the day or day before)
+		if (attendeeMinutes >= regThresholdMinutes) {
+			results.push({
+				gamerTag: a.gamerTag,
+				discordId: a.discordId,
+				registeredAt: a.registeredAt
+			});
+		}
 	}
 
-	if (withTime.length === 0) return [];
+	// CSV is already in registration order, so results preserves that order
+	return results;
+}
 
-	// Sort by registration time ascending (earliest first)
-	withTime.sort((a, b) => a.ts.getTime() - b.ts.getTime());
+/** Format a mention: Discord <@id> if available, otherwise gamer tag. */
+function mention(tag: string, discordId: string): string {
+	return discordId ? `<@${discordId}>` : tag;
+}
 
-	// Find the public reg open time — the most recent occurrence of regDay at regHour:regMinute PST
-	// For simplicity, we filter out anyone who registered before the configured reg time
-	// by looking at the earliest cluster of registrations (they'll all be within seconds of each other)
-	// The first person in the sorted list is the fastest
+/**
+ * Extract event label like "MSV#135" from event slug.
+ * e.g. "tournament/microspacing-vancouver-135/event/..." → "MSV#135"
+ */
+function extractEventLabel(slug: string): string {
+	const match = slug.match(/microspacing-vancouver-(\d+)/i);
+	if (match) return `MSV#${match[1]}`;
+	// Fallback: use the short slug
+	return shortenSlug(slug);
+}
 
-	return withTime.map((w) => ({ gamerTag: w.gamerTag, registeredAt: w.registeredAt }));
+/**
+ * Post fastest registrant: AI-generated reply + update leaderboard.
+ */
+async function postFastestRegistrant(
+	config: { eventSlug: string; registrationDay: string; registrationHour: number; registrationMinute: number },
+	registrants: { gamerTag: string; discordId: string; registeredAt: string }[]
+): Promise<string> {
+	const winner = registrants[0];
+	const runnersUp = registrants.slice(1, 4);
+	const eventLabel = extractEventLabel(config.eventSlug);
+	const eventShort = shortenSlug(config.eventSlug);
+	const guildId = env.DISCORD_GUILD_ID ?? '';
+
+	if (!guildId) return 'DISCORD_GUILD_ID not set, skipped';
+
+	// Build the AI fun announcement (with Discord mentions)
+	const winnerMention = mention(winner.gamerTag, winner.discordId);
+	const runnerMentions = runnersUp.map((r) => mention(r.gamerTag, r.discordId));
+
+	let funMessage: string;
+	try {
+		funMessage = await generateFastestRegMessage(winnerMention, eventLabel, runnerMentions);
+	} catch (aiErr) {
+		console.error(`[attendee-check] AI message generation failed: ${aiErr}`);
+		funMessage = `${winnerMention} wins fastest registrant for ${eventLabel}!\n\nTop 3 after: ${runnerMentions.join(', ')}`;
+	}
+
+	// Load or create leaderboard
+	let lb = await getFastestRegLeaderboard();
+
+	const newEntry: FastestRegEntry = {
+		eventLabel,
+		winnerTag: winner.gamerTag,
+		winnerDiscordId: winner.discordId,
+		runnersUp: runnersUp.map((r) => ({ tag: r.gamerTag, discordId: r.discordId }))
+	};
+
+	if (lb && lb.threadId) {
+		// Add entry and update the leaderboard message
+		lb.entries.push(newEntry);
+		const leaderboardText = buildLeaderboardText(lb.entries);
+
+		try {
+			await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
+		} catch (editErr) {
+			console.error(`[attendee-check] Failed to edit leaderboard: ${editErr}`);
+			// If edit fails, try sending as new message
+		}
+
+		// Post the fun reply
+		await sendMessage(lb.threadId, funMessage);
+		await saveFastestRegLeaderboard(lb);
+		return `posted to thread, updated leaderboard (${eventLabel})`;
+	} else {
+		// No leaderboard exists — create a new forum thread
+		const entries = [newEntry];
+		const leaderboardText = buildLeaderboardText(entries);
+
+		const threadName = truncateTo100(`Fastest Registrant — Season`);
+		const thread = await createForumPost(FASTEST_REG_FORUM_ID, threadName, leaderboardText);
+
+		// Post the fun announcement as a reply
+		await sendMessage(thread.id, funMessage);
+
+		// We need to find the first message ID in the thread for future edits
+		// The createForumPost response doesn't include it, so fetch it
+		const { getMessages } = await import('$lib/server/discord');
+		const msgs = await getMessages(thread.id, 1);
+		const firstMsgId = msgs[0]?.id ?? '';
+
+		await saveFastestRegLeaderboard({
+			entries,
+			threadId: thread.id,
+			leaderboardMessageId: firstMsgId,
+			updatedAt: Date.now()
+		});
+		return `created new forum thread (${eventLabel})`;
+	}
 }
 
 async function handleAttendeeCheck(request: Request) {
@@ -138,47 +248,17 @@ async function handleAttendeeCheck(request: Request) {
 			if (tournamentId) {
 				const sorted = await findFastestRegistrants(
 					tournamentId,
-					config.registrationDay,
 					config.registrationHour,
 					config.registrationMinute
 				);
 
 				if (sorted.length >= 4) {
-					const winner = sorted[0].gamerTag;
-					const runnersUp = sorted.slice(1, 4).map((r) => r.gamerTag);
-					const eventShort = shortenSlug(config.eventSlug);
-
-					// Generate AI message
-					let message: string;
-					try {
-						message = await generateFastestRegMessage(winner, eventShort, runnersUp);
-					} catch (aiErr) {
-						// Fallback if AI fails
-						console.error(`[attendee-check] AI message generation failed: ${aiErr}`);
-						message = `@${winner} wins fastest registrant for ${eventShort}!\n\nTop 3 after: ${runnersUp.join(', ')}`;
-					}
-
-					// Post to the latest thread in the fastest-reg forum
-					const guildId = env.DISCORD_GUILD_ID ?? '';
-					if (guildId) {
-						const latestThread = await getLatestForumThread(guildId, FASTEST_REG_FORUM_ID);
-						if (latestThread) {
-							await sendMessage(latestThread.id, message);
-							results.push(`fastest reg posted to thread ${latestThread.name}`);
-						} else {
-							// No active thread — create a new one
-							const threadName = truncateTo100(`Fastest Registrant — ${eventShort}`);
-							await createForumPost(FASTEST_REG_FORUM_ID, threadName, message);
-							results.push('fastest reg: created new forum thread');
-						}
-					} else {
-						results.push('fastest reg: DISCORD_GUILD_ID not set, skipped');
-					}
-
+					const result = await postFastestRegistrant(config, sorted);
 					await saveDiscordConfig({ fastestRegPosted: true });
 					fired = true;
+					results.push(`fastest reg: ${result}`);
 				} else {
-					results.push(`fastest reg: only ${sorted.length} registrants with timestamps, need 4`);
+					results.push(`fastest reg: only ${sorted.length} public registrants (need 4, pri-reg filtered out)`);
 				}
 			} else {
 				results.push('fastest reg: could not resolve tournament ID');
@@ -211,7 +291,6 @@ async function handleAttendeeCheck(request: Request) {
 		await createForumPost(WAITLIST_CHANNEL_ID, title, content);
 		await saveDiscordConfig({ waitlistCreated: true });
 
-		// Announce the cap in #announcements
 		const shortSlugStr = shortenSlug(config.eventSlug);
 		await sendMessage(
 			ANNOUNCE_CHANNEL_ID,
