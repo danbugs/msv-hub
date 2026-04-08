@@ -27,17 +27,32 @@ export const POST: RequestHandler = async ({ locals }) => {
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
 
-	// Get tournament ID from slug
-	const slugMatch = tournament.startggEventSlug?.match(/tournament\/([^/]+)/);
-	if (!slugMatch) return Response.json({ error: 'No StartGG event slug' }, { status: 400 });
+	// Get tournament ID — try startggEventId first, then resolve from slug
+	let tournamentId = 0;
+	if (tournament.startggEventId) {
+		// Get tournament ID from event ID
+		const eData = await gql<{ event: { tournament: { id: number } } }>(
+			'query($id:ID!){event(id:$id){tournament{id}}}', { id: tournament.startggEventId }
+		);
+		tournamentId = eData?.event?.tournament?.id ?? 0;
+	}
+	if (!tournamentId && tournament.startggEventSlug) {
+		const slugMatch = tournament.startggEventSlug.match(/tournament\/([^/]+)/);
+		if (slugMatch) {
+			const tData = await gql<{ tournament: { id: number } }>(
+				'query($slug:String!){tournament(slug:$slug){id}}', { slug: slugMatch[1] }
+			);
+			tournamentId = tData?.tournament?.id ?? 0;
+		}
+	}
+	if (!tournamentId) {
+		return Response.json({ error: `Could not resolve tournament ID (eventId=${tournament.startggEventId}, slug=${tournament.startggEventSlug})` }, { status: 400 });
+	}
 
-	const tData = await gql<{ tournament: { id: number } }>(
-		'query($slug:String!){tournament(slug:$slug){id}}', { slug: slugMatch[1] }
-	);
-	if (!tData?.tournament?.id) return Response.json({ error: 'Tournament not found' }, { status: 404 });
-
-	const attendees = await exportAttendees(tData.tournament.id);
-	if (!attendees.length) return Response.json({ error: 'Export failed or empty' }, { status: 400 });
+	const attendees = await exportAttendees(tournamentId);
+	if (!attendees.length) {
+		return Response.json({ error: `Export returned 0 attendees for tournament ${tournamentId}. Check admin permissions.` }, { status: 400 });
+	}
 
 	// Merge with existing attendance state (preserve present/setupDeployed flags)
 	const existing = new Map((tournament.attendance ?? []).map((a) => [a.gamerTag.toLowerCase(), a]));

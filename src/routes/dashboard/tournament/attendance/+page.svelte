@@ -12,17 +12,19 @@
 	let setupDeployedCount = $derived(attendance.filter((a) => a.setupDeployed).length);
 	let setupsNeeded = $derived(Math.max(0, 16 - setupCount - 1)); // -1 for venue setup
 
-	onMount(loadAttendance);
-
-	async function loadAttendance() {
+	onMount(async () => {
 		loading = true;
 		const res = await fetch('/api/tournament/attendance');
 		if (res.ok) {
 			const data = await res.json();
 			attendance = data.attendance;
 		}
+		// If no cached attendance, auto-refresh from StartGG
+		if (attendance.length === 0) {
+			await refreshFromStartGG();
+		}
 		loading = false;
-	}
+	});
 
 	async function refreshFromStartGG() {
 		refreshing = true;
