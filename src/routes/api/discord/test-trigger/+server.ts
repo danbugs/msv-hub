@@ -14,8 +14,7 @@ import {
 	createForumPost, getLatestForumThread, getMessages, shortenSlug, truncateTo100
 } from '$lib/server/discord';
 import {
-	getDiscordConfig, getCommunityConfig,
-	getLastMotivationalTs, setLastMotivationalTs,
+	getDiscordConfig,
 	getFastestRegLeaderboard, saveFastestRegLeaderboard, buildLeaderboardText,
 	type FastestRegEntry
 } from '$lib/server/store';
@@ -115,37 +114,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// -----------------------------------------------------------------------
-	// Test motivational (canned)
-	// -----------------------------------------------------------------------
-	if (action === 'motivational') {
-		const communityConfig = await getCommunityConfig();
-		const messages = communityConfig.motivationalMessages;
-		if (!messages.length) return Response.json({ error: 'No motivational messages configured' }, { status: 400 });
-		const pick = messages[Math.floor(Math.random() * messages.length)];
-		await sendMessage(TALK_TO_BALROG, `[TEST] ${pick}`);
-		return Response.json({ ok: true, action: 'motivational', message: pick });
-	}
-
-	// -----------------------------------------------------------------------
 	// Test AI motivational (Haiku-generated, posts to talk-to-balrog)
 	// -----------------------------------------------------------------------
 	if (action === 'motivational-ai') {
 		const message = await generateMotivationalMessage();
 		await sendMessage(TALK_TO_BALROG, message);
 		return Response.json({ ok: true, action: 'motivational-ai', message });
-	}
-
-	// -----------------------------------------------------------------------
-	// Test AI fastest-reg message (Haiku-generated, posts to talk-to-balrog)
-	// -----------------------------------------------------------------------
-	if (action === 'fastest-reg-test') {
-		const message = await generateFastestRegMessage(
-			'@TestPlayer',
-			'MSV#999',
-			['@Runner1', '@Runner2', '@Runner3']
-		);
-		await sendMessage(TALK_TO_BALROG, message);
-		return Response.json({ ok: true, action: 'fastest-reg-test', message });
 	}
 
 	// -----------------------------------------------------------------------
@@ -195,18 +169,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		if (publicRegs.length < 4) {
 			// Debug: show first 10 attendees with parsed dates for troubleshooting
-			const debug = attendees.slice(0, 10).map((a) => {
+			const debugLines = attendees.slice(0, 10).map((a) => {
 				const ts = parseRegTs(a.registeredAt);
 				let pstInfo = 'unparseable';
 				if (ts) {
 					const pst = new Date(ts.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-					pstInfo = `dow=${pst.getDay()} ${pst.getHours()}:${String(pst.getMinutes()).padStart(2, '0')} (target: dow=${targetDow} >=${config.registrationHour}:${String(config.registrationMinute).padStart(2, '0')})`;
+					pstInfo = `dow=${pst.getDay()} ${pst.getHours()}:${String(pst.getMinutes()).padStart(2, '0')}`;
 				}
-				return { tag: a.gamerTag, raw: a.registeredAt, pst: pstInfo };
-			});
+				return `${a.gamerTag}: raw="${a.registeredAt}" → ${pstInfo}`;
+			}).join('\n');
 			return Response.json({
-				error: `Only ${publicRegs.length} public registrants (need 4). Total attendees: ${attendees.length}`,
-				debug
+				error: `Only ${publicRegs.length} public registrants (need 4). Total: ${attendees.length}. Target: dow=${targetDow} >=${config.registrationHour}:${String(config.registrationMinute).padStart(2, '0')}\n\nFirst 10:\n${debugLines}`
 			}, { status: 400 });
 		}
 
@@ -279,6 +252,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	return Response.json({
-		error: 'Unknown action. Use: announcement, attendee-check, waitlist-test, motivational, motivational-ai, fastest-reg-test, fastest-reg'
+		error: 'Unknown action. Use: announcement, attendee-check, waitlist-test, motivational-ai, fastest-reg'
 	}, { status: 400 });
 };

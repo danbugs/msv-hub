@@ -304,11 +304,6 @@
 						<div class="font-medium text-white">TO Management</div>
 						<div class="mt-0.5 text-sm text-gray-400">Manage tournament organizer access</div>
 					</a>
-					<a href="/dashboard/community"
-						class="block rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
-						<div class="font-medium text-white">Community</div>
-						<div class="mt-0.5 text-sm text-gray-400">Fun commands, motivational messages, dice rolls, goat crowning</div>
-					</a>
 				</div>
 			</div>
 		</div>

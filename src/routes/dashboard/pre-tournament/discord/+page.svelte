@@ -40,6 +40,23 @@
 	let pingChannel = $state('general');
 	let pingResult = $state<{ ok: boolean; msg: string } | null>(null);
 
+	let registerRunning = $state(false);
+	let registerResult = $state<{ ok: boolean; msg: string } | null>(null);
+
+	async function registerSlashCommands() {
+		registerRunning = true;
+		registerResult = null;
+		const res = await fetch('/api/discord/register-commands', { method: 'POST' });
+		const data = await res.json().catch(() => ({}));
+		if (res.ok) {
+			const names = (data['registered'] as string[] | undefined) ?? [];
+			registerResult = { ok: true, msg: `Registered ${names.length} command(s): ${names.join(', ')}` };
+		} else {
+			registerResult = { ok: false, msg: (data['error'] as string | undefined) ?? `HTTP ${res.status}` };
+		}
+		registerRunning = false;
+	}
+
 	async function sendPing() {
 		if (!pingMessage.trim()) return;
 		pingRunning = true;
@@ -716,29 +733,19 @@
 				<div class="text-sm font-medium text-white">Test Waitlist</div>
 				<div class="mt-0.5 text-xs text-gray-500">Forum post in test channel</div>
 			</button>
-			<button onclick={() => runTest('motivational')} disabled={!!testRunning}
-				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
-				<div class="text-sm font-medium text-white">Test Motivational</div>
-				<div class="mt-0.5 text-xs text-gray-500">Canned, posts to #talk-to-balrog</div>
-			</button>
 			<button onclick={() => runTest('motivational-ai')} disabled={!!testRunning}
 				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
-				<div class="text-sm font-medium text-white">Test AI Motivational</div>
-				<div class="mt-0.5 text-xs text-gray-500">Haiku-generated, #talk-to-balrog</div>
-			</button>
-			<button onclick={() => runTest('fastest-reg-test')} disabled={!!testRunning}
-				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
-				<div class="text-sm font-medium text-white">Test Fastest Reg AI</div>
-				<div class="mt-0.5 text-xs text-gray-500">Fake data, Haiku msg, #talk-to-balrog</div>
+				<div class="text-sm font-medium text-white">Test Motivational</div>
+				<div class="mt-0.5 text-xs text-gray-500">AI-generated, #talk-to-balrog</div>
 			</button>
 			<button onclick={() => runTest('fastest-reg')} disabled={!!testRunning}
 				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
-				<div class="text-sm font-medium text-white">Fastest Reg (Real Data)</div>
-				<div class="mt-0.5 text-xs text-gray-500">Current event, posts to #talk-to-balrog</div>
+				<div class="text-sm font-medium text-white">Test Fastest Reg</div>
+				<div class="mt-0.5 text-xs text-gray-500">Current event, #talk-to-balrog</div>
 			</button>
 		</div>
 		{#if testRunning}<p class="mt-2 text-xs text-gray-400 animate-pulse">Running {testRunning}...</p>{/if}
-		{#if testResult}<p class="mt-2 text-xs {testResult.ok ? 'text-green-400' : 'text-red-400'}">{testResult.msg}</p>{/if}
+		{#if testResult}<pre class="mt-2 text-xs whitespace-pre-wrap {testResult.ok ? 'text-green-400' : 'text-red-400'}">{testResult.msg}</pre>{/if}
 	</div>
 	</div>
 
@@ -765,6 +772,14 @@
 			</button>
 		</div>
 		{#if pingResult}<p class="mt-1.5 text-xs {pingResult.ok ? 'text-green-400' : 'text-red-400'}">{pingResult.msg}</p>{/if}
+
+		<div class="mt-3">
+			<button onclick={registerSlashCommands} disabled={registerRunning}
+				class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors">
+				{registerRunning ? 'Registering…' : 'Register Slash Commands'}
+			</button>
+			{#if registerResult}<span class="ml-2 text-xs {registerResult.ok ? 'text-green-400' : 'text-red-400'}">{registerResult.msg}</span>{/if}
+		</div>
 	</div>
 	</div>
 
