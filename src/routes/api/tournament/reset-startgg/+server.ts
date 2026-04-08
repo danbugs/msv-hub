@@ -51,13 +51,13 @@ export const POST: RequestHandler = async ({ locals }) => {
 	);
 	const swissPhases = swissPhaseData?.event?.phases ?? [];
 	// Helper: clear a phase with retry (restart may not have propagated yet)
-	async function clearPhaseEntrants(eventId: number, phaseId: number, phaseName: string) {
+	async function clearPhaseEntrants(eventId: number, phaseId: number, phaseName: string, groupType: number = 4) {
 		for (let attempt = 0; attempt < 3; attempt++) {
 			if (attempt > 0) {
 				log(`  Retry ${attempt} for ${phaseName}...`);
 				await new Promise<void>((r) => setTimeout(r, 2000));
 			}
-			const result = await addEntrantsToPhase(eventId, phaseId, []).catch((e) => ({ ok: false, error: String(e) }));
+			const result = await addEntrantsToPhase(eventId, phaseId, [], undefined, groupType).catch((e) => ({ ok: false, error: String(e) }));
 			if (result.ok) { log(`  ✓ ${phaseName} cleared`); return; }
 			log(`  ✗ ${phaseName}: ${(result as { error?: string }).error}`);
 			// If it failed due to existing sets, restart again
@@ -69,7 +69,8 @@ export const POST: RequestHandler = async ({ locals }) => {
 	const r1Phase = swissPhases.find((p) => p.name.includes('Round 1'));
 	for (const phase of swissPhases) {
 		if (phase.id === r1Phase?.id) continue;
-		await clearPhaseEntrants(swissEventId, phase.id, phase.name);
+		const isFinalStandings = phase.name.toLowerCase().includes('final');
+		await clearPhaseEntrants(swissEventId, phase.id, phase.name, isFinalStandings ? 6 : 4);
 	}
 
 	// Step 2b: Clear entrants from bracket event phases too

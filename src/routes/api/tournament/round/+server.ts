@@ -4,7 +4,7 @@ import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
 import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
-import { addEntrantsToPhase } from '$lib/server/startgg-admin';
+import { addEntrantsToPhase, finalizePlacements } from '$lib/server/startgg-admin';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -171,30 +171,33 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 				}
 			} catch { /* best effort */ }
 		}
-		// Add all entrants to Final Standings phase (they're only in R1 by default)
+		// Add all entrants to Final Standings phase (groupTypeId 6 = custom schedule)
 		if (tournament.startggFinalStandingsPhaseId && tournament.startggEventId) {
 			const allEntrantIds = tournament.entrants
 				.map((e) => e.startggEntrantId)
 				.filter((id): id is number => id !== undefined);
-			await addEntrantsToPhase(tournament.startggEventId, tournament.startggFinalStandingsPhaseId, allEntrantIds)
+			await addEntrantsToPhase(tournament.startggEventId, tournament.startggFinalStandingsPhaseId, allEntrantIds, undefined, 6)
 				.catch((e) => console.error(`[StartGG] Failed to add entrants to Final Standings: ${e}`));
 		}
 
+		// Finalize placements using the admin REST endpoint
 		let finalStandingsSynced = false;
-		if (tournament.startggFinalStandingsPhaseId && tournament.startggFinalStandingsPhaseGroupId) {
+		if (tournament.startggFinalStandingsPhaseGroupId) {
 			const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
-			const rankedEntrantIds = finalStandings
-				.map((s) => entrantMap.get(s.entrantId)?.startggEntrantId)
-				.filter((id): id is number => id !== undefined);
-			if (rankedEntrantIds.length) {
-				const result = await pushFinalStandingsSeeding(
-					tournament.startggFinalStandingsPhaseId,
-					tournament.startggFinalStandingsPhaseGroupId,
-					rankedEntrantIds
-				).catch((e) => ({ ok: false as const, error: String(e) }));
+			const standings = finalStandings
+				.map((s, i) => {
+					const sgId = entrantMap.get(s.entrantId)?.startggEntrantId;
+					return sgId ? { entrantId: sgId, placement: i + 1 } : null;
+				})
+				.filter((s): s is { entrantId: number; placement: number } => s !== null);
+			if (standings.length) {
+				const result = await finalizePlacements(tournament.startggFinalStandingsPhaseGroupId, standings)
+					.catch((e) => ({ ok: false as const, error: String(e) }));
 				finalStandingsSynced = result.ok;
 				if (!result.ok) {
-					console.error(`[StartGG] pushFinalStandingsSeeding failed: ${result.error}`);
+					console.error(`[StartGG] finalizePlacements failed: ${result.error}`);
+				} else {
+					console.log(`[StartGG] Finalized ${standings.length} placements`);
 				}
 			}
 		}

@@ -314,7 +314,9 @@ export async function addEntrantsToPhase(
 	destPhaseId: number,
 	entrantIds: number[],
 	/** Current number of seeds in the phase (needed for clearing). If not provided, fetched from API. */
-	currentNumSeeds?: number
+	currentNumSeeds?: number,
+	/** Bracket type ID: 4 = Swiss, 6 = Custom Schedule. Defaults to 4. */
+	groupTypeId: number = 4
 ): Promise<{ ok: boolean; error?: string }> {
 	const cookie = await getSessionCookie();
 	const now = Math.floor(Date.now() / 1000);
@@ -349,7 +351,7 @@ export async function addEntrantsToPhase(
 		},
 		body: JSON.stringify({
 			eventId,
-			groupTypeId: 4,
+			groupTypeId,
 			isDefault: false,
 			destPhaseLinks: [{
 				phaseInputId: null,
@@ -383,5 +385,34 @@ export async function addEntrantsToPhase(
 		return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
 	}
 
+	return { ok: true };
+}
+
+/**
+ * Finalize placements for a phase group (e.g., Final Standings).
+ * Uses the internal REST endpoint to set exact placement order.
+ */
+export async function finalizePlacements(
+	phaseGroupId: number,
+	standings: { entrantId: number; placement: number }[]
+): Promise<{ ok: boolean; error?: string }> {
+	const cookie = await getSessionCookie();
+	const res = await fetch(`https://www.start.gg/api/-/rest/phase_group/${phaseGroupId}/finalize`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Cookie': cookie,
+			'Client-Version': '20'
+		},
+		body: JSON.stringify({
+			validationKey: 'finalize-placements',
+			standings
+		})
+	});
+
+	if (!res.ok) {
+		const text = await res.text().catch(() => '');
+		return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+	}
 	return { ok: true };
 }
