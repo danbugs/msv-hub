@@ -41,6 +41,9 @@ export const POST: RequestHandler = async ({ locals }) => {
 		}
 	}
 
+	// Brief pause to let restarts fully propagate
+	await new Promise<void>((r) => setTimeout(r, 2000));
+
 	// Step 2: Clear entrants from Swiss phases except Round 1
 	log('Step 2: Clearing entrants from later Swiss phases...');
 	const swissPhaseData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
@@ -53,6 +56,19 @@ export const POST: RequestHandler = async ({ locals }) => {
 		log(`  Clearing ${phase.name}...`);
 		const result = await addEntrantsToPhase(swissEventId, phase.id, []).catch((e) => ({ ok: false, error: String(e) }));
 		log(`  ${result.ok ? '✓' : '✗ ' + (result as { error?: string }).error}`);
+	}
+
+	// Step 2b: Clear entrants from bracket event phases too
+	for (const bracketEventId of [mainEventId, redEventId]) {
+		if (!bracketEventId) continue;
+		const bPhaseData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
+			EVENT_PHASES_QUERY, { eventId: bracketEventId }
+		);
+		for (const phase of bPhaseData?.event?.phases ?? []) {
+			log(`  Clearing bracket phase ${phase.name} (${phase.id})...`);
+			const result = await addEntrantsToPhase(bracketEventId, phase.id, []).catch((e) => ({ ok: false, error: String(e) }));
+			log(`  ${result.ok ? '✓' : '✗ ' + (result as { error?: string }).error}`);
+		}
 	}
 
 	// Step 3: Remove all participants from bracket events (keep only Swiss)
