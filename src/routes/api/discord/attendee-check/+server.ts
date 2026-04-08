@@ -66,27 +66,29 @@ async function resolveTournamentId(eventSlug: string): Promise<number | null> {
 	return data?.tournament?.id ?? null;
 }
 
+const DAY_MAP: Record<string, number> = {
+	sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6
+};
+
 /**
  * Get the fastest registrants from the StartGG export CSV.
  *
  * The CSV rows are already in registration order (earliest first).
  * We filter out priority registrants — anyone who registered BEFORE
- * the configured public reg time (regHour:regMinute on regDay).
+ * the configured public reg day+time (e.g. Wednesday 8:30 AM PST).
  *
  * Returns attendees in registration order with their Discord IDs.
  */
 async function findFastestRegistrants(
 	tournamentId: number,
+	regDay: string,
 	regHour: number,
 	regMinute: number
 ): Promise<{ gamerTag: string; discordId: string; registeredAt: string }[]> {
 	const attendees = await exportAttendees(tournamentId);
 	if (attendees.length === 0) return [];
 
-	// The reg time threshold: regHour:regMinute on the registration day.
-	// We need to figure out the actual date. Parse from the first few registrations.
-	// Strategy: find registrations whose time is >= regHour:regMinute.
-	// Priority reg happens before that time on the same day or earlier days.
+	const targetDow = DAY_MAP[regDay] ?? 3; // default to Wednesday
 	const regThresholdMinutes = regHour * 60 + regMinute; // e.g. 8:30 = 510
 
 	const results: { gamerTag: string; discordId: string; registeredAt: string }[] = [];
@@ -96,13 +98,13 @@ async function findFastestRegistrants(
 		const ts = new Date(a.registeredAt);
 		if (isNaN(ts.getTime())) continue;
 
-		// Convert to Pacific Time to compare against reg time
+		// Convert to Pacific Time to compare against reg day+time
 		const pst = new Date(ts.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+		const dow = pst.getDay(); // 0=Sun
 		const attendeeMinutes = pst.getHours() * 60 + pst.getMinutes();
 
-		// Only include if registered at or after the public reg time
-		// (on the same day — priority reg is earlier in the day or day before)
-		if (attendeeMinutes >= regThresholdMinutes) {
+		// Only include if: same day-of-week as reg day AND time >= reg time
+		if (dow === targetDow && attendeeMinutes >= regThresholdMinutes) {
 			results.push({
 				gamerTag: a.gamerTag,
 				discordId: a.discordId,
@@ -248,6 +250,7 @@ async function handleAttendeeCheck(request: Request) {
 			if (tournamentId) {
 				const sorted = await findFastestRegistrants(
 					tournamentId,
+					config.registrationDay,
 					config.registrationHour,
 					config.registrationMinute
 				);

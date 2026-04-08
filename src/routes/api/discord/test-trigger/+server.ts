@@ -167,14 +167,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return Response.json({ error: 'Export returned 0 attendees' }, { status: 400 });
 		}
 
-		// Filter to public reg only (>= regHour:regMinute)
+		// Filter to public reg only: must be on the registration day AND at/after reg time
+		const DAY_MAP: Record<string, number> = {
+			sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6
+		};
+		const targetDow = DAY_MAP[config.registrationDay] ?? 3;
 		const regThreshold = config.registrationHour * 60 + config.registrationMinute;
 		const publicRegs = attendees.filter((a) => {
 			if (!a.registeredAt) return false;
 			const ts = new Date(a.registeredAt);
 			if (isNaN(ts.getTime())) return false;
 			const pst = new Date(ts.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-			return pst.getHours() * 60 + pst.getMinutes() >= regThreshold;
+			const dow = pst.getDay();
+			return dow === targetDow && pst.getHours() * 60 + pst.getMinutes() >= regThreshold;
 		});
 
 		if (publicRegs.length < 4) {
