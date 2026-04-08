@@ -124,7 +124,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each attendance.sort((a, b) => {
+					{#each attendance.toSorted((a, b) => {
 						// Sort: pledged setup first, then by name
 						if (a.pledgedSetup !== b.pledgedSetup) return a.pledgedSetup ? -1 : 1;
 						return a.gamerTag.localeCompare(b.gamerTag);
