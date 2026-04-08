@@ -181,70 +181,61 @@ async function postFastestRegistrant(
 		runnersUp: runnersUp.map((r) => ({ tag: r.gamerTag, discordId: r.discordId }))
 	};
 
-	async function tryPostToThread(lb: Awaited<ReturnType<typeof getFastestRegLeaderboard>>): Promise<string | null> {
-		if (!lb?.threadId) return null;
-		try {
-			// Avoid duplicates on retry
-			if (!lb.entries.some((e) => e.eventLabel === newEntry.eventLabel)) {
-				lb.entries.push(newEntry);
-			}
-			const leaderboardText = buildLeaderboardText(lb.entries);
+	const { getMessages: fetchMessages } = await import('$lib/server/discord');
+	const { parseLeaderboardEntries } = await import('$lib/server/store');
 
-			// Try to edit Balrog's tracked leaderboard message
-			let edited = false;
-			if (lb.leaderboardMessageId) {
-				try {
-					await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
-					edited = true;
-				} catch { /* not Balrog's message or deleted */ }
-			}
-			// If can't edit, post a new leaderboard message (once, then track it)
-			if (!edited) {
-				const newMsgId = await sendMessageWithId(lb.threadId, leaderboardText);
-				lb.leaderboardMessageId = newMsgId;
-			}
-
-			await sendMessage(lb.threadId, funMessage);
-			await saveFastestRegLeaderboard(lb);
-			return `posted to thread, ${edited ? 'edited' : 'new'} leaderboard (${eventLabel})`;
-		} catch (e) {
-			console.error(`[attendee-check] tryPostToThread failed: ${e}`);
-			return null;
-		}
-	}
-
-	// 1. Try Redis-saved thread
+	// Resolve which thread to post to
 	let lb = await getFastestRegLeaderboard();
-	let result = await tryPostToThread(lb);
+	let threadId = lb?.threadId ?? '';
+	let leaderboardMessageId = lb?.leaderboardMessageId ?? '';
 
-	// 2. If failed, find latest active thread and parse existing leaderboard
-	if (!result) {
+	// Verify thread is still valid
+	if (threadId) {
+		try { await fetchMessages(threadId, 1); } catch { threadId = ''; leaderboardMessageId = ''; }
+	}
+	if (!threadId) {
 		const latestThread = await getLatestForumThread(guildId, FASTEST_REG_FORUM_ID);
-		if (latestThread) {
-			const { getMessages } = await import('$lib/server/discord');
-			const { parseLeaderboardEntries } = await import('$lib/server/store');
-			// Read the OP (oldest message = smallest snowflake ID)
-			const threadMsgs = await getMessages(latestThread.id, 50);
-			const op = threadMsgs.length > 0
-				? threadMsgs.reduce((oldest, m) => BigInt(m.id) < BigInt(oldest.id) ? m : oldest)
-				: null;
-			const existingEntries: FastestRegEntry[] = op ? parseLeaderboardEntries(op.content) : [];
-			console.log(`[attendee-check] OP parsed: ${existingEntries.length} entries from thread ${latestThread.name}`);
-			lb = { entries: existingEntries, threadId: latestThread.id, leaderboardMessageId: '', updatedAt: Date.now() };
-			result = await tryPostToThread(lb);
-		}
+		if (latestThread) { threadId = latestThread.id; leaderboardMessageId = ''; }
 	}
 
-	// 3. If still no thread, create a new one
-	if (!result) {
+	let result: string;
+
+	if (threadId) {
+		// Always read the OP to get ground-truth entries
+		const threadMsgs = await fetchMessages(threadId, 50);
+		const op = threadMsgs.length > 0
+			? threadMsgs.reduce((oldest, m) => BigInt(m.id) < BigInt(oldest.id) ? m : oldest)
+			: null;
+		const opEntries = op ? parseLeaderboardEntries(op.content) : [];
+
+		// Merge: OP entries + new entry (deduplicate)
+		const allEntries = [...opEntries];
+		if (!allEntries.some((e) => e.eventLabel === newEntry.eventLabel)) {
+			allEntries.push(newEntry);
+		}
+		const leaderboardText = buildLeaderboardText(allEntries);
+
+		let edited = false;
+		if (leaderboardMessageId) {
+			try { await editMessage(threadId, leaderboardMessageId, leaderboardText); edited = true; } catch { /* stale */ }
+		}
+		if (!edited) {
+			const newMsgId = await sendMessageWithId(threadId, leaderboardText);
+			leaderboardMessageId = newMsgId;
+		}
+
+		await sendMessage(threadId, funMessage);
+		await saveFastestRegLeaderboard({
+			entries: allEntries, threadId, leaderboardMessageId, updatedAt: Date.now()
+		});
+		result = `posted to thread, ${edited ? 'edited' : 'new'} leaderboard (${eventLabel})`;
+	} else {
 		const entries = [newEntry];
 		const leaderboardText = buildLeaderboardText(entries);
 		const threadName = truncateTo100(`Fastest Registrant — Season`);
 		const thread = await createForumPost(FASTEST_REG_FORUM_ID, threadName, leaderboardText);
 		await sendMessage(thread.id, funMessage);
-
-		const { getMessages } = await import('$lib/server/discord');
-		const msgs = await getMessages(thread.id, 1);
+		const msgs = await fetchMessages(thread.id, 1);
 		await saveFastestRegLeaderboard({
 			entries, threadId: thread.id,
 			leaderboardMessageId: msgs[0]?.id ?? '', updatedAt: Date.now()
