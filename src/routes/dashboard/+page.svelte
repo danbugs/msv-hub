@@ -121,24 +121,25 @@
 			<div class="pb-6 pt-1 min-w-0 flex-1">
 				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Wednesday — Registration Day</p>
 
-				<!-- ④ Open Registration -->
+				<!-- ④ Open Registration (fully automated) -->
 				<button onclick={() => toggle('open-reg')}
 					class="w-full text-left rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
-					<div class="font-medium text-white">④ Open Registration</div>
-					<div class="mt-0.5 text-sm text-gray-400">Open reg at 8:30 AM, verify announcement, check fastest registrant</div>
+					<div class="font-medium text-white">④ Open Registration <span class="ml-1.5 text-xs font-normal text-green-400">automated</span></div>
+					<div class="mt-0.5 text-sm text-gray-400">Balrog handles registration, announcement, fastest registrant, and waitlist</div>
 				</button>
 				{#if expandedStep === 'open-reg'}
 					<div class="mt-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4 text-sm text-gray-300 space-y-3">
-						<p class="font-medium text-amber-300">At 8:30 AM:</p>
+						<p class="font-medium text-green-300">All automated at 8:30 AM:</p>
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Go to the event dashboard and set <strong class="text-gray-200">Registration</strong> to public.</li>
-							<li>Balrog should post the announcement automatically. If not, go to <a href="/dashboard/pre-tournament/discord" class="text-violet-400 hover:text-violet-300">Discord Setup</a> → Automation → <strong class="text-gray-200">Send Now</strong>.</li>
-							<li>If the announcement has issues, the waitlist likely will too. <strong class="text-gray-200">Pause the bot</strong> and monitor manually for when the event caps to post the waitlist.</li>
+							<li>Balrog opens registration on StartGG and posts the announcement to Discord.</li>
+							<li>Once 4+ public registrants appear, Balrog detects the fastest registrant and posts to the forum with an updated leaderboard.</li>
+							<li>When the event caps, Balrog creates a waitlist thread and announces it.</li>
 						</ol>
-						<p class="font-medium text-amber-300">After registration is live:</p>
+						<p class="font-medium text-amber-300">If something goes wrong:</p>
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Check the fastest registrant: go to the StartGG event dashboard → <strong class="text-gray-200">Attendees</strong> → <strong class="text-gray-200">Export attendee list</strong>. The export includes registration timestamps. Find the fastest registration after 8:30 AM (disregard anyone who registered before that, e.g., priority registrations).</li>
-							<li>Go to the <strong class="text-gray-200">fastest-registration</strong> forum on Discord and post who won this week. Update the leaderboard.</li>
+							<li>Go to <a href="/dashboard/pre-tournament/discord" class="text-violet-400 hover:text-violet-300">Discord Setup</a> → Testing → <strong class="text-gray-200">Send Now</strong> for the announcement.</li>
+							<li>Use <a href="/dashboard/pre-tournament/discord" class="text-violet-400 hover:text-violet-300">Discord Setup</a> → Tools → <strong class="text-gray-200">Manual Fastest Reg</strong> to post a specific event's fastest registrant.</li>
+							<li>If both announcement and waitlist are broken, <strong class="text-gray-200">Pause the bot</strong> and handle manually.</li>
 						</ol>
 					</div>
 				{/if}
