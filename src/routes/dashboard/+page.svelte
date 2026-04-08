@@ -17,6 +17,19 @@
 
 	let expandedStep = $state<string | null>(null);
 	function toggle(id: string) { expandedStep = expandedStep === id ? null : id; }
+
+	let resettingStartGG = $state(false);
+	let resetResult = $state('');
+	async function resetStartGG() {
+		if (!confirm('Reset StartGG? This restarts all phases, removes bracket registrations, and leaves everyone in Swiss Round 1 only. Continue?')) return;
+		resettingStartGG = true;
+		resetResult = '';
+		const res = await fetch('/api/tournament/reset-startgg', { method: 'POST' });
+		const data = await res.json();
+		if (res.ok) resetResult = 'StartGG reset complete';
+		else resetResult = data.error ?? 'Reset failed';
+		resettingStartGG = false;
+	}
 </script>
 
 <main class="mx-auto max-w-3xl px-4 py-8">
@@ -251,11 +264,17 @@
 										Export JSON
 									</a>
 								{/if}
+								<button onclick={resetStartGG} disabled={resettingStartGG}
+									class="rounded-lg border border-gray-700 px-3 py-1.5 text-sm text-gray-400 hover:border-amber-700 hover:text-amber-400 transition-colors disabled:opacity-50"
+									title="Restart all StartGG phases, remove bracket registrations, reset to Swiss Round 1">
+									{resettingStartGG ? 'Resetting...' : 'Reset StartGG'}
+								</button>
 								<button onclick={deleteTournament}
 									class="rounded-lg border border-gray-700 px-3 py-1.5 text-sm text-gray-400 hover:border-red-700 hover:text-red-400 transition-colors">
 									Delete
 								</button>
 							</div>
+							{#if resetResult}<p class="mt-2 text-xs {resetResult.includes('complete') ? 'text-green-400' : 'text-red-400'}">{resetResult}</p>{/if}
 						</div>
 					</div>
 				{:else}
