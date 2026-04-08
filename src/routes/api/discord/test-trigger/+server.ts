@@ -49,10 +49,6 @@ function mentionStr(tag: string, discordId: string): string {
 	return discordId && /^\d{17,20}$/.test(discordId) ? `<@${discordId}>` : tag;
 }
 
-/** Escape Discord mentions so test messages don't ping people. <@id> → <@/id>, @name → @/name */
-function escapeMentions(text: string): string {
-	return text.replace(/<@(\d+)>/g, '<@/$1>').replace(/@(\w)/g, '@/$1');
-}
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -74,7 +70,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (action === 'announcement') {
 		if (!effectiveSlug) return Response.json({ error: 'No event slug configured' }, { status: 400 });
 		const message = buildAnnouncementMessage(effectiveSlug, config.attendeeCap, config.announcementTemplate);
-		await sendMessage(TALK_TO_BALROG, escapeMentions(`[TEST] ${message}`));
+		await sendMessage(TALK_TO_BALROG, (`[TEST] ${message}`));
 		return Response.json({ ok: true, action: 'announcement', message: 'Sent to #talk-to-balrog' });
 	}
 
@@ -123,7 +119,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// -----------------------------------------------------------------------
 	if (action === 'motivational-ai') {
 		const message = await generateMotivationalMessage();
-		await sendMessage(TALK_TO_BALROG, escapeMentions(message));
+		await sendMessage(TALK_TO_BALROG, (message));
 		return Response.json({ ok: true, action: 'motivational-ai', message });
 	}
 
@@ -201,7 +197,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		if (!body.postToReal) {
 			// Test mode — post to talk-to-balrog
-			await sendMessage(TALK_TO_BALROG, escapeMentions(`[TEST fastest-reg for ${eventLabel}]\n\n${funMessage}`));
+			await sendMessage(TALK_TO_BALROG, (`[TEST fastest-reg for ${eventLabel}]\n\n${funMessage}`));
 			return Response.json({
 				ok: true, action: 'fastest-reg', test: true,
 				eventLabel, winner: winner.gamerTag,
