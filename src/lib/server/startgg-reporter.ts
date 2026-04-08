@@ -498,8 +498,45 @@ async function _doReportBracketMatch(
 	if (result.ok) {
 		match.startggSetId = result.reportedSetId ?? setId;
 		clearErrorsForMatch(sync, match.id);
-		// Remove from pending queue if it was there
 		sync.pendingBracketMatchIds = sync.pendingBracketMatchIds.filter((id) => id !== pendingKey);
+
+		// If we just reported a preview set, cache all real IDs via admin REST
+		if (setId.startsWith('preview_') && bracketEventId) {
+			try {
+				const epData = await gql<{ event: { phases: { id: number }[] } }>(
+					'query($eventId:ID!){event(id:$eventId){phases{id}}}', { eventId: bracketEventId }, { delay: 0 }
+				);
+				const bPhaseId = epData?.event?.phases?.[0]?.id;
+				if (bPhaseId) {
+					const { fetchPhaseGroups: fpg } = await import('$lib/server/startgg');
+					const bGroups = await fpg(bPhaseId).catch(() => []);
+					if (bGroups.length > 0) {
+						const adminSets = await fetchAdminPhaseGroupSets(bGroups[0].id).catch(() => []);
+						if (adminSets.length > 0 && tournament.brackets) {
+							const bracket = tournament.brackets[_bracketName as 'main' | 'redemption'];
+							if (bracket) {
+								for (const bm of bracket.matches) {
+									if (bm.startggSetId) continue;
+									const bTopEid = _bracketEntrantCache?.get(`${_bracketName}-${bracketEventId}`)?.get(
+										entrantMap.get(bm.topPlayerId ?? '')?.startggEntrantId ?? 0
+									);
+									const bBotEid = _bracketEntrantCache?.get(`${_bracketName}-${bracketEventId}`)?.get(
+										entrantMap.get(bm.bottomPlayerId ?? '')?.startggEntrantId ?? 0
+									);
+									if (!bTopEid || !bBotEid) continue;
+									const as = adminSets.find((s) =>
+										(s.entrant1Id === bTopEid && s.entrant2Id === bBotEid) ||
+										(s.entrant1Id === bBotEid && s.entrant2Id === bTopEid)
+									);
+									if (as) bm.startggSetId = String(as.id);
+								}
+								console.log(`[bracket] Cached real IDs for ${_bracketName} via admin REST`);
+							}
+						}
+					}
+				}
+			} catch { /* best effort */ }
+		}
 	} else {
 		addError(sync, match.id, result.error ?? 'Unknown StartGG error');
 	}
