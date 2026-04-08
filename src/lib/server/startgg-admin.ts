@@ -458,11 +458,12 @@ export async function setRegistrationPublished(
 export async function exportAttendees(
 	tournamentId: number
 ): Promise<{ gamerTag: string; registeredAt: string; bringingSetup: string; discordId: string; events: string[] }[]> {
-	const cookie = await getSessionCookie();
-	const res = await fetch(`https://www.start.gg/api-proxy/tournament/${tournamentId}/export_attendees`, {
-		headers: { 'Cookie': cookie, 'Client-Version': '20' }
-	});
-	if (!res.ok) return [];
+	const url = `https://www.start.gg/api-proxy/tournament/${tournamentId}/export_attendees`;
+	const res = await adminFetch(url, { method: 'GET' });
+	if (!res.ok) {
+		console.error(`[startgg-admin] Export attendees failed: HTTP ${res.status} for tournament ${tournamentId}`);
+		return [];
+	}
 	const text = await res.text();
 	const lines = text.split('\n').filter(Boolean);
 	if (lines.length < 2) return [];
