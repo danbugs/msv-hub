@@ -69,7 +69,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		...(announcementTemplate !== undefined && { announcementTemplate }),
 		...(paused !== undefined && { paused }),
 		...(waitlistCreated !== undefined && { waitlistCreated }),
-		...(slugChanged && { waitlistCreated: false })
+		...(slugChanged && { waitlistCreated: false, fastestRegPosted: false })
 	});
 
 	// Auto-update the cron schedule in .github/workflows/discord-cron.yml

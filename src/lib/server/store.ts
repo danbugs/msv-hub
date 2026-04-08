@@ -26,6 +26,8 @@ export interface DiscordConfig {
 	paused: boolean;
 	/** Set to true once the waitlist thread has been created for the current event. */
 	waitlistCreated: boolean;
+	/** Set to true once the fastest registrant has been posted for the current event. */
+	fastestRegPosted: boolean;
 	updatedAt: number;
 }
 
@@ -40,6 +42,7 @@ const DEFAULT_DISCORD_CONFIG: DiscordConfig = {
 	announcementTemplate: '',
 	paused: false,
 	waitlistCreated: false,
+	fastestRegPosted: false,
 	updatedAt: 0
 };
 

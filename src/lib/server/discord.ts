@@ -104,7 +104,7 @@ export async function createForumPost(
 	return data;
 }
 
-/** Send a plain message to a text channel. */
+/** Send a plain message to a text channel (also works on forum threads). */
 export async function sendMessage(channelId: string, content: string): Promise<void> {
 	const res = await discordFetch(`/channels/${channelId}/messages`, {
 		method: 'POST',
@@ -114,6 +114,22 @@ export async function sendMessage(channelId: string, content: string): Promise<v
 		const body = await res.text();
 		throw new Error(`Failed to send message to ${channelId}: ${res.status} ${body}`);
 	}
+}
+
+/**
+ * Find the most recent (latest) active thread in a forum channel.
+ * Returns the thread ID, or null if no active threads exist.
+ */
+export async function getLatestForumThread(
+	guildId: string,
+	forumChannelId: string
+): Promise<DiscordThread | null> {
+	const threads = await listActiveThreads(guildId);
+	const forumThreads = threads.filter((t) => t.parent_id === forumChannelId && !t.archived);
+	if (forumThreads.length === 0) return null;
+	// Discord returns threads in no guaranteed order; sort by snowflake ID descending (higher = newer)
+	forumThreads.sort((a, b) => (BigInt(b.id) > BigInt(a.id) ? 1 : -1));
+	return forumThreads[0];
 }
 
 // ---------------------------------------------------------------------------

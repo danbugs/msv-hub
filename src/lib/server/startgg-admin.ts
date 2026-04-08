@@ -26,7 +26,7 @@ async function adminFetch(url: string, options: RequestInit = {}): Promise<Respo
 			'Content-Type': 'application/json',
 			'Cookie': cookie,
 			'Client-Version': '20',
-			...(options.headers ?? {})
+			...(options.headers as Record<string, string> ?? {})
 		};
 		// Remove headers set to empty string (opt-out)
 		for (const [k, v] of Object.entries(headers)) {

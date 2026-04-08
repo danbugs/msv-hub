@@ -16,9 +16,13 @@
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { sendMessage, buildAnnouncementMessage } from '$lib/server/discord';
-import { getDiscordConfig } from '$lib/server/store';
+import { getDiscordConfig, getLastMotivationalTs, setLastMotivationalTs } from '$lib/server/store';
 import { setRegistrationPublished } from '$lib/server/startgg-admin';
 import { gql } from '$lib/server/startgg';
+import { generateMotivationalMessage } from '$lib/server/ai';
+
+const GENERAL_CHANNEL_ID = '1066863005591162961';
+const MOTIVATIONAL_COOLDOWN_MS = 48 * 60 * 60 * 1000; // 48 hours
 
 const DAY_MAP: Record<string, number> = {
 	sun: 0,
@@ -130,9 +134,24 @@ async function handleCron(request: Request) {
 		results.push('announcement skipped (no event slug configured)');
 	}
 
-	// Motivational messages are handled by the background hook (motivational-bg.ts)
-	// — fires on Fridays around noon PDT, piggybacking on any site request.
-	results.push('motivational handled by background hook');
+	// --- Motivational message check ---
+	// Post an AI-generated motivational message every 48h
+	try {
+		const lastTs = await getLastMotivationalTs();
+		const elapsed = Date.now() - lastTs;
+		if (elapsed >= MOTIVATIONAL_COOLDOWN_MS) {
+			const message = await generateMotivationalMessage();
+			await sendMessage(GENERAL_CHANNEL_ID, message);
+			await setLastMotivationalTs(Date.now());
+			results.push(`motivational sent: "${message.slice(0, 60)}..."`);
+		} else {
+			const hoursLeft = Math.round((MOTIVATIONAL_COOLDOWN_MS - elapsed) / 3600000);
+			results.push(`motivational: ${hoursLeft}h until next`);
+		}
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : String(e);
+		results.push(`motivational error: ${msg}`);
+	}
 
 	return Response.json({ ok: true, fired, reason: results.join('; ') });
 }
