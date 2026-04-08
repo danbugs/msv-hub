@@ -169,7 +169,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		if (publicRegs.length < 4) {
 			// Debug: show first 10 attendees with parsed dates for troubleshooting
-			const debugLines = attendees.slice(0, 10).map((a) => {
+			const debugLines = attendees.map((a) => {
 				const ts = parseRegTs(a.registeredAt);
 				let pstInfo = 'unparseable';
 				if (ts) {
@@ -179,7 +179,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				return `${a.gamerTag}: raw="${a.registeredAt}" → ${pstInfo}`;
 			}).join('\n');
 			return Response.json({
-				error: `Only ${publicRegs.length} public registrants (need 4). Total: ${attendees.length}. Target: dow=${targetDow} >=${config.registrationHour}:${String(config.registrationMinute).padStart(2, '0')}\n\nFirst 10:\n${debugLines}`
+				error: `Only ${publicRegs.length} public registrants (need 4). Total: ${attendees.length}. Target: dow=${targetDow} >=${config.registrationHour}:${String(config.registrationMinute).padStart(2, '0')}\n\nAll ${attendees.length}:\n${debugLines}`
 			}, { status: 400 });
 		}
 
