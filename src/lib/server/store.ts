@@ -154,7 +154,7 @@ export function buildLeaderboardText(entries: FastestRegEntry[]): string {
 		}
 		if (rank > 3) break;
 		const medal = medals[rank - 1] ?? '';
-		const mention = player.discordId && /^\d+$/.test(player.discordId) ? `<@${player.discordId}>` : player.tag;
+		const mention = player.discordId && /^\d{17,20}$/.test(player.discordId) ? `<@${player.discordId}>` : player.tag;
 		const winLabel = player.count === 1 ? '1 win' : `${player.count} wins`;
 
 		// Find others at same rank
@@ -175,7 +175,7 @@ export function buildLeaderboardText(entries: FastestRegEntry[]): string {
 
 	// Per-event history
 	for (const e of entries) {
-		const mention = e.winnerDiscordId && /^\d+$/.test(e.winnerDiscordId) ? `<@${e.winnerDiscordId}>` : e.winnerTag;
+		const mention = e.winnerDiscordId && /^\d{17,20}$/.test(e.winnerDiscordId) ? `<@${e.winnerDiscordId}>` : e.winnerTag;
 		lines.push(`${e.eventLabel}) ${mention}`);
 	}
 
