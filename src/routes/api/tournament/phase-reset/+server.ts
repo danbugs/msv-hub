@@ -8,7 +8,7 @@ import { restartPhase } from '$lib/server/startgg-admin';
  * POST — Automatically restarts the phase on StartGG, re-seeds with current pairings,
  * and re-triggers conversion. No manual step needed on StartGG.
  */
-export const POST: RequestHandler = async ({ locals, platform }) => {
+export const POST: RequestHandler = async ({ locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const tournament = await getActiveTournament();
@@ -54,20 +54,15 @@ export const POST: RequestHandler = async ({ locals, platform }) => {
 		console.log(`[phase-reset] Re-seed successful`);
 	}
 
-	// Step 3: Clear cached set IDs and trigger conversion
+	// Step 3: Clear cached set IDs — preview IDs will be used for first report,
+	// then admin REST fetches real IDs instantly after.
 	for (const m of round.matches) m.startggSetId = undefined;
 	tournament.startggSync!.pendingPhaseReset = undefined;
-	tournament.startggSync!.cacheReady = false;
+	tournament.startggSync!.cacheReady = true; // No wait needed
 	await saveTournament(tournament);
 
-	const conversionPromise = triggerConversionAndCache(tournament, roundNumber, phaseGroupId).catch((e) => {
-		console.error(`[phase-reset] conversion failed: ${e}`);
-	});
-	try {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const ctx = (platform as any)?.context;
-		if (ctx?.waitUntil) ctx.waitUntil(conversionPromise);
-	} catch { /* not on Vercel */ }
+	// Cache preview IDs in background (fast, no conversion)
+	triggerConversionAndCache(tournament, roundNumber, phaseGroupId).catch(() => {});
 
 	return Response.json({ ok: true, roundNumber });
 };

@@ -15,13 +15,7 @@
 	// Set of match IDs currently being reported (prevents double-clicks)
 	let reportingMatches = $state(new Set<string>());
 
-	// Poll briefly while StartGG set IDs are being cached (typically completes in ~1-2s)
-	onMount(() => {
-		const interval = setInterval(() => {
-			if (tournament?.startggSync?.cacheReady === false) loadTournament();
-		}, 2000);
-		return () => clearInterval(interval);
-	});
+	// No polling needed — preview IDs work for first report, real IDs cached instantly after.
 
 	onMount(loadTournament);
 
@@ -268,15 +262,7 @@
 				{/if}
 			</div>
 
-			<!-- StartGG sync status -->
-			{#if tournament.startggSync?.cacheReady === false && tournament.startggPhase1Groups?.length}
-				<div class="mt-4 flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800/60 px-4 py-3 text-xs text-gray-400">
-					<svg class="h-3 w-3 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path d="M21 12a9 9 0 1 1-6.219-8.56" />
-					</svg>
-					<span>Preparing StartGG set IDs (please wait before reporting)...</span>
-				</div>
-			{/if}
+			<!-- Banner removed — no wait needed. Preview IDs work for first report. -->
 
 			<!-- Pending phase reset after misreport fix -->
 			{#if tournament.startggSync?.pendingPhaseReset}

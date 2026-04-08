@@ -12,7 +12,7 @@
 import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { flushPendingBracketMatches } from '$lib/server/startgg-reporter';
-import { pushBracketSeeding, reportSet, resetSet, gql, EVENT_PHASES_QUERY, PHASE_GROUP_SETS_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
+import { pushBracketSeeding, gql, EVENT_PHASES_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
 import { assignBracketSplit } from '$lib/server/startgg-admin';
 
 export const POST: RequestHandler = async ({ locals }) => {
@@ -89,22 +89,8 @@ export const POST: RequestHandler = async ({ locals }) => {
 					.catch((e) => ({ ok: false as const, error: String(e) }));
 				if (result.ok) {
 					log(`Pushed ${bName} bracket seeding`);
-					// Trigger preview→real conversion
-					type PGData = { phaseGroup: { sets: { nodes: { id: unknown; slots: { entrant: { id: unknown } | null }[] }[] } } };
-					const setsData = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId: bPgId }, { delay: 0 }).catch(() => null);
-					const bSets = setsData?.phaseGroup?.sets?.nodes ?? [];
-					const previewSet = bSets.find((s) =>
-						String(s.id).startsWith('preview_') && s.slots?.length >= 2 && s.slots[0]?.entrant?.id && s.slots[1]?.entrant?.id
-					);
-					if (previewSet) {
-						const dummyWinner = Number(previewSet.slots[0].entrant!.id);
-						const rep = await reportSet(String(previewSet.id), dummyWinner, {}).catch(() => ({ ok: false as const }));
-						if (rep.ok) {
-							const realId = rep.reportedSetId ?? String(previewSet.id);
-							await resetSet(realId).catch(() => {});
-							log(`${bName} bracket conversion triggered`);
-						}
-					}
+					// No dummy report needed — preview IDs work for first bracket report.
+					// Real IDs are cached via admin REST after the first report.
 				} else {
 					log(`${bName} bracket seeding failed: ${result.error}`);
 				}

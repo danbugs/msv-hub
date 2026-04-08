@@ -482,7 +482,7 @@
 						{/if}
 
 						<!-- Step 3: Per-game details (winner + characters) -->
-						{#if reportWinnerId && reportScore && showChars}
+						{#if reportWinnerId && reportScore && showChars && reportScore !== 'DQ'}
 							<div class="mt-3">
 								<p class="text-xs font-medium text-gray-400 mb-2">Per-game details</p>
 								<div class="space-y-2 max-h-64 overflow-y-auto">
