@@ -50,12 +50,26 @@ export const POST: RequestHandler = async ({ locals }) => {
 		EVENT_PHASES_QUERY, { eventId: swissEventId }
 	);
 	const swissPhases = swissPhaseData?.event?.phases ?? [];
+	// Helper: clear a phase with retry (restart may not have propagated yet)
+	async function clearPhaseEntrants(eventId: number, phaseId: number, phaseName: string) {
+		for (let attempt = 0; attempt < 3; attempt++) {
+			if (attempt > 0) {
+				log(`  Retry ${attempt} for ${phaseName}...`);
+				await new Promise<void>((r) => setTimeout(r, 2000));
+			}
+			const result = await addEntrantsToPhase(eventId, phaseId, []).catch((e) => ({ ok: false, error: String(e) }));
+			if (result.ok) { log(`  ✓ ${phaseName} cleared`); return; }
+			log(`  ✗ ${phaseName}: ${(result as { error?: string }).error}`);
+			// If it failed due to existing sets, restart again
+			await restartPhase(phaseId).catch(() => {});
+			await new Promise<void>((r) => setTimeout(r, 2000));
+		}
+	}
+
 	const r1Phase = swissPhases.find((p) => p.name.includes('Round 1'));
 	for (const phase of swissPhases) {
 		if (phase.id === r1Phase?.id) continue;
-		log(`  Clearing ${phase.name}...`);
-		const result = await addEntrantsToPhase(swissEventId, phase.id, []).catch((e) => ({ ok: false, error: String(e) }));
-		log(`  ${result.ok ? '✓' : '✗ ' + (result as { error?: string }).error}`);
+		await clearPhaseEntrants(swissEventId, phase.id, phase.name);
 	}
 
 	// Step 2b: Clear entrants from bracket event phases too
@@ -65,9 +79,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 			EVENT_PHASES_QUERY, { eventId: bracketEventId }
 		);
 		for (const phase of bPhaseData?.event?.phases ?? []) {
-			log(`  Clearing bracket phase ${phase.name} (${phase.id})...`);
-			const result = await addEntrantsToPhase(bracketEventId, phase.id, []).catch((e) => ({ ok: false, error: String(e) }));
-			log(`  ${result.ok ? '✓' : '✗ ' + (result as { error?: string }).error}`);
+			await clearPhaseEntrants(bracketEventId, phase.id, `Bracket: ${phase.name}`);
 		}
 	}
 
