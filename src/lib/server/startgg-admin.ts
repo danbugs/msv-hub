@@ -22,14 +22,19 @@ function invalidateSession() {
 async function adminFetch(url: string, options: RequestInit = {}): Promise<Response> {
 	for (let attempt = 0; attempt < 2; attempt++) {
 		const cookie = await getSessionCookie();
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json',
+			'Cookie': cookie,
+			'Client-Version': '20',
+			...(options.headers ?? {})
+		};
+		// Remove headers set to empty string (opt-out)
+		for (const [k, v] of Object.entries(headers)) {
+			if (v === '') delete headers[k];
+		}
 		const res = await fetch(url, {
 			...options,
-			headers: {
-				'Content-Type': 'application/json',
-				'Cookie': cookie,
-				'Client-Version': '20',
-				...(options.headers ?? {})
-			}
+			headers
 		});
 		if (res.status === 403 && attempt === 0) {
 			console.log(`[startgg-admin] 403 on ${url.split('?')[0]} — re-logging in...`);
@@ -452,6 +457,37 @@ export async function setRegistrationPublished(
 	return { ok: true };
 }
 
+/** Proper CSV row parser that handles quoted fields containing commas and escaped quotes. */
+function parseCSVRow(line: string): string[] {
+	const result: string[] = [];
+	let current = '';
+	let inQuotes = false;
+	for (let i = 0; i < line.length; i++) {
+		const ch = line[i];
+		if (inQuotes) {
+			if (ch === '"' && line[i + 1] === '"') {
+				current += '"';
+				i++; // skip escaped quote
+			} else if (ch === '"') {
+				inQuotes = false;
+			} else {
+				current += ch;
+			}
+		} else {
+			if (ch === '"') {
+				inQuotes = true;
+			} else if (ch === ',') {
+				result.push(current.trim());
+				current = '';
+			} else {
+				current += ch;
+			}
+		}
+	}
+	result.push(current.trim());
+	return result;
+}
+
 /**
  * Export attendees CSV from StartGG. Returns parsed rows with key fields.
  */
@@ -462,34 +498,43 @@ export async function exportAttendees(
 	console.log(`[startgg-admin] Exporting attendees for tournament ${tournamentId}...`);
 	let res: Response;
 	try {
-		res = await adminFetch(url, { method: 'GET' });
+		// Don't send Content-Type: application/json for CSV download
+		res = await adminFetch(url, {
+			method: 'GET',
+			headers: { 'Accept': 'text/csv, */*', 'Content-Type': '' }
+		});
 	} catch (e) {
 		console.error(`[startgg-admin] Export fetch error: ${e}`);
 		return [];
 	}
-	console.log(`[startgg-admin] Export response: ${res.status} ${res.statusText}`);
+	console.log(`[startgg-admin] Export response: ${res.status} ${res.statusText}, content-type: ${res.headers.get('content-type')}`);
 	if (!res.ok) {
 		const body = await res.text().catch(() => '');
 		console.error(`[startgg-admin] Export failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
 		return [];
 	}
 	const text = await res.text();
-	const lines = text.split('\n').filter(Boolean);
+	console.log(`[startgg-admin] Export body length: ${text.length}, first 300 chars: ${text.slice(0, 300)}`);
+
+	// Handle \r\n line endings
+	const lines = text.split(/\r?\n/).filter(Boolean);
+	console.log(`[startgg-admin] CSV lines: ${lines.length}, header: ${lines[0]?.slice(0, 200)}`);
 	if (lines.length < 2) return [];
 
-	// Parse CSV header
-	const header = lines[0].split(',').map((h) => h.replace(/^"|"$/g, '').trim());
+	// Parse CSV header — handle quoted headers with commas inside
+	const header = parseCSVRow(lines[0]);
+	console.log(`[startgg-admin] Parsed header columns (${header.length}): ${header.join(' | ')}`);
 	const setupIdx = header.findIndex((h) => h.toLowerCase().includes('bring a setup'));
 	const regDateIdx = header.indexOf('Registered At Date');
 	const regTimeIdx = header.indexOf('Registered At Time');
 	const tagIdx = header.indexOf('GamerTag');
 	const discordIdx = header.indexOf('Discord ID');
+	console.log(`[startgg-admin] Column indices — tag:${tagIdx} setup:${setupIdx} regDate:${regDateIdx} regTime:${regTimeIdx} discord:${discordIdx}`);
 
 	const results: { gamerTag: string; registeredAt: string; bringingSetup: string; discordId: string; events: string[] }[] = [];
 
 	for (let i = 1; i < lines.length; i++) {
-		// Simple CSV parse (handles quoted fields)
-		const row = lines[i].match(/("([^"]*)"|[^,]*)/g)?.map((v) => v.replace(/^"|"$/g, '').trim()) ?? [];
+		const row = parseCSVRow(lines[i]);
 		const tag = tagIdx >= 0 ? row[tagIdx] ?? '' : '';
 		const regDate = regDateIdx >= 0 ? row[regDateIdx] ?? '' : '';
 		const regTime = regTimeIdx >= 0 ? row[regTimeIdx] ?? '' : '';
@@ -501,7 +546,7 @@ export async function exportAttendees(
 				registeredAt: `${regDate} ${regTime}`.trim(),
 				bringingSetup: setup,
 				discordId: discord,
-				events: [] // Could parse event columns if needed
+				events: []
 			});
 		}
 	}
