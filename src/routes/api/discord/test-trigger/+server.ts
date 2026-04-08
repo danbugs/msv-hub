@@ -221,15 +221,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		if (lb && lb.threadId) {
 			lb.entries.push(newEntry);
 			const leaderboardText = buildLeaderboardText(lb.entries);
-			try {
-				await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
-			} catch (e) {
-				console.error(`[test-trigger] Failed to edit leaderboard: ${e}`);
+
+			let edited = false;
+			if (lb.leaderboardMessageId) {
+				try {
+					await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
+					edited = true;
+				} catch { /* not Balrog's message — post new */ }
 			}
+			if (!edited) {
+				const newMsgId = await sendMessageWithId(lb.threadId, leaderboardText);
+				lb.leaderboardMessageId = newMsgId;
+			}
+
 			await sendMessage(lb.threadId, funMessage);
 			await saveFastestRegLeaderboard(lb);
 		} else {
-			// Create new forum thread
 			const leaderboardText = buildLeaderboardText([newEntry]);
 			const threadName = truncateTo100(`Fastest Registrant — Season`);
 			const thread = await createForumPost(FASTEST_REG_FORUM_ID, threadName, leaderboardText);
@@ -251,7 +258,38 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 	}
 
+	// -----------------------------------------------------------------------
+	// New season — create a fresh leaderboard forum post
+	// -----------------------------------------------------------------------
+	if (action === 'new-season') {
+		const guildId = env.DISCORD_GUILD_ID ?? '';
+		if (!guildId) return Response.json({ error: 'DISCORD_GUILD_ID not set' }, { status: 400 });
+
+		// Lock the old thread if it exists
+		const oldLb = await getFastestRegLeaderboard();
+		if (oldLb?.threadId) {
+			try {
+				const { lockThread } = await import('$lib/server/discord');
+				await lockThread(oldLb.threadId);
+			} catch { /* best effort */ }
+		}
+
+		// Create new forum thread with empty leaderboard
+		const threadName = truncateTo100(`Fastest Registrant — New Season`);
+		const thread = await createForumPost(FASTEST_REG_FORUM_ID, threadName, 'No fastest registrant data yet. Season starts now!');
+
+		const msgs = await getMessages(thread.id, 1);
+		await saveFastestRegLeaderboard({
+			entries: [],
+			threadId: thread.id,
+			leaderboardMessageId: msgs[0]?.id ?? '',
+			updatedAt: Date.now()
+		});
+
+		return Response.json({ ok: true, action: 'new-season', message: `New season thread created: ${thread.name}` });
+	}
+
 	return Response.json({
-		error: 'Unknown action. Use: announcement, attendee-check, waitlist-test, motivational-ai, fastest-reg'
+		error: 'Unknown action. Use: announcement, attendee-check, waitlist-test, motivational-ai, fastest-reg, new-season'
 	}, { status: 400 });
 };

@@ -57,6 +57,48 @@
 		registerRunning = false;
 	}
 
+	// --- Manual fastest reg ---
+	let fastestRegSlug = $state('');
+	let fastestRegRunning = $state(false);
+	let fastestRegResult = $state<{ ok: boolean; msg: string } | null>(null);
+	let fastestRegPostToReal = $state(false);
+
+	async function sendFastestReg() {
+		const slug = fastestRegSlug.trim();
+		if (!slug) return;
+		fastestRegRunning = true;
+		fastestRegResult = null;
+		const res = await fetch('/api/discord/test-trigger', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ action: 'fastest-reg', eventSlug: slug, postToReal: fastestRegPostToReal })
+		});
+		const data = await res.json().catch(() => ({}));
+		fastestRegResult = res.ok
+			? { ok: true, msg: data.message ?? `Posted! Winner: ${data.winner}` }
+			: { ok: false, msg: data.error ?? 'Failed' };
+		fastestRegRunning = false;
+	}
+
+	// --- New season leaderboard ---
+	let newSeasonRunning = $state(false);
+	let newSeasonResult = $state<{ ok: boolean; msg: string } | null>(null);
+
+	async function createNewSeason() {
+		newSeasonRunning = true;
+		newSeasonResult = null;
+		const res = await fetch('/api/discord/test-trigger', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ action: 'new-season' })
+		});
+		const data = await res.json().catch(() => ({}));
+		newSeasonResult = res.ok
+			? { ok: true, msg: data.message ?? 'New season created!' }
+			: { ok: false, msg: data.error ?? 'Failed' };
+		newSeasonRunning = false;
+	}
+
 	async function sendPing() {
 		if (!pingMessage.trim()) return;
 		pingRunning = true;
@@ -773,13 +815,37 @@
 		</div>
 		{#if pingResult}<p class="mt-1.5 text-xs {pingResult.ok ? 'text-green-400' : 'text-red-400'}">{pingResult.msg}</p>{/if}
 
-		<div class="mt-3">
+		<!-- Manual Fastest Reg -->
+		<div class="mt-4">
+			<p class="mb-1.5 text-xs font-medium text-gray-400">Manual Fastest Reg</p>
+			<div class="flex gap-2">
+				<input type="text" bind:value={fastestRegSlug} placeholder="tournament/microspacing-vancouver-135/event/ultimate-singles"
+					class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none" />
+				<label class="flex items-center gap-1.5 text-xs text-gray-400">
+					<input type="checkbox" bind:checked={fastestRegPostToReal} class="rounded" />
+					Post to real forum
+				</label>
+				<button onclick={sendFastestReg} disabled={fastestRegRunning || !fastestRegSlug.trim()}
+					class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors">
+					{fastestRegRunning ? '…' : 'Send'}
+				</button>
+			</div>
+			{#if fastestRegResult}<pre class="mt-1.5 text-xs whitespace-pre-wrap {fastestRegResult.ok ? 'text-green-400' : 'text-red-400'}">{fastestRegResult.msg}</pre>{/if}
+		</div>
+
+		<!-- Other tools -->
+		<div class="mt-4 flex flex-wrap gap-2">
 			<button onclick={registerSlashCommands} disabled={registerRunning}
 				class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors">
 				{registerRunning ? 'Registering…' : 'Register Slash Commands'}
 			</button>
-			{#if registerResult}<span class="ml-2 text-xs {registerResult.ok ? 'text-green-400' : 'text-red-400'}">{registerResult.msg}</span>{/if}
+			<button onclick={createNewSeason} disabled={newSeasonRunning}
+				class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors">
+				{newSeasonRunning ? 'Creating…' : 'New Fastest Reg Season'}
+			</button>
 		</div>
+		{#if registerResult}<p class="mt-1.5 text-xs {registerResult.ok ? 'text-green-400' : 'text-red-400'}">{registerResult.msg}</p>{/if}
+		{#if newSeasonResult}<p class="mt-1.5 text-xs {newSeasonResult.ok ? 'text-green-400' : 'text-red-400'}">{newSeasonResult.msg}</p>{/if}
 	</div>
 	</div>
 

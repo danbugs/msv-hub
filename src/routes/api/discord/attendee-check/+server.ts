@@ -193,17 +193,26 @@ async function postFastestRegistrant(
 		lb.entries.push(newEntry);
 		const leaderboardText = buildLeaderboardText(lb.entries);
 
-		try {
-			await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
-		} catch (editErr) {
-			console.error(`[attendee-check] Failed to edit leaderboard: ${editErr}`);
-			// If edit fails, try sending as new message
+		// Try to edit Balrog's leaderboard message. If it fails (e.g. not Balrog's message),
+		// post a new leaderboard reply and track that one instead.
+		let edited = false;
+		if (lb.leaderboardMessageId) {
+			try {
+				await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
+				edited = true;
+			} catch {
+				// Can't edit (probably not Balrog's message) — post new one
+			}
+		}
+		if (!edited) {
+			const newMsgId = await sendMessageWithId(lb.threadId, leaderboardText);
+			lb.leaderboardMessageId = newMsgId;
 		}
 
 		// Post the fun reply
 		await sendMessage(lb.threadId, funMessage);
 		await saveFastestRegLeaderboard(lb);
-		return `posted to thread, updated leaderboard (${eventLabel})`;
+		return `posted to thread, ${edited ? 'edited' : 'posted new'} leaderboard (${eventLabel})`;
 	} else {
 		// No leaderboard exists — create a new forum thread
 		const entries = [newEntry];
@@ -215,8 +224,8 @@ async function postFastestRegistrant(
 		// Post the fun announcement as a reply
 		await sendMessage(thread.id, funMessage);
 
-		// We need to find the first message ID in the thread for future edits
-		// The createForumPost response doesn't include it, so fetch it
+		// The first message in the thread was created by Balrog via createForumPost,
+		// so we can edit it. Fetch its ID.
 		const { getMessages } = await import('$lib/server/discord');
 		const msgs = await getMessages(thread.id, 1);
 		const firstMsgId = msgs[0]?.id ?? '';

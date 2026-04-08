@@ -12,9 +12,18 @@ function getClient(): Anthropic {
 	return new Anthropic({ apiKey });
 }
 
+// Common AI writing tells to avoid — these make text obviously AI-generated.
+const AI_AVOIDANCE = `CRITICAL STYLE RULES — your message must sound human-written:
+- NEVER use em dashes (—). Use commas, periods, or "..." instead.
+- NEVER use these words/phrases: "delve", "tapestry", "landscape", "it's worth noting", "let's dive", "buckle up", "without further ado", "in the realm of", "game-changer", "revolutionize", "embark"
+- Don't start with "So..." or "Well..."
+- Don't use overly structured sentences. Be messy, casual.
+- Use contractions (don't, can't, won't). Never "do not" or "cannot".
+- Typos or informal grammar are OK and even encouraged.`;
+
 /**
  * Generate a short, casual fastest-registrant announcement.
- * Style: brief, goofy, like a friend posting — NOT corporate or hype-beast.
+ * Style: brief, goofy, like a friend posting.
  */
 export async function generateFastestRegMessage(
 	winner: string,
@@ -30,19 +39,22 @@ export async function generateFastestRegMessage(
 		messages: [
 			{
 				role: 'user',
-				content: `You're a chill community bot for a Smash Bros local called MSV. Someone won "fastest registrant" (first to register when reg opened).
+				content: `You're posting in a Smash Bros local Discord (MSV). Someone won "fastest registrant" (first to register when reg opened).
 
-Write a VERY short announcement (1-2 sentences). Be casual and a little goofy, like a friend posting — not corporate, not try-hard. Vary your style: sometimes a pun on their name, sometimes a short quip, sometimes just a simple congrats with personality. No emojis or max 1. No caps lock. No "ALERT" or "BREAKING". Keep it lowkey.
+Write a VERY short message (1-2 sentences). Casual, a little goofy, like a friend posting. Vary your style: pun on their name, short quip, simple congrats with personality. Max 1 emoji. No caps lock. No "ALERT" or "BREAKING". Keep it lowkey and fun.
 
-Examples of the vibe (don't copy these):
+${AI_AVOIDANCE}
+
+Examples of the vibe (don't copy these exactly):
 - "@Mossayef is our boy and he won fastest registrant for MSV#74!"
 - "HM ( @raphael ) ? More like, He Must have gotten fastest reg at MSV#70!"
 - "The 1 in his name stands for #1 fastest registrant! @BrenX1 wins fastest registrant for MSV#78!"
+- "@Captain L decided to not Captain Lose this one and took fastest registrant for MSV#75!"
 
 Winner: ${winner}
 Event: ${eventName}
 
-Output ONLY the message. Don't include runners-up — I add those.`
+Output ONLY the message text. Don't include runners-up.`
 			}
 		]
 	});
@@ -52,26 +64,34 @@ Output ONLY the message. Don't include runners-up — I add those.`
 }
 
 /**
- * Generate a motivational / community message for the Smash Bros Discord.
- * Style: encouraging, fun, on-topic for fighting game community.
+ * Generate a community message for the Smash Bros Discord #general.
+ * Style: like a regular community member posting, not a bot.
  */
 export async function generateMotivationalMessage(): Promise<string> {
 	const client = getClient();
 
 	const response = await client.messages.create({
 		model: 'claude-haiku-4-5-20251001',
-		max_tokens: 150,
+		max_tokens: 100,
 		messages: [
 			{
 				role: 'user',
-				content: `You are a friendly community bot for "Microspacing Vancouver" (MSV), a weekly Smash Bros Ultimate local in Vancouver, BC. Write a single short motivational or fun community message (1-2 sentences) to post in the #general Discord channel.
+				content: `You're posting in #general of a Smash Bros Ultimate local Discord in Vancouver (MSV). Write a single short message (1-2 sentences).
 
-Be varied — sometimes encouraging, sometimes funny, sometimes a hot take prompt, sometimes a question to spark discussion. Keep it natural and not cringe. Don't overuse emojis (0-1 max). Don't mention that you're an AI or bot.
+Be varied: sometimes encouraging, sometimes a question to spark discussion, sometimes a hot take, sometimes just vibes. Sound like a regular person in the server, not a bot.
 
-Just output the message, nothing else.`
+${AI_AVOIDANCE}
+
+Examples of the vibe:
+- "who's been labbing something new lately?"
+- "shoutout to everyone grinding, see you guys monday"
+- "real talk, who do you think is the most underrated player at MSV right now?"
+- "reminder to stretch your hands before you play. carpal tunnel is no joke"
+
+Output ONLY the message.`
 			}
 		]
 	});
 
-	return response.content[0].type === 'text' ? response.content[0].text.trim() : 'Keep grinding!';
+	return response.content[0].type === 'text' ? response.content[0].text.trim() : 'who else is hyped for next week?';
 }
