@@ -216,36 +216,53 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			runnersUp: runnersUp.map((r) => ({ tag: r.gamerTag, discordId: r.discordId }))
 		};
 
-		let lb = await getFastestRegLeaderboard();
+		async function postToThread(lb: Awaited<ReturnType<typeof getFastestRegLeaderboard>>) {
+			const leaderboardText = buildLeaderboardText([...(lb?.entries ?? []), newEntry]);
 
-		// If no Redis record, find the latest active thread in the forum
-		if (!lb?.threadId) {
+			if (lb && lb.threadId) {
+				// Try posting to the saved thread
+				try {
+					lb.entries.push(newEntry);
+
+					let edited = false;
+					if (lb.leaderboardMessageId) {
+						try {
+							await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
+							edited = true;
+						} catch { /* not Balrog's message */ }
+					}
+					if (!edited) {
+						const newMsgId = await sendMessageWithId(lb.threadId, leaderboardText);
+						lb.leaderboardMessageId = newMsgId;
+					}
+
+					await sendMessage(lb.threadId, funMessage);
+					await saveFastestRegLeaderboard(lb);
+					return true;
+				} catch {
+					// Thread probably deleted — fall through to retry
+					return false;
+				}
+			}
+			return false;
+		}
+
+		// 1. Try Redis-saved thread
+		let lb = await getFastestRegLeaderboard();
+		let posted = await postToThread(lb);
+
+		// 2. If failed (stale/deleted thread), find latest active thread in forum
+		if (!posted) {
 			const { getLatestForumThread } = await import('$lib/server/discord');
 			const latestThread = await getLatestForumThread(guildId, FASTEST_REG_FORUM_ID);
 			if (latestThread) {
 				lb = { entries: [], threadId: latestThread.id, leaderboardMessageId: '', updatedAt: Date.now() };
+				posted = await postToThread(lb);
 			}
 		}
 
-		if (lb && lb.threadId) {
-			lb.entries.push(newEntry);
-			const leaderboardText = buildLeaderboardText(lb.entries);
-
-			let edited = false;
-			if (lb.leaderboardMessageId) {
-				try {
-					await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
-					edited = true;
-				} catch { /* not Balrog's message — post new */ }
-			}
-			if (!edited) {
-				const newMsgId = await sendMessageWithId(lb.threadId, leaderboardText);
-				lb.leaderboardMessageId = newMsgId;
-			}
-
-			await sendMessage(lb.threadId, funMessage);
-			await saveFastestRegLeaderboard(lb);
-		} else {
+		// 3. If still no thread, create a new one
+		if (!posted) {
 			const leaderboardText = buildLeaderboardText([newEntry]);
 			const threadName = truncateTo100(`Fastest Registrant — Season`);
 			const thread = await createForumPost(FASTEST_REG_FORUM_ID, threadName, leaderboardText);

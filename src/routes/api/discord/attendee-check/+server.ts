@@ -174,9 +174,6 @@ async function postFastestRegistrant(
 		funMessage = `${winnerMention} wins fastest registrant for ${eventLabel}!\n\nTop 3 after: ${runnerTags.join(', ')}`;
 	}
 
-	// Load leaderboard, or find the latest existing thread in the forum
-	let lb = await getFastestRegLeaderboard();
-
 	const newEntry: FastestRegEntry = {
 		eventLabel,
 		winnerTag: winner.gamerTag,
@@ -184,55 +181,63 @@ async function postFastestRegistrant(
 		runnersUp: runnersUp.map((r) => ({ tag: r.gamerTag, discordId: r.discordId }))
 	};
 
-	// If no Redis record, look for the latest active thread in the forum
-	if (!lb?.threadId) {
-		const latestThread = await getLatestForumThread(guildId, FASTEST_REG_FORUM_ID);
-		if (latestThread) {
-			lb = { entries: [], threadId: latestThread.id, leaderboardMessageId: '', updatedAt: Date.now() };
+	async function tryPostToThread(lb: Awaited<ReturnType<typeof getFastestRegLeaderboard>>): Promise<string | null> {
+		if (!lb?.threadId) return null;
+		try {
+			lb.entries.push(newEntry);
+			const leaderboardText = buildLeaderboardText(lb.entries);
+
+			let edited = false;
+			if (lb.leaderboardMessageId) {
+				try {
+					await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
+					edited = true;
+				} catch { /* not Balrog's message */ }
+			}
+			if (!edited) {
+				const newMsgId = await sendMessageWithId(lb.threadId, leaderboardText);
+				lb.leaderboardMessageId = newMsgId;
+			}
+
+			await sendMessage(lb.threadId, funMessage);
+			await saveFastestRegLeaderboard(lb);
+			return `posted to thread, ${edited ? 'edited' : 'posted new'} leaderboard (${eventLabel})`;
+		} catch {
+			return null; // thread probably deleted
 		}
 	}
 
-	if (lb && lb.threadId) {
-		lb.entries.push(newEntry);
-		const leaderboardText = buildLeaderboardText(lb.entries);
+	// 1. Try Redis-saved thread
+	let lb = await getFastestRegLeaderboard();
+	let result = await tryPostToThread(lb);
 
-		// Try to edit Balrog's leaderboard message. If it fails (not Balrog's msg),
-		// post a new leaderboard reply and track that one instead.
-		let edited = false;
-		if (lb.leaderboardMessageId) {
-			try {
-				await editMessage(lb.threadId, lb.leaderboardMessageId, leaderboardText);
-				edited = true;
-			} catch { /* not Balrog's message */ }
+	// 2. If failed, find latest active thread in forum
+	if (!result) {
+		const latestThread = await getLatestForumThread(guildId, FASTEST_REG_FORUM_ID);
+		if (latestThread) {
+			lb = { entries: [], threadId: latestThread.id, leaderboardMessageId: '', updatedAt: Date.now() };
+			result = await tryPostToThread(lb);
 		}
-		if (!edited) {
-			const newMsgId = await sendMessageWithId(lb.threadId, leaderboardText);
-			lb.leaderboardMessageId = newMsgId;
-		}
+	}
 
-		await sendMessage(lb.threadId, funMessage);
-		await saveFastestRegLeaderboard(lb);
-		return `posted to thread, ${edited ? 'edited' : 'posted new'} leaderboard (${eventLabel})`;
-	} else {
-		// No thread exists at all — create a new forum thread
+	// 3. If still no thread, create a new one
+	if (!result) {
 		const entries = [newEntry];
 		const leaderboardText = buildLeaderboardText(entries);
-
 		const threadName = truncateTo100(`Fastest Registrant — Season`);
 		const thread = await createForumPost(FASTEST_REG_FORUM_ID, threadName, leaderboardText);
 		await sendMessage(thread.id, funMessage);
 
 		const { getMessages } = await import('$lib/server/discord');
 		const msgs = await getMessages(thread.id, 1);
-
 		await saveFastestRegLeaderboard({
-			entries,
-			threadId: thread.id,
-			leaderboardMessageId: msgs[0]?.id ?? '',
-			updatedAt: Date.now()
+			entries, threadId: thread.id,
+			leaderboardMessageId: msgs[0]?.id ?? '', updatedAt: Date.now()
 		});
-		return `created new forum thread (${eventLabel})`;
+		result = `created new forum thread (${eventLabel})`;
 	}
+
+	return result;
 }
 
 async function handleAttendeeCheck(request: Request) {
