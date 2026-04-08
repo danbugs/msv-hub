@@ -187,28 +187,12 @@
 			<div class="pb-6 pt-1 min-w-0 flex-1">
 				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Monday — Tournament Day</p>
 
-				<!-- Pre-tournament setup check -->
-				<button onclick={() => toggle('pre-tourney-check')}
-					class="w-full text-left rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
-					<div class="font-medium text-white">Pre-Tournament Check</div>
-					<div class="mt-0.5 text-sm text-gray-400">Verify setup count, ping for more setups if needed</div>
-				</button>
-				{#if expandedStep === 'pre-tourney-check'}
-					<div class="mt-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4 text-sm text-gray-300 space-y-3">
-						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Go to the StartGG event dashboard → <strong class="text-gray-200">Attendees</strong> (admin view) → <strong class="text-gray-200">Export attendee list</strong>. Count how many attendees marked "bringing a setup" in the custom options. Don't forget to include Tony's setup in the total.</li>
-							<li>If you have fewer than <strong class="text-gray-200">16 setups</strong>, post in <strong class="text-gray-200">#announcements</strong>. Refer to a previous setup-request message for the template. The message should:
-								<ul class="list-disc list-inside ml-4 mt-1 space-y-1">
-									<li>Mention you are <strong class="text-gray-200">X setups under the preferred 16</strong> to run Swiss.</li>
-									<li>Ping everyone who is bringing a setup and ask them not to forget their equipment.</li>
-									<li>Ping everyone who is not bringing a setup and ask them to consider pledging.</li>
-									<li>Ask people to mention in <strong class="text-gray-200">#talk-to-a-to</strong> if they can pledge a setup.</li>
-								</ul>
-							</li>
-							<li>Send a <strong class="text-gray-200">screenshot of the attendees</strong> from the Pools & Seeding page on StartGG to the management or admin chat for attendance tracking.</li>
-						</ol>
-					</div>
-				{/if}
+				<!-- Attendance & Setup Tracking -->
+				<a href="/dashboard/tournament/attendance"
+					class="block rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
+					<div class="font-medium text-white">Attendance & Setups</div>
+					<div class="mt-0.5 text-sm text-gray-400">Track who's here, verify setups, mark attendance for TOs to collaborate</div>
+				</a>
 
 				<!-- Active tournament card -->
 				<div class="mt-2">

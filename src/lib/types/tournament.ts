@@ -50,6 +50,22 @@ export interface TournamentState {
 	startggRedemptionBracketEventId?: number;
 	/** StartGG sync state for bracket reporting */
 	startggSync?: StartggSyncState;
+	/** Attendance and setup tracking — persisted for TO collaboration */
+	attendance?: AttendeeStatus[];
+}
+
+export interface AttendeeStatus {
+	gamerTag: string;
+	/** Pledged a setup during registration */
+	pledgedSetup: boolean;
+	/** TO confirmed player is present at venue */
+	present?: boolean;
+	/** TO confirmed player has set up their station */
+	setupDeployed?: boolean;
+	/** Registration timestamp from StartGG */
+	registeredAt?: string;
+	/** Discord user ID for pinging */
+	discordId?: string;
 }
 
 export interface Entrant {
