@@ -319,9 +319,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		}
 	}
 
-	// Fire-and-forget: trigger StartGG preview→real conversion and cache real set IDs.
-	// Sets cacheReady=false immediately so the UI shows the "Re-hydrating" banner, then
-	// cacheReady=true once real IDs are populated (~30–60 s for round 1; near-instant for later rounds).
+	// Cache preview set IDs in background. No conversion needed — preview IDs work for
+	// the first report. After that, cacheRealSetIds() instantly fetches real IDs.
 	if (pgId) {
 		if (!tournament.startggSync) {
 			tournament.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
@@ -329,7 +328,6 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		tournament.startggSync.cacheReady = false;
 		await saveTournament(tournament);
 
-		// Run conversion in background. On Vercel, use waitUntil to keep function alive.
 		const conversionPromise = triggerConversionAndCache(tournament, nextRound, pgId).catch(() => {});
 		try {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
