@@ -242,22 +242,37 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		if (threadId) {
-			// Always read the OP to get ground-truth entries
 			const threadMsgs = await getMessages(threadId, 50);
-			const op = threadMsgs.length > 0
-				? threadMsgs.reduce((oldest, m) => BigInt(m.id) < BigInt(oldest.id) ? m : oldest)
-				: null;
-			const opEntries = op ? parseLeaderboardEntries(op.content) : [];
-			console.log(`[test-trigger] OP parsed ${opEntries.length} entries: ${opEntries.map(e => e.eventLabel).join(', ')}`);
 
-			// Merge: OP entries + new entry (deduplicate by eventLabel)
-			const allEntries = [...opEntries];
+			// Primary source: Balrog's own leaderboard message (has all entries including ones Balrog added)
+			// Fallback: the OP (human-maintained, only has original entries)
+			let existingEntries: import('$lib/server/store').FastestRegEntry[] = [];
+
+			if (leaderboardMessageId) {
+				const balrogMsg = threadMsgs.find((m) => m.id === leaderboardMessageId);
+				if (balrogMsg) {
+					existingEntries = parseLeaderboardEntries(balrogMsg.content);
+					console.log(`[test-trigger] Balrog msg parsed ${existingEntries.length} entries`);
+				}
+			}
+
+			// If Balrog's message wasn't found or had no entries, fall back to OP
+			if (existingEntries.length === 0) {
+				const op = threadMsgs.length > 0
+					? threadMsgs.reduce((oldest, m) => BigInt(m.id) < BigInt(oldest.id) ? m : oldest)
+					: null;
+				existingEntries = op ? parseLeaderboardEntries(op.content) : [];
+				console.log(`[test-trigger] OP parsed ${existingEntries.length} entries`);
+			}
+
+			// Add new entry (deduplicate)
+			const allEntries = [...existingEntries];
 			if (!allEntries.some((e) => e.eventLabel === newEntry.eventLabel)) {
 				allEntries.push(newEntry);
 			}
 			const leaderboardText = buildLeaderboardText(allEntries);
 
-			// Try to edit Balrog's tracked leaderboard message
+			// Try to edit Balrog's tracked message; if stale, post a new one
 			let edited = false;
 			if (leaderboardMessageId) {
 				try {

@@ -201,15 +201,26 @@ async function postFastestRegistrant(
 	let result: string;
 
 	if (threadId) {
-		// Always read the OP to get ground-truth entries
 		const threadMsgs = await fetchMessages(threadId, 50);
-		const op = threadMsgs.length > 0
-			? threadMsgs.reduce((oldest, m) => BigInt(m.id) < BigInt(oldest.id) ? m : oldest)
-			: null;
-		const opEntries = op ? parseLeaderboardEntries(op.content) : [];
 
-		// Merge: OP entries + new entry (deduplicate)
-		const allEntries = [...opEntries];
+		// Primary: Balrog's own leaderboard message (has all entries including Balrog's additions)
+		// Fallback: the OP (human-maintained, only has original entries)
+		let existingEntries: FastestRegEntry[] = [];
+
+		if (leaderboardMessageId) {
+			const balrogMsg = threadMsgs.find((m) => m.id === leaderboardMessageId);
+			if (balrogMsg) {
+				existingEntries = parseLeaderboardEntries(balrogMsg.content);
+			}
+		}
+		if (existingEntries.length === 0) {
+			const op = threadMsgs.length > 0
+				? threadMsgs.reduce((oldest, m) => BigInt(m.id) < BigInt(oldest.id) ? m : oldest)
+				: null;
+			existingEntries = op ? parseLeaderboardEntries(op.content) : [];
+		}
+
+		const allEntries = [...existingEntries];
 		if (!allEntries.some((e) => e.eventLabel === newEntry.eventLabel)) {
 			allEntries.push(newEntry);
 		}
