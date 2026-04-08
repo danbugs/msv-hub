@@ -312,12 +312,30 @@ export async function restartPhase(phaseId: number): Promise<{ ok: boolean; erro
 export async function addEntrantsToPhase(
 	eventId: number,
 	destPhaseId: number,
-	entrantIds: number[]
+	entrantIds: number[],
+	/** Current number of seeds in the phase (needed for clearing). If not provided, fetched from API. */
+	currentNumSeeds?: number
 ): Promise<{ ok: boolean; error?: string }> {
-	if (!entrantIds.length) return { ok: true };
-
 	const cookie = await getSessionCookie();
 	const now = Math.floor(Date.now() / 1000);
+
+	// When clearing (empty entrantIds), we need the actual current seed count
+	let numSeeds = entrantIds.length;
+	if (entrantIds.length === 0) {
+		if (currentNumSeeds !== undefined) {
+			numSeeds = currentNumSeeds;
+		} else {
+			// Fetch current seed count
+			try {
+				const seedData = await gql<{ phase: { seeds: { pageInfo: { total: number } } } }>(
+					'query($id:ID!){phase(id:$id){seeds(query:{page:1,perPage:1}){pageInfo{total}}}}',
+					{ id: destPhaseId }, { delay: 0 }
+				);
+				numSeeds = seedData?.phase?.seeds?.pageInfo?.total ?? 0;
+			} catch { /* use 0 */ }
+		}
+		if (numSeeds === 0) return { ok: true }; // Already empty
+	}
 
 	const initialEntrants: Record<string, boolean> = {};
 	for (const id of entrantIds) initialEntrants[String(id)] = true;
@@ -352,7 +370,7 @@ export async function addEntrantsToPhase(
 				createdAt: now,
 				destSeedOrder: 0,
 				outputType: 1,
-				numSeeds: 0,
+				numSeeds,
 				destBracketSide: 1,
 				originPlacement: null,
 				initialEntrants
