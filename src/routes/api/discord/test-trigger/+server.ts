@@ -158,25 +158,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return isNaN(ts.getTime()) ? null : ts;
 		}
 
+		// CSV timestamps from StartGG are already in Pacific Time — don't convert again
 		const publicRegs = attendees.filter((a) => {
 			const ts = parseRegTs(a.registeredAt);
 			if (!ts) return false;
-			const pstStr = ts.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
-			const pst = new Date(pstStr);
-			const dow = pst.getDay();
-			return dow === targetDow && pst.getHours() * 60 + pst.getMinutes() >= regThreshold;
+			return ts.getDay() === targetDow && ts.getHours() * 60 + ts.getMinutes() >= regThreshold;
 		});
 
 		if (publicRegs.length < 4) {
 			// Debug: show first 10 attendees with parsed dates for troubleshooting
+			// CSV times are already Pacific — no conversion needed
 			const debugLines = attendees.map((a) => {
 				const ts = parseRegTs(a.registeredAt);
-				let pstInfo = 'unparseable';
+				let info = 'unparseable';
 				if (ts) {
-					const pst = new Date(ts.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-					pstInfo = `dow=${pst.getDay()} ${pst.getHours()}:${String(pst.getMinutes()).padStart(2, '0')}`;
+					info = `dow=${ts.getDay()} ${ts.getHours()}:${String(ts.getMinutes()).padStart(2, '0')}`;
 				}
-				return `${a.gamerTag}: raw="${a.registeredAt}" → ${pstInfo}`;
+				return `${a.gamerTag}: raw="${a.registeredAt}" → ${info}`;
 			}).join('\n');
 			return Response.json({
 				error: `Only ${publicRegs.length} public registrants (need 4). Total: ${attendees.length}. Target: dow=${targetDow} >=${config.registrationHour}:${String(config.registrationMinute).padStart(2, '0')}\n\nAll ${attendees.length}:\n${debugLines}`

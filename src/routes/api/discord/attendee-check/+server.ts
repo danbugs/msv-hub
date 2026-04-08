@@ -89,13 +89,6 @@ function parseRegTimestamp(raw: string): Date | null {
 	return null;
 }
 
-/** Convert a Date to Pacific Time components. */
-function toPacific(d: Date): { dow: number; hour: number; minute: number } {
-	const pstStr = d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
-	const pst = new Date(pstStr);
-	return { dow: pst.getDay(), hour: pst.getHours(), minute: pst.getMinutes() };
-}
-
 /**
  * Get the fastest registrants from the StartGG export CSV.
  *
@@ -117,11 +110,14 @@ async function findFastestRegistrants(
 
 	const results: { gamerTag: string; discordId: string; registeredAt: string }[] = [];
 
+	// CSV timestamps from StartGG are already in Pacific Time — don't convert again
 	for (const a of attendees) {
 		const ts = parseRegTimestamp(a.registeredAt);
 		if (!ts) continue;
 
-		const { dow, hour, minute } = toPacific(ts);
+		const dow = ts.getDay();
+		const hour = ts.getHours();
+		const minute = ts.getMinutes();
 
 		if (dow === targetDow && hour * 60 + minute >= regThresholdMinutes) {
 			results.push({
