@@ -459,9 +459,18 @@ export async function exportAttendees(
 	tournamentId: number
 ): Promise<{ gamerTag: string; registeredAt: string; bringingSetup: string; discordId: string; events: string[] }[]> {
 	const url = `https://www.start.gg/api-proxy/tournament/${tournamentId}/export_attendees`;
-	const res = await adminFetch(url, { method: 'GET' });
+	console.log(`[startgg-admin] Exporting attendees for tournament ${tournamentId}...`);
+	let res: Response;
+	try {
+		res = await adminFetch(url, { method: 'GET' });
+	} catch (e) {
+		console.error(`[startgg-admin] Export fetch error: ${e}`);
+		return [];
+	}
+	console.log(`[startgg-admin] Export response: ${res.status} ${res.statusText}`);
 	if (!res.ok) {
-		console.error(`[startgg-admin] Export attendees failed: HTTP ${res.status} for tournament ${tournamentId}`);
+		const body = await res.text().catch(() => '');
+		console.error(`[startgg-admin] Export failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
 		return [];
 	}
 	const text = await res.text();

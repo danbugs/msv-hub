@@ -49,7 +49,9 @@ export const POST: RequestHandler = async ({ locals }) => {
 		return Response.json({ error: `Could not resolve tournament ID (eventId=${tournament.startggEventId}, slug=${tournament.startggEventSlug})` }, { status: 400 });
 	}
 
+	console.log(`[attendance] Resolved tournament ID: ${tournamentId}`);
 	const attendees = await exportAttendees(tournamentId);
+	console.log(`[attendance] Export returned ${attendees.length} attendees`);
 	if (!attendees.length) {
 		return Response.json({ error: `Export returned 0 attendees for tournament ${tournamentId}. Check admin permissions.` }, { status: 400 });
 	}
