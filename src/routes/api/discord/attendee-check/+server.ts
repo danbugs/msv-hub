@@ -163,14 +163,14 @@ async function postFastestRegistrant(
 	if (!guildId) return 'DISCORD_GUILD_ID not set, skipped';
 
 	// Only ping the winner; runners-up just use gamer tags
-	const winnerMention = mention(winner.gamerTag, winner.discordId);
 	const runnerTags = runnersUp.map((r) => r.gamerTag);
 
 	let funMessage: string;
 	try {
-		funMessage = await generateFastestRegMessage(winnerMention, eventLabel, runnerTags);
+		funMessage = await generateFastestRegMessage(winner.gamerTag, eventLabel, runnerTags, winner.discordId);
 	} catch (aiErr) {
 		console.error(`[attendee-check] AI message generation failed: ${aiErr}`);
+		const winnerMention = mention(winner.gamerTag, winner.discordId);
 		funMessage = `${winnerMention} wins fastest registrant for ${eventLabel}!\n\nTop 3 after: ${runnerTags.join(', ')}`;
 	}
 

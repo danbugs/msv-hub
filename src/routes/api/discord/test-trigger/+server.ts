@@ -191,7 +191,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		let funMessage: string;
 		try {
-			funMessage = await generateFastestRegMessage(winnerMention, eventLabel, runnerTags);
+			funMessage = await generateFastestRegMessage(winner.gamerTag, eventLabel, runnerTags, winner.discordId);
 		} catch {
 			funMessage = `${winnerMention} wins fastest registrant for ${eventLabel}!\n\nTop 3 after: ${runnerTags.join(', ')}`;
 		}

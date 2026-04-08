@@ -26,13 +26,14 @@ const AI_AVOIDANCE = `CRITICAL STYLE RULES — your message must sound human-wri
  * Style: brief, goofy, like a friend posting.
  */
 export async function generateFastestRegMessage(
-	winner: string,
+	winnerTag: string,
 	eventName: string,
-	topRunners: string[]
+	topRunners: string[],
+	/** If provided, replaces @winnerTag with <@discordId> in the final message */
+	winnerDiscordId?: string
 ): Promise<string> {
 	const client = getClient();
 	const runnersUp = topRunners.length > 0 ? `\n\nTop 3 after: ${topRunners.join(', ')}` : '';
-	// Note: winner may be a Discord mention (<@id>) or gamer tag. topRunners are always gamer tags.
 
 	const response = await client.messages.create({
 		model: 'claude-haiku-4-5-20251001',
@@ -53,16 +54,23 @@ Examples of the vibe (don't copy these exactly, and NEVER repeat the same joke s
 - "@Captain L decided to not Captain Lose this one and took fastest registrant for MSV#75!"
 - "@xInferno frame-perfect cancelled registration and hit confirm for MSV#73!"
 
-Winner: ${winner}
+Winner: @${winnerTag}
 Event: ${eventName}
 
-Output ONLY the message text. Don't include runners-up.`
+Output ONLY the message text. Always refer to the winner as @${winnerTag}. Don't include runners-up.`
 			}
 		]
 	});
 
-	const text = response.content[0].type === 'text' ? response.content[0].text : '';
-	return text.trim() + runnersUp;
+	let text = response.content[0].type === 'text' ? response.content[0].text : '';
+	text = text.trim();
+
+	// Replace @gamerTag with proper Discord mention if we have a valid snowflake
+	if (winnerDiscordId && /^\d{17,20}$/.test(winnerDiscordId)) {
+		text = text.replace(new RegExp(`@${winnerTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'gi'), `<@${winnerDiscordId}>`);
+	}
+
+	return text + runnersUp;
 }
 
 /**
