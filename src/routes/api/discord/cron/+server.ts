@@ -17,6 +17,8 @@ import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { sendMessage, buildAnnouncementMessage } from '$lib/server/discord';
 import { getDiscordConfig } from '$lib/server/store';
+import { setRegistrationPublished } from '$lib/server/startgg-admin';
+import { gql } from '$lib/server/startgg';
 
 const DAY_MAP: Record<string, number> = {
 	sun: 0,
@@ -90,6 +92,23 @@ async function handleCron(request: Request) {
 		const wrappedDiff = Math.min(diff, 7 * 24 * 60 - diff);
 
 		if (wrappedDiff <= 15) {
+			// Auto-open registration before sending announcement
+			try {
+				const slugMatch = config.eventSlug.match(/tournament\/([^/]+)/);
+				if (slugMatch) {
+					const tData = await gql<{ tournament: { id: number } }>(
+						'query($slug:String!){tournament(slug:$slug){id}}',
+						{ slug: slugMatch[1] }
+					);
+					if (tData?.tournament?.id) {
+						const openResult = await setRegistrationPublished(tData.tournament.id, true);
+						results.push(openResult.ok ? 'registration opened' : `open reg failed: ${openResult.error}`);
+					}
+				}
+			} catch (e) {
+				results.push(`open reg error: ${e instanceof Error ? e.message : String(e)}`);
+			}
+
 			const announceChannelId = channelId('DISCORD_CHANNEL_ANNOUNCE', '1066863301885173800');
 			const message = buildAnnouncementMessage(
 				config.eventSlug,
@@ -118,6 +137,6 @@ async function handleCron(request: Request) {
 	return Response.json({ ok: true, fired, reason: results.join('; ') });
 }
 
-// Accept both GET (Vercel Cron) and POST (GitHub Actions)
+// Accept both GET (QStash) and POST (manual/legacy)
 export const GET: RequestHandler = async ({ request }) => handleCron(request);
 export const POST: RequestHandler = async ({ request }) => handleCron(request);

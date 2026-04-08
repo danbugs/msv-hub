@@ -389,6 +389,78 @@ export async function addEntrantsToPhase(
 }
 
 /**
+ * Open (or close) tournament registration by toggling the publish state.
+ * featureId 3 = registration visibility.
+ */
+export async function setRegistrationPublished(
+	tournamentId: number,
+	published: boolean
+): Promise<{ ok: boolean; error?: string }> {
+	const data = await adminGql<{ updateProfilePublishing: { publishState: string } }>(
+		`mutation UpdatePublishing($profileType: String!, $profileId: ID!, $featureId: ID!, $publishState: PublishState!) {
+			updateProfilePublishing(profileType: $profileType, profileId: $profileId, featureId: $featureId, publishState: $publishState) {
+				id publishState
+			}
+		}`,
+		{
+			profileType: 'tournament',
+			profileId: tournamentId,
+			featureId: 3,
+			publishState: published ? 'PUBLISHED' : 'ADMIN_ONLY'
+		}
+	);
+	if (!data) return { ok: false, error: 'UpdatePublishing mutation failed' };
+	return { ok: true };
+}
+
+/**
+ * Export attendees CSV from StartGG. Returns parsed rows with key fields.
+ */
+export async function exportAttendees(
+	tournamentId: number
+): Promise<{ gamerTag: string; registeredAt: string; bringingSetup: string; discordId: string; events: string[] }[]> {
+	const cookie = await getSessionCookie();
+	const res = await fetch(`https://www.start.gg/api-proxy/tournament/${tournamentId}/export_attendees`, {
+		headers: { 'Cookie': cookie, 'Client-Version': '20' }
+	});
+	if (!res.ok) return [];
+	const text = await res.text();
+	const lines = text.split('\n').filter(Boolean);
+	if (lines.length < 2) return [];
+
+	// Parse CSV header
+	const header = lines[0].split(',').map((h) => h.replace(/^"|"$/g, '').trim());
+	const setupIdx = header.findIndex((h) => h.toLowerCase().includes('bring a setup'));
+	const regDateIdx = header.indexOf('Registered At Date');
+	const regTimeIdx = header.indexOf('Registered At Time');
+	const tagIdx = header.indexOf('GamerTag');
+	const discordIdx = header.indexOf('Discord ID');
+
+	const results: { gamerTag: string; registeredAt: string; bringingSetup: string; discordId: string; events: string[] }[] = [];
+
+	for (let i = 1; i < lines.length; i++) {
+		// Simple CSV parse (handles quoted fields)
+		const row = lines[i].match(/("([^"]*)"|[^,]*)/g)?.map((v) => v.replace(/^"|"$/g, '').trim()) ?? [];
+		const tag = tagIdx >= 0 ? row[tagIdx] ?? '' : '';
+		const regDate = regDateIdx >= 0 ? row[regDateIdx] ?? '' : '';
+		const regTime = regTimeIdx >= 0 ? row[regTimeIdx] ?? '' : '';
+		const setup = setupIdx >= 0 ? row[setupIdx] ?? '' : '';
+		const discord = discordIdx >= 0 ? row[discordIdx] ?? '' : '';
+		if (tag) {
+			results.push({
+				gamerTag: tag,
+				registeredAt: `${regDate} ${regTime}`.trim(),
+				bringingSetup: setup,
+				discordId: discord,
+				events: [] // Could parse event columns if needed
+			});
+		}
+	}
+
+	return results;
+}
+
+/**
  * Finalize placements for a phase group (e.g., Final Standings).
  * Uses the internal REST endpoint to set exact placement order.
  */

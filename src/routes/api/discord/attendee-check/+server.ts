@@ -104,6 +104,6 @@ async function handleAttendeeCheck(request: Request) {
 	return Response.json({ ok: true, fired: false, entrants: numEntrants });
 }
 
-// Accept both GET (Vercel Cron) and POST (GitHub Actions)
+// Accept both GET (QStash) and POST (manual/legacy)
 export const GET: RequestHandler = async ({ request }) => handleAttendeeCheck(request);
 export const POST: RequestHandler = async ({ request }) => handleAttendeeCheck(request);

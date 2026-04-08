@@ -633,7 +633,7 @@
 					<p class="text-sm font-medium text-white">Registration Announcement</p>
 					<div class="mt-1 flex items-center gap-2 text-xs text-gray-500">
 						<span class="inline-block h-1.5 w-1.5 rounded-full bg-violet-500"></span>
-						{nextAnnouncement} <span class="text-gray-600">(automatic via Vercel cron)</span>
+						{nextAnnouncement} <span class="text-gray-600">(automatic via QStash)</span>
 					</div>
 				</div>
 				<div>
