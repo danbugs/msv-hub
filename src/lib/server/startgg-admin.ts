@@ -11,6 +11,36 @@ const LOGIN_URL = 'https://www.start.gg/api/-/rest/user/login';
 const PHASE_REST_URL = 'https://www.start.gg/api/-/rest/phase';
 
 let cachedSession: { cookie: string; expiresAt: number } | null = null;
+const SESSION_TTL = 30 * 60 * 1000; // 30 minutes
+
+/** Invalidate the cached session (call on 403 to trigger re-login). */
+function invalidateSession() {
+	cachedSession = null;
+}
+
+/** Fetch with session cookie, auto-retry on 403 (expired session). */
+async function adminFetch(url: string, options: RequestInit = {}): Promise<Response> {
+	for (let attempt = 0; attempt < 2; attempt++) {
+		const cookie = await getSessionCookie();
+		const res = await fetch(url, {
+			...options,
+			headers: {
+				'Content-Type': 'application/json',
+				'Cookie': cookie,
+				'Client-Version': '20',
+				...(options.headers ?? {})
+			}
+		});
+		if (res.status === 403 && attempt === 0) {
+			console.log(`[startgg-admin] 403 on ${url.split('?')[0]} — re-logging in...`);
+			invalidateSession();
+			continue;
+		}
+		return res;
+	}
+	// Shouldn't reach here, but just in case
+	throw new Error('adminFetch exhausted retries');
+}
 
 /** Login to StartGG and get a session cookie. Cached for 1 hour. */
 async function getSessionCookie(): Promise<string> {
@@ -43,7 +73,7 @@ async function getSessionCookie(): Promise<string> {
 	const cookie = raw.match(/(gg_session=[^;]+)/)?.[1];
 	if (!cookie) throw new Error('StartGG login succeeded but no gg_session cookie returned');
 
-	cachedSession = { cookie, expiresAt: Date.now() + 60 * 60 * 1000 }; // 1 hour
+	cachedSession = { cookie, expiresAt: Date.now() + SESSION_TTL };
 	return cookie;
 }
 
@@ -55,38 +85,47 @@ mutation UpdateParticipantRegistration($participantId: ID!, $regData: [UpdatePar
   }
 }`;
 
-/** Call the production GQL endpoint with session cookie */
+/** Call the production GQL endpoint with session cookie. Retries once on 403 (expired session). */
 async function adminGql<T = Record<string, unknown>>(
 	query: string,
 	variables: Record<string, unknown>
 ): Promise<T | null> {
-	const cookie = await getSessionCookie();
-	const res = await fetch(PROD_GQL, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			'Cookie': cookie,
-			'Client-Version': '20',
-			'X-web-source': 'gg-web-gql-client',
-			'Accept': '*/*'
-		},
-		body: JSON.stringify({ query, variables })
-	});
+	for (let attempt = 0; attempt < 2; attempt++) {
+		const cookie = await getSessionCookie();
+		const res = await fetch(PROD_GQL, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Cookie': cookie,
+				'Client-Version': '20',
+				'X-web-source': 'gg-web-gql-client',
+				'Accept': '*/*'
+			},
+			body: JSON.stringify({ query, variables })
+		});
 
-	if (!res.ok) {
-		console.error(`[startgg-admin] HTTP ${res.status}`);
-		return null;
-	}
-
-	const json = await res.json();
-	if (json.errors?.length) {
-		for (const err of json.errors) {
-			console.error(`[startgg-admin] GQL error: ${err.message}`);
+		if (res.status === 403 && attempt === 0) {
+			console.log('[startgg-admin] 403 — session expired, re-logging in...');
+			invalidateSession();
+			continue;
 		}
-		return null;
-	}
 
-	return json.data as T;
+		if (!res.ok) {
+			console.error(`[startgg-admin] HTTP ${res.status}`);
+			return null;
+		}
+
+		const json = await res.json();
+		if (json.errors?.length) {
+			for (const err of json.errors) {
+				console.error(`[startgg-admin] GQL error: ${err.message}`);
+			}
+			return null;
+		}
+
+		return json.data as T;
+	}
+	return null;
 }
 
 interface ParticipantInfo {
