@@ -46,7 +46,7 @@ function extractEventLabel(slug: string): string {
 }
 
 function mentionStr(tag: string, discordId: string): string {
-	return discordId ? `<@${discordId}>` : tag;
+	return discordId && /^\d+$/.test(discordId) ? `<@${discordId}>` : tag;
 }
 
 export const POST: RequestHandler = async ({ request, locals }) => {

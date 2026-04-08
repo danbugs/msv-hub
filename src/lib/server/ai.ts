@@ -41,15 +41,16 @@ export async function generateFastestRegMessage(
 				role: 'user',
 				content: `You're posting in a Smash Bros local Discord (MSV). Someone won "fastest registrant" (first to register when reg opened).
 
-Write a VERY short message (1-2 sentences). Casual, a little goofy, like a friend posting. Vary your style: pun on their name, short quip, simple congrats with personality. Max 1 emoji. No caps lock. No "ALERT" or "BREAKING". Keep it lowkey and fun.
+Write a VERY short message (1-2 sentences). Casual, a little goofy, like a friend posting. Use Smash Bros / fighting game references when possible (frame perfect, buffered input, read the opponent, tech skill, 0-to-death, etc.) but don't force it. Vary your style each time: pun on their name, game reference, short quip, simple congrats with personality. Max 1 emoji. No caps lock. No "ALERT" or "BREAKING". Keep it lowkey and fun.
 
 ${AI_AVOIDANCE}
 
-Examples of the vibe (don't copy these exactly):
+Examples of the vibe (don't copy these exactly, and NEVER repeat the same joke structure twice in a row):
 - "@Mossayef is our boy and he won fastest registrant for MSV#74!"
 - "HM ( @raphael ) ? More like, He Must have gotten fastest reg at MSV#70!"
 - "The 1 in his name stands for #1 fastest registrant! @BrenX1 wins fastest registrant for MSV#78!"
 - "@Captain L decided to not Captain Lose this one and took fastest registrant for MSV#75!"
+- "@xInferno frame-perfect cancelled registration and hit confirm for MSV#73!"
 
 Winner: ${winner}
 Event: ${eventName}

@@ -131,9 +131,9 @@ async function findFastestRegistrants(
 	return results;
 }
 
-/** Format a mention: Discord <@id> if available, otherwise gamer tag. */
+/** Format a mention: Discord <@id> if valid numeric snowflake, otherwise gamer tag. */
 function mention(tag: string, discordId: string): string {
-	return discordId ? `<@${discordId}>` : tag;
+	return discordId && /^\d+$/.test(discordId) ? `<@${discordId}>` : tag;
 }
 
 /**
