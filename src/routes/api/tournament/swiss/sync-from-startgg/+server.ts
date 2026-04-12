@@ -77,9 +77,23 @@ export const POST: RequestHandler = async ({ locals }) => {
 			if (!match) { skipped++; continue; }
 
 			const winnerId = set.winnerId as number | null | undefined;
-			// Only pull UPDATES/ADDITIONS from StartGG — don't clear MSV matches when
-			// StartGG set is unreported (could be a timer in progress, or StartGG lagging).
-			if (!winnerId) { skipped++; continue; }
+
+			// Sync from StartGG = make MSV Hub match StartGG exactly.
+			// If StartGG has no winner but MSV does, clear MSV (user intentionally
+			// called sync — they want StartGG to be the source of truth).
+			if (!winnerId) {
+				if (match.winnerId) {
+					match.winnerId = undefined;
+					match.topScore = undefined;
+					match.bottomScore = undefined;
+					match.isDQ = false;
+					synced++;
+					perRound[roundNum] = (perRound[roundNum] ?? 0) + 1;
+				} else {
+					skipped++;
+				}
+				continue;
+			}
 
 			const msvWinner = startggToMsvHub.get(Number(winnerId));
 			if (!msvWinner) { skipped++; continue; }

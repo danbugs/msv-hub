@@ -412,27 +412,39 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (isDQ) { match.isDQ = true; match.topScore = undefined; match.bottomScore = undefined; }
 	else { match.isDQ = false; if (topScore !== undefined) match.topScore = topScore; if (bottomScore !== undefined) match.bottomScore = bottomScore; }
 
-	// Distributed lock: serialize concurrent reports during preview→real conversion.
-	// Only locks when the match has a preview ID cached (the usual case for first report
-	// of each round). Concurrent reports with preview IDs wait for the first to finish
-	// conversion, then reload to pick up real IDs.
+	// Distributed lock: serialize reports during preview→real conversion AND
+	// when background caching hasn't populated preview IDs yet (R2+ first report).
 	const { acquireLock, waitForLock, releaseLock } = await import('$lib/server/store');
 	const lockKey = `lock:swiss_convert:${tournament.slug}:${targetRound.number}`;
 
-	const isPreview = match.startggSetId?.startsWith('preview_') ?? false;
+	const hasRealId = match.startggSetId && !match.startggSetId.startsWith('preview_');
 	let gotLock = false;
 
-	if (isPreview) {
+	if (!hasRealId) {
 		gotLock = await acquireLock(lockKey, 15);
 		if (!gotLock) {
-			// Another report holds the lock — wait briefly, then reload to get real IDs
+			// Another report holds the lock — wait, then reload to get the real IDs it cached
 			await waitForLock(lockKey, 10000);
 			const reloaded = await getActiveTournament();
 			if (reloaded) {
 				const reloadedRound = reloaded.rounds.find((r) => r.number === targetRound!.number);
 				const reloadedMatch = reloadedRound?.matches.find((m) => m.id === matchId);
-				if (reloadedMatch?.startggSetId && !reloadedMatch.startggSetId.startsWith('preview_')) {
+				if (reloadedMatch?.startggSetId) {
 					match.startggSetId = reloadedMatch.startggSetId;
+				}
+			}
+		} else if (!match.startggSetId) {
+			// Got the lock but no cached ID yet — wait briefly for background cache to populate
+			// (R2+ case where user reports before bg cache finished).
+			for (let attempt = 0; attempt < 5; attempt++) {
+				await new Promise<void>((r) => setTimeout(r, 1000));
+				const reloaded = await getActiveTournament();
+				if (!reloaded) break;
+				const rr = reloaded.rounds.find((r) => r.number === targetRound!.number);
+				const rm = rr?.matches.find((m) => m.id === matchId);
+				if (rm?.startggSetId) {
+					match.startggSetId = rm.startggSetId;
+					break;
 				}
 			}
 		}
