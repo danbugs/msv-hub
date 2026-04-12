@@ -61,9 +61,6 @@ export const POST: RequestHandler = async ({ locals }) => {
 		const sets = data?.phaseGroup?.sets?.nodes ?? [];
 
 		for (const set of sets) {
-			const winnerId = set.winnerId as number | null | undefined;
-			if (!winnerId) { skipped++; continue; }
-
 			const slots = (set.slots ?? []) as GqlRecord[];
 			const sgE1 = Number((slots[0]?.entrant as { id?: number } | undefined)?.id);
 			const sgE2 = Number((slots[1]?.entrant as { id?: number } | undefined)?.id);
@@ -71,14 +68,33 @@ export const POST: RequestHandler = async ({ locals }) => {
 
 			const msvE1 = startggToMsvHub.get(sgE1);
 			const msvE2 = startggToMsvHub.get(sgE2);
-			const msvWinner = startggToMsvHub.get(Number(winnerId));
-			if (!msvE1 || !msvE2 || !msvWinner) { skipped++; continue; }
+			if (!msvE1 || !msvE2) { skipped++; continue; }
 
 			const match = round.matches.find((m) =>
 				(m.topPlayerId === msvE1 && m.bottomPlayerId === msvE2) ||
 				(m.topPlayerId === msvE2 && m.bottomPlayerId === msvE1)
 			);
 			if (!match) { skipped++; continue; }
+
+			const winnerId = set.winnerId as number | null | undefined;
+
+			// No winner on StartGG → clear MSV Hub match if it had one
+			if (!winnerId) {
+				if (match.winnerId) {
+					match.winnerId = undefined;
+					match.topScore = undefined;
+					match.bottomScore = undefined;
+					match.isDQ = false;
+					synced++;
+					perRound[roundNum] = (perRound[roundNum] ?? 0) + 1;
+				} else {
+					skipped++;
+				}
+				continue;
+			}
+
+			const msvWinner = startggToMsvHub.get(Number(winnerId));
+			if (!msvWinner) { skipped++; continue; }
 
 			// Extract scores from displayScore (e.g. "PlayerA 2 - PlayerB 1")
 			let topScore = 0;

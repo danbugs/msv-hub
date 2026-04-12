@@ -245,7 +245,7 @@ async function resolveSetId(
 				(s.entrant1Id === e1 && s.entrant2Id === e2) ||
 				(s.entrant1Id === e2 && s.entrant2Id === e1)
 			);
-			if (match) return String(match.id);
+			if (match && !isNaN(match.id) && match.id > 0) return String(match.id);
 		}
 
 		// Fallback: GQL lookup (handles edge cases where admin REST doesn't return a match)

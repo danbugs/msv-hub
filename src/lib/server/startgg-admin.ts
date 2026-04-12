@@ -315,12 +315,15 @@ export async function fetchAdminPhaseGroupSets(
 	const data = await res.json();
 	const sets = data?.entities?.sets;
 	if (!Array.isArray(sets)) return [];
-	return sets.map((s: Record<string, unknown>) => ({
-		id: Number(s.id),
-		entrant1Id: Number(s.entrant1Id),
-		entrant2Id: Number(s.entrant2Id),
-		winnerId: s.winnerId ? Number(s.winnerId) : null
-	}));
+	return sets
+		.map((s: Record<string, unknown>) => ({
+			id: Number(s.id),
+			entrant1Id: Number(s.entrant1Id),
+			entrant2Id: Number(s.entrant2Id),
+			winnerId: s.winnerId ? Number(s.winnerId) : null
+		}))
+		// Filter out sets with NaN/invalid IDs — happens when phase is still populating
+		.filter((s) => !isNaN(s.id) && s.id > 0 && !isNaN(s.entrant1Id) && !isNaN(s.entrant2Id));
 }
 
 /**
