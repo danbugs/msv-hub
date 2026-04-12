@@ -89,7 +89,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	debug.push(`Reported sets on StartGG: ${(sets as GqlRecord[]).filter((s) => s.winnerId).length}, bracket matches: ${bracket.matches.length}`);
 
 	// Classify each StartGG set by its bracket side + round.
-	// StartGG: round>0 = winners, round<0 = losers. fullRoundText for GF/GFR.
+	// NOTE: StartGG's `round` field for losers bracket starts at -3 (not -1) in a
+	// 16-player DE, because it numbers rounds continuously. We normalize by SORTING
+	// losers rounds and assigning them sequential MSV round numbers (L1, L2, ...).
 	type Bucket = 'W' | 'L' | 'GF' | 'GFR';
 	function bucketOf(s: GqlRecord): Bucket | null {
 		const text = String(s.fullRoundText ?? '');
@@ -101,12 +103,36 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return null;
 	}
 
-	// Group all sets (reported or not) by bucket+round so we can map StartGG structure → MSV matches
+	// First pass: collect unique StartGG round values per side, sort, build mapping.
+	const wRounds = new Set<number>();
+	const lRounds = new Set<number>();
+	for (const s of sets as GqlRecord[]) {
+		const b = bucketOf(s);
+		const r = Number(s.round);
+		if (b === 'W') wRounds.add(r);
+		else if (b === 'L') lRounds.add(Math.abs(r));
+	}
+	const wRoundMap = new Map<number, number>(); // StartGG W round → MSV W round (1-indexed)
+	[...wRounds].sort((a, b) => a - b).forEach((r, i) => wRoundMap.set(r, i + 1));
+	const lRoundMap = new Map<number, number>(); // StartGG abs(L round) → MSV L round (1-indexed)
+	[...lRounds].sort((a, b) => a - b).forEach((r, i) => lRoundMap.set(r, i + 1));
+
+	// Group sets by bucket+round using normalized MSV round numbers.
 	const setsByKey = new Map<string, GqlRecord[]>();
 	for (const s of sets as GqlRecord[]) {
 		const b = bucketOf(s);
 		if (!b) continue;
-		const key = (b === 'GF' || b === 'GFR') ? b : `${b}${Math.abs(Number(s.round))}`;
+		let key: string;
+		if (b === 'GF' || b === 'GFR') key = b;
+		else if (b === 'W') {
+			const msvRound = wRoundMap.get(Number(s.round));
+			if (!msvRound) continue;
+			key = `W${msvRound}`;
+		} else {
+			const msvRound = lRoundMap.get(Math.abs(Number(s.round)));
+			if (!msvRound) continue;
+			key = `L${msvRound}`;
+		}
 		if (!setsByKey.has(key)) setsByKey.set(key, []);
 		setsByKey.get(key)!.push(s);
 	}
