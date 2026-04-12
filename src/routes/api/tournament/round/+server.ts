@@ -413,19 +413,19 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	else { match.isDQ = false; if (topScore !== undefined) match.topScore = topScore; if (bottomScore !== undefined) match.bottomScore = bottomScore; }
 
 	// Distributed lock: serialize concurrent reports during preview→real conversion.
-	// First report acquires the lock, does the conversion, releases it. Others wait for
-	// the lock then reload tournament from Redis to pick up the fresh real set IDs.
+	// Only locks when the match has a preview ID cached (the usual case for first report
+	// of each round). Concurrent reports with preview IDs wait for the first to finish
+	// conversion, then reload to pick up real IDs.
 	const { acquireLock, waitForLock, releaseLock } = await import('$lib/server/store');
 	const lockKey = `lock:swiss_convert:${tournament.slug}:${targetRound.number}`;
 
-	// Only lock if we'd be reporting with a preview ID (conversion hasn't happened yet)
-	const needsConversion = match.startggSetId?.startsWith('preview_') ?? true;
+	const isPreview = match.startggSetId?.startsWith('preview_') ?? false;
 	let gotLock = false;
 
-	if (needsConversion) {
+	if (isPreview) {
 		gotLock = await acquireLock(lockKey, 15);
 		if (!gotLock) {
-			// Another report is doing conversion — wait for it, then reload to get real IDs
+			// Another report holds the lock — wait briefly, then reload to get real IDs
 			await waitForLock(lockKey, 10000);
 			const reloaded = await getActiveTournament();
 			if (reloaded) {
@@ -434,22 +434,6 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				if (reloadedMatch?.startggSetId && !reloadedMatch.startggSetId.startsWith('preview_')) {
 					match.startggSetId = reloadedMatch.startggSetId;
 				}
-			}
-		} else {
-			// Got the lock — reload tournament to pick up any preview IDs the background
-			// cache may have saved between when we loaded and now. If cacheReady is still
-			// false, wait briefly for it before reporting.
-			for (let attempt = 0; attempt < 6; attempt++) {
-				const reloaded = await getActiveTournament();
-				if (!reloaded) break;
-				const rr = reloaded.rounds.find((r) => r.number === targetRound!.number);
-				const rm = rr?.matches.find((m) => m.id === matchId);
-				if (rm?.startggSetId) {
-					match.startggSetId = rm.startggSetId;
-					break;
-				}
-				if (reloaded.startggSync?.cacheReady) break;
-				await new Promise<void>((r) => setTimeout(r, 1000));
 			}
 		}
 	}
