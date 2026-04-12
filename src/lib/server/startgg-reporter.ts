@@ -71,7 +71,8 @@ function ensureSync(tournament: TournamentState): StartggSyncState {
 }
 
 function addError(sync: StartggSyncState, matchId: string, message: string) {
-	const actionable = `${message}. Try "Sync from StartGG" to pull the latest state, or re-report matches that aren't showing as reported.`;
+	const trimmed = message.replace(/\.+\s*$/, ''); // strip trailing periods
+	const actionable = `${trimmed}. Try "Sync from StartGG" to pull the latest state, or re-report matches that aren't showing as reported.`;
 	sync.errors = [{ matchId, message: actionable, ts: Date.now() }, ...sync.errors].slice(0, 20);
 }
 
@@ -154,7 +155,42 @@ export async function triggerConversionAndCache(
 ): Promise<void> {
 	console.log(`[cache] Caching set IDs for round ${roundNumber}, PG ${phaseGroupId}`);
 
-	// Fetch preview/real sets — retry if empty (phase still generating after seed)
+	// STEP 1: Try admin REST first — returns real set IDs instantly, even right after
+	// pushing pairings (GQL often lags). This makes round 2+ reports instant.
+	let adminSets: Awaited<ReturnType<typeof fetchAdminPhaseGroupSets>> = [];
+	for (let attempt = 0; attempt < 5; attempt++) {
+		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 1500));
+		adminSets = await fetchAdminPhaseGroupSets(phaseGroupId).catch(() => []);
+		if (adminSets.length > 0) break;
+	}
+
+	if (adminSets.length > 0) {
+		const fresh = await getActiveTournament();
+		if (!fresh) return;
+		const round = fresh.rounds.find((r) => r.number === roundNumber);
+		if (round) {
+			const entrantMap = new Map(fresh.entrants.map((e) => [e.id, e]));
+			for (const match of round.matches) {
+				const top = entrantMap.get(match.topPlayerId);
+				const bot = entrantMap.get(match.bottomPlayerId);
+				if (!top?.startggEntrantId || !bot?.startggEntrantId) continue;
+				const e1 = Number(top.startggEntrantId);
+				const e2 = Number(bot.startggEntrantId);
+				const as = adminSets.find((s) =>
+					(s.entrant1Id === e1 && s.entrant2Id === e2) ||
+					(s.entrant1Id === e2 && s.entrant2Id === e1)
+				);
+				if (as) match.startggSetId = String(as.id);
+			}
+			console.log(`[cache] Cached ${adminSets.length} real set IDs via admin REST`);
+		}
+		const sync = ensureSync(fresh);
+		sync.cacheReady = true;
+		await saveTournament(fresh);
+		return;
+	}
+
+	// STEP 2: Fall back to GQL for preview IDs
 	let nodes: GqlNode[] = [];
 	for (let attempt = 0; attempt < 10; attempt++) {
 		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, attempt <= 3 ? 3000 : 5000));
@@ -163,13 +199,8 @@ export async function triggerConversionAndCache(
 			nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
 		} catch { /* retry */ }
 		if (nodes.length > 0) break;
-		console.log(`[cache] Attempt ${attempt + 1}: 0 sets returned, retrying...`);
 	}
-	console.log(`[cache] Cached ${nodes.length} set IDs`);
-
-	// No dummy report needed. Preview IDs work for reporting.
-	// After the first real report triggers conversion, reportSwissMatch calls
-	// cacheRealSetIds() to instantly get all real IDs via the admin REST endpoint.
+	console.log(`[cache] Cached ${nodes.length} set IDs via GQL`);
 
 	const fresh = await getActiveTournament();
 	if (!fresh) return;
