@@ -327,6 +327,64 @@ export async function fetchAdminPhaseGroupSets(
 }
 
 /**
+ * Raw set data from admin REST — includes preview sets with "preview_..." IDs.
+ * Used for internal-REST reporting which works with either preview or real IDs.
+ */
+export async function fetchAdminPhaseGroupSetsRaw(
+	phaseGroupId: number
+): Promise<Array<Record<string, unknown>>> {
+	const cookie = await getSessionCookie();
+	const res = await fetch(
+		`${PHASE_REST_URL.replace('/phase', '/admin/phase_group')}/${phaseGroupId}?id=${phaseGroupId}&admin=true&expand=%5B%22sets%22%5D&reset=false`,
+		{ headers: { 'Cookie': cookie, 'Client-Version': '20' } }
+	);
+	if (!res.ok) return [];
+	const data = await res.json();
+	const sets = data?.entities?.sets;
+	return Array.isArray(sets) ? sets : [];
+}
+
+/**
+ * Report a set result via StartGG's INTERNAL REST API (the one their UI uses).
+ * Much faster than the public GraphQL reportBracketSet mutation.
+ *
+ * Works with both preview IDs ("preview_3251999_1_0") and real IDs ("101575015").
+ * The response returns the real set ID after conversion.
+ */
+export async function completeSetViaAdminRest(
+	setId: string,
+	setData: Record<string, unknown>,
+	winnerEntrantId: number,
+	entrant1Score: number,
+	entrant2Score: number,
+	isDQ: boolean
+): Promise<{ ok: boolean; realSetId?: string; error?: string }> {
+	// Build payload: start with the existing set data, apply score/winner mutations
+	const payload: Record<string, unknown> = {
+		...setData,
+		entrant1Score: isDQ ? -1 : entrant1Score,
+		entrant2Score: isDQ ? -1 : entrant2Score,
+		winnerId: winnerEntrantId,
+		isLast: false,
+		games: []
+	};
+
+	const res = await adminFetch(`https://www.start.gg/api/-/rest/set/${setId}/complete`, {
+		method: 'POST',
+		body: JSON.stringify(payload)
+	});
+
+	if (!res.ok) {
+		const text = await res.text().catch(() => '');
+		return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+	}
+
+	const data = await res.json().catch(() => ({}));
+	const realId = data?.id ?? data?.entities?.sets?.[0]?.id;
+	return { ok: true, realSetId: realId ? String(realId) : undefined };
+}
+
+/**
  * Restart a phase on StartGG — resets all sets and un-starts the pool.
  * This replaces the manual "go to StartGG and reset the phase" step.
  */
