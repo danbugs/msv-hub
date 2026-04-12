@@ -153,55 +153,21 @@ export async function triggerConversionAndCache(
 	roundNumber: number,
 	phaseGroupId: number
 ): Promise<void> {
-	console.log(`[cache] Caching set IDs for round ${roundNumber}, PG ${phaseGroupId}`);
+	console.log(`[cache] Caching preview set IDs for round ${roundNumber}, PG ${phaseGroupId}`);
 
-	// STEP 1: Try admin REST first — returns real set IDs instantly, even right after
-	// pushing pairings (GQL often lags). Retry aggressively — StartGG can take
-	// 10-20s to generate sets for later rounds.
-	let adminSets: Awaited<ReturnType<typeof fetchAdminPhaseGroupSets>> = [];
-	for (let attempt = 0; attempt < 15; attempt++) {
-		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 2000));
-		adminSets = await fetchAdminPhaseGroupSets(phaseGroupId).catch(() => []);
-		if (adminSets.length > 0) break;
-	}
-
-	if (adminSets.length > 0) {
-		const fresh = await getActiveTournament();
-		if (!fresh) return;
-		const round = fresh.rounds.find((r) => r.number === roundNumber);
-		if (round) {
-			const entrantMap = new Map(fresh.entrants.map((e) => [e.id, e]));
-			for (const match of round.matches) {
-				const top = entrantMap.get(match.topPlayerId);
-				const bot = entrantMap.get(match.bottomPlayerId);
-				if (!top?.startggEntrantId || !bot?.startggEntrantId) continue;
-				const e1 = Number(top.startggEntrantId);
-				const e2 = Number(bot.startggEntrantId);
-				const as = adminSets.find((s) =>
-					(s.entrant1Id === e1 && s.entrant2Id === e2) ||
-					(s.entrant1Id === e2 && s.entrant2Id === e1)
-				);
-				if (as) match.startggSetId = String(as.id);
-			}
-			console.log(`[cache] Cached ${adminSets.length} real set IDs via admin REST`);
-		}
-		const sync = ensureSync(fresh);
-		sync.cacheReady = true;
-		await saveTournament(fresh);
-		return;
-	}
-
-	// STEP 2: Fall back to GQL for preview IDs
+	// Fetch preview set IDs via GQL. These work for reporting — no conversion needed.
+	// After the first real report triggers conversion on StartGG, cacheRealSetIds
+	// fetches real IDs via admin REST to populate remaining matches.
 	let nodes: GqlNode[] = [];
 	for (let attempt = 0; attempt < 10; attempt++) {
-		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, attempt <= 3 ? 3000 : 5000));
+		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, attempt <= 3 ? 2000 : 4000));
 		try {
 			const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
 			nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
 		} catch { /* retry */ }
 		if (nodes.length > 0) break;
 	}
-	console.log(`[cache] Cached ${nodes.length} set IDs via GQL`);
+	console.log(`[cache] Got ${nodes.length} sets via GQL`);
 
 	const fresh = await getActiveTournament();
 	if (!fresh) return;
@@ -268,26 +234,9 @@ async function resolveSetId(
 
 	const groups = tournament.startggPhase1Groups;
 	if (groups && groups[roundNumber - 1]) {
-		const pgId = groups[roundNumber - 1].id;
-		const e1 = Number(entrantId1), e2 = Number(entrantId2);
-
-		// No cached ID — retry admin REST up to ~6s (Vercel Hobby 10s budget minus
-		// the reportSet call). Most cases will resolve on first try.
-		for (let attempt = 0; attempt < 5; attempt++) {
-			if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 1200));
-			const adminSets = await fetchAdminPhaseGroupSets(pgId).catch(() => []);
-			if (adminSets.length === 0) continue;
-			const match = adminSets.find((s) =>
-				(s.entrant1Id === e1 && s.entrant2Id === e2) ||
-				(s.entrant1Id === e2 && s.entrant2Id === e1)
-			);
-			if (match && !isNaN(match.id) && match.id > 0) return String(match.id);
-			// Sets exist but this pair isn't among them — stop retrying, fall to GQL
-			break;
-		}
-
-		// Fallback: GQL lookup
-		return findSetInPhaseGroup(pgId, entrantId1, entrantId2).catch(() => null);
+		// No cached ID — fall back to GQL lookup (has its own retry for the
+		// preview→real conversion window).
+		return findSetInPhaseGroup(groups[roundNumber - 1].id, entrantId1, entrantId2).catch(() => null);
 	}
 
 	// No phase group info — fall back to full event scan (only safe path when
