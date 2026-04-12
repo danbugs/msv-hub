@@ -164,6 +164,7 @@
 
 	async function startFromEvent() {
 		if (!eventUrl.trim()) return;
+		if (swissRounds && Number(swissRounds) > 5) { error = 'Max 5 Swiss rounds supported'; return; }
 		loadingEvent = true; error = '';
 		const res = await fetch('/api/tournament/from-event', {
 			method: 'POST',
@@ -177,6 +178,7 @@
 
 	async function startSwiss() {
 		if (!result) return;
+		if (swissRounds && Number(swissRounds) > 5) { error = 'Max 5 Swiss rounds supported'; return; }
 		startingSwiss = true; error = '';
 
 		// Step 1: Apply seeding to StartGG
@@ -436,7 +438,7 @@
 				</div>
 				<div>
 					<label for="swiss-rounds" class="block text-xs text-gray-400">Swiss rounds</label>
-					<input id="swiss-rounds" type="number" bind:value={swissRounds} min="1" max="10"
+					<input id="swiss-rounds" type="number" bind:value={swissRounds} min="1" max="5"
 						placeholder="auto"
 						class="mt-1 w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
 				</div>
@@ -472,7 +474,7 @@
 					</div>
 					<div>
 						<label for="fe-rounds" class="block text-xs text-gray-400">Swiss rounds</label>
-						<input id="fe-rounds" type="number" bind:value={swissRounds} min="1" max="10"
+						<input id="fe-rounds" type="number" bind:value={swissRounds} min="1" max="5"
 							placeholder="auto"
 							class="mt-1 w-20 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
 					</div>

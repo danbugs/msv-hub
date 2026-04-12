@@ -31,6 +31,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (numRounds === null) {
 		return Response.json({ error: 'Too few stations for this number of players' }, { status: 400 });
 	}
+	if (numRounds > 5) {
+		return Response.json({ error: 'Max 5 Swiss rounds supported' }, { status: 400 });
+	}
+	if (numRounds < 1) {
+		return Response.json({ error: 'At least 1 Swiss round required' }, { status: 400 });
+	}
 
 	const tournamentEntrants: Entrant[] = entrants.map((e, i) => ({
 		id: `e-${i + 1}`,
