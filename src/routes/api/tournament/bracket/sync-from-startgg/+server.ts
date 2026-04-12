@@ -84,135 +84,177 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	let bracket = generateBracket(bracketName, players, standings);
 
-	// StartGG may have different player assignments in WR1 than what generateBracket
-	// produces (happens when standings changed after bracket was pushed to StartGG).
-	// Override WR1 player positions to match StartGG's actual pairings, keyed by
-	// set identifier (A=matchIndex 0, B=1, ...).
 	type Slot = { entrant?: { id?: number } };
 	function identifierToMatchIndex(id: string): number {
 		if (!id) return -1;
 		let n = 0;
-		for (let i = 0; i < id.length; i++) {
-			n = n * 26 + (id.charCodeAt(i) - 64); // 'A' = 65 → 1
-		}
+		for (let i = 0; i < id.length; i++) n = n * 26 + (id.charCodeAt(i) - 64);
 		return n - 1;
 	}
-	const wr1Sets = (sets as GqlRecord[]).filter((s) => s.fullRoundText === 'Winners Round 1');
-	for (const s of wr1Sets) {
-		const idx = identifierToMatchIndex(s.identifier as string);
+
+	/** Classify set by its bracket side based on StartGG's 'round' field (positive=W, negative=L). */
+	function bucketOf(set: GqlRecord): 'W' | 'L' | 'GF' | 'GFR' | null {
+		const text = String(set.fullRoundText ?? '');
+		if (text === 'Grand Final Reset') return 'GFR';
+		if (text === 'Grand Final') return 'GF';
+		const round = Number(set.round);
+		if (round > 0) return 'W';
+		if (round < 0) return 'L';
+		return null;
+	}
+
+	const reportedSets = (sets as GqlRecord[]).filter((s) => s.winnerId);
+	const debug: string[] = [];
+	debug.push(`Reported sets on StartGG: ${reportedSets.length}, bracket matches: ${bracket.matches.length}`);
+
+	// Group sets by bracket side and round, sorted in apply order
+	const wSetsByRound = new Map<number, GqlRecord[]>();
+	const lSetsByRound = new Map<number, GqlRecord[]>();
+	let gfSet: GqlRecord | null = null;
+	let gfrSet: GqlRecord | null = null;
+	for (const s of reportedSets) {
+		const b = bucketOf(s);
+		const r = Math.abs(Number(s.round ?? 0));
+		if (b === 'W') { if (!wSetsByRound.has(r)) wSetsByRound.set(r, []); wSetsByRound.get(r)!.push(s); }
+		else if (b === 'L') { if (!lSetsByRound.has(r)) lSetsByRound.set(r, []); lSetsByRound.get(r)!.push(s); }
+		else if (b === 'GF') gfSet = s;
+		else if (b === 'GFR') gfrSet = s;
+	}
+
+	let synced = 0;
+	const applied = new Set<string>();
+
+	function parseScores(set: GqlRecord, msvE1: string, msvE2: string, match: BracketMatch): { topScore?: number; bottomScore?: number } {
+		const ds = set.displayScore as string | undefined;
+		if (!ds) return {};
+		const parts = ds.split(' - ');
+		if (parts.length !== 2) return {};
+		const s1 = Number(parts[0].replace(/[^0-9]/g, ''));
+		const s2 = Number(parts[1].replace(/[^0-9]/g, ''));
+		if (isNaN(s1) || isNaN(s2)) return {};
+		if (msvE1 === match.topPlayerId) return { topScore: s1, bottomScore: s2 };
+		return { topScore: s2, bottomScore: s1 };
+	}
+
+	/**
+	 * Apply sets scoped to a single bracket side (W or L) and round.
+	 * 1. Override player assignments on round-N matches from StartGG's set identifiers
+	 * 2. Apply winners via reportBracketMatch (which advances players to round N+1)
+	 */
+	function applyRound(side: 'W' | 'L', round: number, setsInRound: GqlRecord[]) {
+		// Which match ID prefix identifies this side in the generated bracket?
+		const idPrefix = side === 'W' ? `${bracketName}-W${round}-` : `${bracketName}-L${round}-`;
+		const roundMatches = bracket.matches.filter((m: BracketMatch) => m.id.startsWith(idPrefix));
+
+		// Step 1: Override pairings from StartGG for this round
+		for (const s of setsInRound) {
+			const idx = identifierToMatchIndex(s.identifier as string);
+			// StartGG assigns identifiers globally across WB & LB → find the idx within this round
+			// by matching to an MSV match at that matchIndex on THIS side.
+			const slots = (s.slots ?? []) as Slot[];
+			const sgE1 = Number(slots[0]?.entrant?.id);
+			const sgE2 = Number(slots[1]?.entrant?.id);
+			const msvE1 = bracketEntrantToMsvHub.get(sgE1);
+			const msvE2 = bracketEntrantToMsvHub.get(sgE2);
+			if (!msvE1 || !msvE2) continue;
+			// Prefer matching by identifier-derived index, but fall back to finding a match
+			// with both players on this side (whose players already correctly advanced).
+			let msvMatch = roundMatches.find((m) => m.matchIndex === idx);
+			if (!msvMatch || (msvMatch.topPlayerId && msvMatch.topPlayerId !== msvE1 && msvMatch.topPlayerId !== msvE2)) {
+				msvMatch = roundMatches.find((m) =>
+					(m.topPlayerId === msvE1 && m.bottomPlayerId === msvE2) ||
+					(m.topPlayerId === msvE2 && m.bottomPlayerId === msvE1)
+				) ?? msvMatch;
+			}
+			if (!msvMatch) continue;
+			msvMatch.topPlayerId = msvE1;
+			msvMatch.bottomPlayerId = msvE2;
+			msvMatch.winnerId = undefined; // clear any stale winner before reporting
+		}
+
+		// Step 2: Apply winners
+		for (const s of setsInRound) {
+			if (applied.has(String(s.id))) continue;
+			const slots = (s.slots ?? []) as Slot[];
+			const sgE1 = Number(slots[0]?.entrant?.id);
+			const sgE2 = Number(slots[1]?.entrant?.id);
+			const msvE1 = bracketEntrantToMsvHub.get(sgE1);
+			const msvE2 = bracketEntrantToMsvHub.get(sgE2);
+			const msvWinner = bracketEntrantToMsvHub.get(Number(s.winnerId));
+			if (!msvE1 || !msvE2 || !msvWinner) {
+				debug.push(`  ${s.fullRoundText} set ${s.id}: couldn't map entrants ${sgE1}/${sgE2}/${s.winnerId}`);
+				continue;
+			}
+			const match = bracket.matches.find((m: BracketMatch) =>
+				m.id.startsWith(idPrefix) &&
+				((m.topPlayerId === msvE1 && m.bottomPlayerId === msvE2) ||
+				 (m.topPlayerId === msvE2 && m.bottomPlayerId === msvE1))
+			);
+			if (!match) {
+				debug.push(`  ${s.fullRoundText} set ${s.id} (${sgE1} vs ${sgE2}): no ${idPrefix} match in MSV`);
+				continue;
+			}
+			const { topScore, bottomScore } = parseScores(s, msvE1, msvE2, match);
+			try {
+				bracket = reportBracketMatch(bracket, match.id, msvWinner, undefined, undefined, topScore, bottomScore);
+				const updated = bracket.matches.find((m: BracketMatch) => m.id === match.id);
+				if (updated) updated.startggSetId = String(s.id);
+				applied.add(String(s.id));
+				synced++;
+			} catch (e) {
+				debug.push(`  ${s.fullRoundText} set ${s.id}: reportBracketMatch threw: ${String(e).slice(0, 120)}`);
+			}
+		}
+	}
+
+	// Winners bracket first, round by round
+	const wRounds = [...wSetsByRound.keys()].sort((a, b) => a - b);
+	for (const r of wRounds) applyRound('W', r, wSetsByRound.get(r)!);
+
+	// Losers bracket second, round by round
+	const lRounds = [...lSetsByRound.keys()].sort((a, b) => a - b);
+	for (const r of lRounds) applyRound('L', r, lSetsByRound.get(r)!);
+
+	// Grand Final
+	function applyGF(s: GqlRecord, idContains: string, idNotContains?: string) {
 		const slots = (s.slots ?? []) as Slot[];
 		const sgE1 = Number(slots[0]?.entrant?.id);
 		const sgE2 = Number(slots[1]?.entrant?.id);
 		const msvE1 = bracketEntrantToMsvHub.get(sgE1);
 		const msvE2 = bracketEntrantToMsvHub.get(sgE2);
-		if (!msvE1 || !msvE2 || idx < 0) continue;
-		const msvMatch = bracket.matches.find((m: BracketMatch) => m.round === 1 && m.matchIndex === idx);
-		if (msvMatch) {
-			msvMatch.topPlayerId = msvE1;
-			msvMatch.bottomPlayerId = msvE2;
-		}
-	}
-
-	// Step 4: Apply StartGG results to the fresh bracket
-	// Multiple passes — each pass processes sets whose players are already placed in the bracket.
-	// After each pass, advancePlayer places players for the next round.
-	const reportedSets = (sets as GqlRecord[]).filter((s) => s.winnerId);
-
-	let synced = 0;
-	let notFound = 0;
-	const applied = new Set<string>();
-	const debug: string[] = [];
-	debug.push(`Reported sets on StartGG: ${reportedSets.length}, bracket matches: ${bracket.matches.length}`);
-
-	for (let pass = 0; pass < 20; pass++) {
-		let progressThisPass = 0;
-
-	for (const set of reportedSets) {
-		if (applied.has(String(set.id))) continue;
-		const slots = set.slots ?? [];
-		const sgWinnerId = Number(set.winnerId);
-		const sgE1 = Number(slots[0]?.entrant?.id);
-		const sgE2 = Number(slots[1]?.entrant?.id);
-		if (!sgE1 || !sgE2 || !sgWinnerId) { if (pass === 0) debug.push(`  Set ${set.id}: no entrants/winner on StartGG`); continue; }
-
-		const msvE1 = bracketEntrantToMsvHub.get(sgE1);
-		const msvE2 = bracketEntrantToMsvHub.get(sgE2);
-		const msvWinner = bracketEntrantToMsvHub.get(sgWinnerId);
-		if (!msvE1 || !msvE2 || !msvWinner) {
-			if (pass === 0) debug.push(`  Set ${set.id}: couldn't map entrants ${sgE1}/${sgE2}/${sgWinnerId} to MSV`);
-			notFound++;
-			continue;
-		}
-
-		// Find matching bracket match. Prefer unreported matches, but fall back to
-		// any match with these two players — StartGG is the source of truth, so we
-		// overwrite any mismatched local state.
-		let match = bracket.matches.find((m: BracketMatch) =>
-			!m.winnerId &&
-			((m.topPlayerId === msvE1 && m.bottomPlayerId === msvE2) ||
-			 (m.topPlayerId === msvE2 && m.bottomPlayerId === msvE1))
+		const msvWinner = bracketEntrantToMsvHub.get(Number(s.winnerId));
+		if (!msvE1 || !msvE2 || !msvWinner) return;
+		const match = bracket.matches.find((m: BracketMatch) =>
+			m.id.includes(idContains) && (!idNotContains || !m.id.includes(idNotContains))
 		);
-		if (!match) {
-			match = bracket.matches.find((m: BracketMatch) =>
-				(m.topPlayerId === msvE1 && m.bottomPlayerId === msvE2) ||
-				(m.topPlayerId === msvE2 && m.bottomPlayerId === msvE1)
-			);
-		}
-		if (!match) { continue; } // Not placed yet — try next pass after earlier rounds resolve
-
-		// Extract scores from displayScore
-		let topScore: number | undefined;
-		let bottomScore: number | undefined;
-		const displayScore = set.displayScore as string | undefined;
-		if (displayScore) {
-			const parts = displayScore.split(' - ');
-			if (parts.length === 2) {
-				const s1 = Number(parts[0].replace(/[^0-9]/g, ''));
-				const s2 = Number(parts[1].replace(/[^0-9]/g, ''));
-				if (!isNaN(s1) && !isNaN(s2)) {
-					if (msvE1 === match.topPlayerId) { topScore = s1; bottomScore = s2; }
-					else { topScore = s2; bottomScore = s1; }
-				}
-			}
-		}
-
-		// Skip if already reported with the correct winner (idempotent)
-		if (match.winnerId === msvWinner && match.startggSetId === String(set.id)) {
-			applied.add(String(set.id));
-			synced++;
-			progressThisPass++;
-			continue;
-		}
-
+		if (!match) { debug.push(`  ${s.fullRoundText} set ${s.id}: no ${idContains} match in MSV`); return; }
+		match.topPlayerId = msvE1;
+		match.bottomPlayerId = msvE2;
+		match.winnerId = undefined;
+		const { topScore, bottomScore } = parseScores(s, msvE1, msvE2, match);
 		try {
 			bracket = reportBracketMatch(bracket, match.id, msvWinner, undefined, undefined, topScore, bottomScore);
-			const updatedMatch = bracket.matches.find((m: BracketMatch) => m.id === match.id);
-			if (updatedMatch) updatedMatch.startggSetId = String(set.id);
-			applied.add(String(set.id));
+			const updated = bracket.matches.find((m: BracketMatch) => m.id === match.id);
+			if (updated) updated.startggSetId = String(s.id);
+			applied.add(String(s.id));
 			synced++;
-			progressThisPass++;
 		} catch (e) {
-			debug.push(`  Set ${set.id} (${set.fullRoundText}): reportBracketMatch threw: ${String(e).slice(0, 120)}`);
+			debug.push(`  ${s.fullRoundText} set ${s.id}: reportBracketMatch threw: ${String(e).slice(0, 120)}`);
 		}
 	}
+	if (gfSet) applyGF(gfSet, '-GF-', '-GFR-');
+	if (gfrSet) applyGF(gfrSet, '-GFR-');
 
-	if (progressThisPass === 0) {
-		debug.push(`Pass ${pass + 1}: no progress, stopping. ${reportedSets.length - synced} sets unmatched`);
-		break;
-	}
-	}
+	const notFound = reportedSets.length - synced;
 
-	notFound = reportedSets.length - synced;
-
-	// Log which sets couldn't be applied
+	// Log unmatched
 	if (notFound > 0 && notFound < 30) {
 		for (const set of reportedSets) {
 			if (applied.has(String(set.id))) continue;
 			const slots = set.slots ?? [];
 			const sgE1 = Number(slots[0]?.entrant?.id);
 			const sgE2 = Number(slots[1]?.entrant?.id);
-			const fullRoundText = set.fullRoundText ?? 'unknown';
-			debug.push(`  Unmatched: "${fullRoundText}" set ${set.id} (entrants ${sgE1} vs ${sgE2})`);
+			debug.push(`  Unmatched: "${set.fullRoundText}" set ${set.id} (entrants ${sgE1} vs ${sgE2})`);
 		}
 	}
 
