@@ -137,6 +137,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		setsByKey.get(key)!.push(s);
 	}
 
+	// If StartGG has a GFR set but MSV doesn't have a GFR match yet (generateBracket
+	// only creates it when GF top-slot wins), add one so sync can populate it.
+	if (setsByKey.has('GFR') && !bracket.matches.some((m) => m.id.includes('-GFR-'))) {
+		const gfMatch = bracket.matches.find((m) => m.id.includes('-GF-') && !m.id.includes('-GFR-'));
+		if (gfMatch) {
+			bracket.matches.push({
+				id: `${bracketName}-GFR-0`,
+				round: gfMatch.round + 1,
+				matchIndex: 0
+			});
+		}
+	}
+
 	// Helper: MSV match ID prefix for a bucket/round
 	function msvMatchesFor(key: string): BracketMatch[] {
 		if (key === 'GF') return bracket.matches.filter((m) => m.id.includes('-GF-') && !m.id.includes('-GFR-'));
