@@ -115,13 +115,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			continue;
 		}
 
-		// Find matching bracket match
-		const match = bracket.matches.find((m: BracketMatch) =>
+		// Find matching bracket match. Prefer unreported matches, but fall back to
+		// any match with these two players — StartGG is the source of truth, so we
+		// overwrite any mismatched local state.
+		let match = bracket.matches.find((m: BracketMatch) =>
 			!m.winnerId &&
 			((m.topPlayerId === msvE1 && m.bottomPlayerId === msvE2) ||
 			 (m.topPlayerId === msvE2 && m.bottomPlayerId === msvE1))
 		);
-		if (!match) { continue; } // Not ready yet — try next pass
+		if (!match) {
+			match = bracket.matches.find((m: BracketMatch) =>
+				(m.topPlayerId === msvE1 && m.bottomPlayerId === msvE2) ||
+				(m.topPlayerId === msvE2 && m.bottomPlayerId === msvE1)
+			);
+		}
+		if (!match) { continue; } // Not placed yet — try next pass after earlier rounds resolve
 
 		// Extract scores from displayScore
 		let topScore: number | undefined;
@@ -139,6 +147,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
+		// Skip if already reported with the correct winner (idempotent)
+		if (match.winnerId === msvWinner && match.startggSetId === String(set.id)) {
+			applied.add(String(set.id));
+			synced++;
+			progressThisPass++;
+			continue;
+		}
+
 		try {
 			bracket = reportBracketMatch(bracket, match.id, msvWinner, undefined, undefined, topScore, bottomScore);
 			const updatedMatch = bracket.matches.find((m: BracketMatch) => m.id === match.id);
@@ -147,7 +163,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			synced++;
 			progressThisPass++;
 		} catch (e) {
-			debug.push(`  Set ${set.id}: reportBracketMatch threw: ${String(e).slice(0, 100)}`);
+			debug.push(`  Set ${set.id} (${set.fullRoundText}): reportBracketMatch threw: ${String(e).slice(0, 120)}`);
 		}
 	}
 
