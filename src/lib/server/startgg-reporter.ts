@@ -230,14 +230,17 @@ async function resolveSetId(
 	roundNumber: number,
 	cachedSetId?: string
 ): Promise<string | null> {
-	if (cachedSetId) return cachedSetId;
+	// If we have a REAL cached ID, use it instantly. For preview IDs, try to
+	// upgrade to a real ID via admin REST first (cheap, instant).
+	const cachedIsPreview = cachedSetId?.startsWith('preview_') ?? false;
+	if (cachedSetId && !cachedIsPreview) return cachedSetId;
 
 	const groups = tournament.startggPhase1Groups;
 	if (groups && groups[roundNumber - 1]) {
 		const pgId = groups[roundNumber - 1].id;
 
 		// FAST PATH: try admin REST first — returns real set IDs instantly without
-		// waiting for GQL's preview→real conversion (saves 5-30s on round 2+ first report).
+		// waiting for GQL's preview→real conversion (saves 5-30s on subsequent reports).
 		const adminSets = await fetchAdminPhaseGroupSets(pgId).catch(() => []);
 		if (adminSets.length > 0) {
 			const e1 = Number(entrantId1), e2 = Number(entrantId2);
@@ -247,6 +250,9 @@ async function resolveSetId(
 			);
 			if (match && !isNaN(match.id) && match.id > 0) return String(match.id);
 		}
+
+		// Still have a preview cached? Use it (conversion hasn't happened yet).
+		if (cachedSetId) return cachedSetId;
 
 		// Fallback: GQL lookup (handles edge cases where admin REST doesn't return a match)
 		return findSetInPhaseGroup(pgId, entrantId1, entrantId2).catch(() => null);

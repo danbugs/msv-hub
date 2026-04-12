@@ -428,12 +428,19 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			freshMatch.bottomScore = match.bottomScore;
 			freshMatch.isDQ = match.isDQ;
 			freshMatch.startggSetId = match.startggSetId;
-			// Merge any cached set IDs from conversion (other matches in this round)
+			// Merge any cached set IDs from conversion (other matches in this round).
+			// Overwrite when the fresh copy has a preview ID and ours is real —
+			// otherwise stale preview IDs would stick around after conversion.
 			if (freshRound) {
 				for (const m of targetRound.matches) {
-					if (m.startggSetId) {
-						const fm = freshRound.matches.find((fm) => fm.id === m.id);
-						if (fm && !fm.startggSetId) fm.startggSetId = m.startggSetId;
+					if (!m.startggSetId) continue;
+					const fm = freshRound.matches.find((fm) => fm.id === m.id);
+					if (!fm) continue;
+					const newIsPreview = m.startggSetId.startsWith('preview_');
+					const freshIsPreview = fm.startggSetId?.startsWith('preview_') ?? false;
+					// Copy if fresh has nothing, OR if fresh has preview and ours is real
+					if (!fm.startggSetId || (freshIsPreview && !newIsPreview)) {
+						fm.startggSetId = m.startggSetId;
 					}
 				}
 			}
