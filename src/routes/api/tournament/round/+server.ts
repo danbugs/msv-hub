@@ -416,10 +416,38 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (isDQ) { match.isDQ = true; match.topScore = undefined; match.bottomScore = undefined; }
 	else { match.isDQ = false; if (topScore !== undefined) match.topScore = topScore; if (bottomScore !== undefined) match.bottomScore = bottomScore; }
 
+	// Distributed lock: serialize concurrent reports during preview→real conversion.
+	// First report acquires the lock, does the conversion, releases it. Others wait for
+	// the lock then reload tournament from Redis to pick up the fresh real set IDs.
+	const { acquireLock, waitForLock, releaseLock } = await import('$lib/server/store');
+	const lockKey = `lock:swiss_convert:${tournament.slug}:${targetRound.number}`;
+
+	// Only lock if we'd be reporting with a preview ID (conversion hasn't happened yet)
+	const needsConversion = match.startggSetId?.startsWith('preview_') ?? true;
+	let gotLock = false;
+
+	if (needsConversion) {
+		gotLock = await acquireLock(lockKey, 15);
+		if (!gotLock) {
+			// Another report is doing conversion — wait for it, then reload to get real IDs
+			await waitForLock(lockKey, 10000);
+			const reloaded = await getActiveTournament();
+			if (reloaded) {
+				const reloadedRound = reloaded.rounds.find((r) => r.number === targetRound!.number);
+				const reloadedMatch = reloadedRound?.matches.find((m) => m.id === matchId);
+				if (reloadedMatch?.startggSetId && !reloadedMatch.startggSetId.startsWith('preview_')) {
+					match.startggSetId = reloadedMatch.startggSetId;
+				}
+			}
+		}
+	}
+
 	// Report to StartGG — save match result immediately, then merge StartGG metadata.
 	const sgResult = await reportSwissMatch(tournament, targetRound.number, match).catch(
 		(e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) })
 	);
+
+	if (gotLock) await releaseLock(lockKey);
 
 	// Safe merge: re-load fresh state so concurrent reports don't overwrite each other.
 	// Only apply this specific match's changes to the latest state.

@@ -282,3 +282,33 @@ export async function deleteTournament(slug: string): Promise<void> {
 	const active = await redis.get<string>(ACTIVE_KEY);
 	if (active === slug) await redis.del(ACTIVE_KEY);
 }
+
+// ---------------------------------------------------------------------------
+// Distributed lock (SET NX with TTL) — serializes concurrent reports during
+// the preview→real conversion window.
+// ---------------------------------------------------------------------------
+
+/** Acquire a lock atomically. Returns true if acquired. TTL in seconds. */
+export async function acquireLock(key: string, ttlSec = 15): Promise<boolean> {
+	const redis = getRedis();
+	// Upstash SET with NX + EX options
+	const res = await redis.set(key, '1', { nx: true, ex: ttlSec });
+	return res === 'OK';
+}
+
+/** Wait for a lock to be released (polling). Returns true if released in time. */
+export async function waitForLock(key: string, timeoutMs = 8000, pollMs = 200): Promise<boolean> {
+	const redis = getRedis();
+	const start = Date.now();
+	while (Date.now() - start < timeoutMs) {
+		const exists = await redis.exists(key);
+		if (!exists) return true;
+		await new Promise<void>((r) => setTimeout(r, pollMs));
+	}
+	return false;
+}
+
+export async function releaseLock(key: string): Promise<void> {
+	const redis = getRedis();
+	await redis.del(key);
+}
