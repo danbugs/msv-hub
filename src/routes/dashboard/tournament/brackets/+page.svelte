@@ -255,7 +255,10 @@
 			body: JSON.stringify({ bracketName: activeBracket })
 		});
 		const data = await res.json();
-		if (res.ok) syncResult = `Synced ${data.synced} matches from StartGG`;
+		if (res.ok) {
+			const dbg = data.debug ? `\n\n${data.debug.join('\n')}` : '';
+			syncResult = `Synced ${data.synced}/${data.totalSetsOnStartGG} matches (${data.notFound} unmatched)${dbg}`;
+		}
 		else error = data.error ?? 'Sync failed';
 		syncingFromStartGG = false;
 		await loadTournament();
@@ -382,7 +385,7 @@
 				title="Sync from StartGG — pulls results and overwrites MSV Hub's bracket state">
 				{syncingFromStartGG ? 'Syncing...' : 'Sync from StartGG'}
 			</button>
-			{#if syncResult}<span class="text-xs text-green-400 ml-2">{syncResult}</span>{/if}
+			{#if syncResult}<pre class="ml-2 text-xs text-green-400 whitespace-pre-wrap">{syncResult}</pre>{/if}
 		</div>
 
 		{@const bracket = getBracket()}

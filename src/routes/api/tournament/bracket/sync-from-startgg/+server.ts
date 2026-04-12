@@ -92,6 +92,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let synced = 0;
 	let notFound = 0;
 	const applied = new Set<string>();
+	const debug: string[] = [];
+	debug.push(`Reported sets on StartGG: ${reportedSets.length}, bracket matches: ${bracket.matches.length}`);
 
 	for (let pass = 0; pass < 20; pass++) {
 		let progressThisPass = 0;
@@ -102,12 +104,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const sgWinnerId = Number(set.winnerId);
 		const sgE1 = Number(slots[0]?.entrant?.id);
 		const sgE2 = Number(slots[1]?.entrant?.id);
-		if (!sgE1 || !sgE2 || !sgWinnerId) continue;
+		if (!sgE1 || !sgE2 || !sgWinnerId) { if (pass === 0) debug.push(`  Set ${set.id}: no entrants/winner on StartGG`); continue; }
 
 		const msvE1 = bracketEntrantToMsvHub.get(sgE1);
 		const msvE2 = bracketEntrantToMsvHub.get(sgE2);
 		const msvWinner = bracketEntrantToMsvHub.get(sgWinnerId);
-		if (!msvE1 || !msvE2 || !msvWinner) { notFound++; continue; }
+		if (!msvE1 || !msvE2 || !msvWinner) {
+			if (pass === 0) debug.push(`  Set ${set.id}: couldn't map entrants ${sgE1}/${sgE2}/${sgWinnerId} to MSV`);
+			notFound++;
+			continue;
+		}
 
 		// Find matching bracket match
 		const match = bracket.matches.find((m: BracketMatch) =>
@@ -140,15 +146,31 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			applied.add(String(set.id));
 			synced++;
 			progressThisPass++;
-		} catch {
-			// Match might not be ready yet — try next pass
+		} catch (e) {
+			debug.push(`  Set ${set.id}: reportBracketMatch threw: ${String(e).slice(0, 100)}`);
 		}
 	}
 
-	if (progressThisPass === 0) break; // No progress — all remaining sets can't be applied
+	if (progressThisPass === 0) {
+		debug.push(`Pass ${pass + 1}: no progress, stopping. ${reportedSets.length - synced} sets unmatched`);
+		break;
+	}
 	}
 
 	notFound = reportedSets.length - synced;
+
+	// Log which sets couldn't be applied
+	if (notFound > 0 && notFound < 30) {
+		for (const set of reportedSets) {
+			if (applied.has(String(set.id))) continue;
+			const slots = set.slots ?? [];
+			const sgE1 = Number(slots[0]?.entrant?.id);
+			const sgE2 = Number(slots[1]?.entrant?.id);
+			const fullRoundText = set.fullRoundText ?? 'unknown';
+			debug.push(`  Unmatched: "${fullRoundText}" set ${set.id} (entrants ${sgE1} vs ${sgE2})`);
+		}
+	}
+
 	tournament.brackets[bracketName] = bracket;
 
 	// Clear errors for this bracket
@@ -159,5 +181,5 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	await saveTournament(tournament);
-	return Response.json({ ok: true, bracketName, synced, notFound, totalSetsOnStartGG: reportedSets.length });
+	return Response.json({ ok: true, bracketName, synced, notFound, totalSetsOnStartGG: reportedSets.length, debug });
 };

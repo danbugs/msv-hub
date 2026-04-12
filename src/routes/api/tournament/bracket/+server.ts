@@ -31,6 +31,23 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	const bracket = tournament.brackets[bracketName];
 	if (!bracket) return Response.json({ error: `Bracket "${bracketName}" not found` }, { status: 404 });
 
+	// Guard: don't allow editing a GF result if the GF Reset match has been reported.
+	// The reset match's state would become inconsistent. Reset GFR first.
+	const targetMatch = bracket.matches.find((m) => m.id === matchId);
+	const isGFEdit = targetMatch && targetMatch.winnerId && !matchId.includes('-GFR-');
+	if (isGFEdit) {
+		const maxRound = Math.max(...bracket.matches.filter((m) => !m.id.includes('-GFR-')).map((m) => m.round));
+		const isGF = targetMatch.round === maxRound;
+		if (isGF) {
+			const gfr = bracket.matches.find((m) => m.id.includes('-GFR-'));
+			if (gfr?.winnerId) {
+				return Response.json({
+					error: 'Cannot edit Grand Finals result: the Reset match has already been reported. Unreport the Reset match first (edit it), then edit the Grand Finals.'
+				}, { status: 400 });
+			}
+		}
+	}
+
 	try {
 		const otherName = bracketName === 'main' ? 'redemption' : 'main';
 		const otherBracket = tournament.brackets[otherName];
