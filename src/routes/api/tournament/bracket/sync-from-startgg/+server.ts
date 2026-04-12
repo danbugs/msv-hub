@@ -84,6 +84,35 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	let bracket = generateBracket(bracketName, players, standings);
 
+	// StartGG may have different player assignments in WR1 than what generateBracket
+	// produces (happens when standings changed after bracket was pushed to StartGG).
+	// Override WR1 player positions to match StartGG's actual pairings, keyed by
+	// set identifier (A=matchIndex 0, B=1, ...).
+	type Slot = { entrant?: { id?: number } };
+	function identifierToMatchIndex(id: string): number {
+		if (!id) return -1;
+		let n = 0;
+		for (let i = 0; i < id.length; i++) {
+			n = n * 26 + (id.charCodeAt(i) - 64); // 'A' = 65 → 1
+		}
+		return n - 1;
+	}
+	const wr1Sets = (sets as GqlRecord[]).filter((s) => s.fullRoundText === 'Winners Round 1');
+	for (const s of wr1Sets) {
+		const idx = identifierToMatchIndex(s.identifier as string);
+		const slots = (s.slots ?? []) as Slot[];
+		const sgE1 = Number(slots[0]?.entrant?.id);
+		const sgE2 = Number(slots[1]?.entrant?.id);
+		const msvE1 = bracketEntrantToMsvHub.get(sgE1);
+		const msvE2 = bracketEntrantToMsvHub.get(sgE2);
+		if (!msvE1 || !msvE2 || idx < 0) continue;
+		const msvMatch = bracket.matches.find((m: BracketMatch) => m.round === 1 && m.matchIndex === idx);
+		if (msvMatch) {
+			msvMatch.topPlayerId = msvE1;
+			msvMatch.bottomPlayerId = msvE2;
+		}
+	}
+
 	// Step 4: Apply StartGG results to the fresh bracket
 	// Multiple passes — each pass processes sets whose players are already placed in the bracket.
 	// After each pass, advancePlayer places players for the next round.
