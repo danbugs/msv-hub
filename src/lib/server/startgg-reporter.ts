@@ -231,15 +231,35 @@ async function resolveSetId(
 	roundNumber: number,
 	cachedSetId?: string
 ): Promise<string | null> {
-	// Use cached ID directly (preview or real). Preview IDs work for the first report;
-	// after it succeeds, cacheRealSetIds populates real IDs on all other matches.
-	if (cachedSetId) return cachedSetId;
+	// Real cached ID → use it directly (instant)
+	if (cachedSetId && !cachedSetId.startsWith('preview_')) return cachedSetId;
 
 	const groups = tournament.startggPhase1Groups;
 	if (groups && groups[roundNumber - 1]) {
-		// No cached ID — fall back to GQL lookup (has its own retry for the
-		// preview→real conversion window).
-		return findSetInPhaseGroup(groups[roundNumber - 1].id, entrantId1, entrantId2).catch(() => null);
+		const pgId = groups[roundNumber - 1].id;
+		const e1 = Number(entrantId1), e2 = Number(entrantId2);
+
+		// Try admin REST first — returns real IDs quickly once StartGG commits the
+		// phase group. Retry briefly (budget ~6s to stay under Vercel 10s limit).
+		for (let attempt = 0; attempt < 4; attempt++) {
+			if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 1500));
+			const adminSets = await fetchAdminPhaseGroupSets(pgId).catch(() => []);
+			if (adminSets.length > 0) {
+				const m = adminSets.find((s) =>
+					(s.entrant1Id === e1 && s.entrant2Id === e2) ||
+					(s.entrant1Id === e2 && s.entrant2Id === e1)
+				);
+				if (m && !isNaN(m.id) && m.id > 0) return String(m.id);
+				// Sets exist but this pair isn't there — stop retrying (would be same result)
+				break;
+			}
+		}
+
+		// Preview ID cached? Use it — reporting with preview triggers conversion.
+		if (cachedSetId) return cachedSetId;
+
+		// Last resort: GQL lookup
+		return findSetInPhaseGroup(pgId, entrantId1, entrantId2).catch(() => null);
 	}
 
 	// No phase group info — fall back to full event scan (only safe path when

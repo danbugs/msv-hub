@@ -322,9 +322,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		}
 	}
 
-	// Cache preview set IDs — wait up to 4s for the common case (R1 finishes in ~1s,
-	// R2 in 2-4s). If it takes longer, background continues via waitUntil and the
-	// lock on reports handles the race.
+	// Fire-and-forget background cache (returns quickly; the lock on reports handles
+	// races if the user clicks before caching finishes).
 	if (pgId) {
 		if (!tournament.startggSync) {
 			tournament.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
@@ -333,10 +332,6 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		await saveTournament(tournament);
 
 		const conversionPromise = triggerConversionAndCache(tournament, nextRound, pgId).catch(() => {});
-		await Promise.race([
-			conversionPromise,
-			new Promise<void>((r) => setTimeout(r, 4000))
-		]);
 		try {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const ctx = (platform as any)?.context;
