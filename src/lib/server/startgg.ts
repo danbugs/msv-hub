@@ -117,6 +117,8 @@ query EventSets($eventId: ID!, $page: Int!, $perPage: Int!) {
       pageInfo { totalPages }
       nodes {
         id
+        identifier
+        round
         displayScore
         winnerId
         fullRoundText
