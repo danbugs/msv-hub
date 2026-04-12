@@ -174,11 +174,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return ai.localeCompare(bi);
 		});
 
+		debug.push(`${key}: StartGG sets=${sortedSets.length}, MSV matches=${msvMatches.length}`);
 		if (sortedSets.length !== msvMatches.length) {
-			debug.push(`  ${key}: StartGG has ${sortedSets.length} sets, MSV has ${msvMatches.length} matches — size mismatch`);
+			debug.push(`  ${key}: SIZE MISMATCH`);
 		}
 
 		const n = Math.min(sortedSets.length, msvMatches.length);
+		let groupSynced = 0;
 		for (let i = 0; i < n; i++) {
 			const s = sortedSets[i];
 			const m = msvMatches[i];
@@ -189,6 +191,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			const msvE2 = sgE2 ? bracketEntrantToMsvHub.get(sgE2) : undefined;
 			const sgWinnerId = Number(s.winnerId);
 			const msvWinner = sgWinnerId ? bracketEntrantToMsvHub.get(sgWinnerId) : undefined;
+
+			if (sgWinnerId && !msvWinner) {
+				debug.push(`  ${key}[${i}] ${s.identifier}: winnerId ${sgWinnerId} not in bracketEntrantToMsvHub (${bracketEntrantToMsvHub.size} entries)`);
+			}
+			if (sgWinnerId && msvWinner && msvWinner !== msvE1 && msvWinner !== msvE2) {
+				debug.push(`  ${key}[${i}] ${s.identifier}: winner ${msvWinner} not in slots (${msvE1}, ${msvE2})`);
+			}
 
 			// Assign players (StartGG is source of truth). Missing slots → leave undefined.
 			m.topPlayerId = msvE1;
@@ -201,6 +210,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				m.topScore = topScore;
 				m.bottomScore = bottomScore;
 				synced++;
+				groupSynced++;
 			} else {
 				m.winnerId = undefined;
 				m.topScore = undefined;
