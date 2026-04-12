@@ -71,7 +71,7 @@ function ensureSync(tournament: TournamentState): StartggSyncState {
 }
 
 function addError(sync: StartggSyncState, matchId: string, message: string) {
-	const actionable = `${message}. Try re-reporting matches that aren't showing as reported on StartGG.`;
+	const actionable = `${message}. Try "Sync from StartGG" to pull the latest state, or re-report matches that aren't showing as reported.`;
 	sync.errors = [{ matchId, message: actionable, ts: Date.now() }, ...sync.errors].slice(0, 20);
 }
 
@@ -230,17 +230,15 @@ async function resolveSetId(
 	roundNumber: number,
 	cachedSetId?: string
 ): Promise<string | null> {
-	// If we have a REAL cached ID, use it instantly. For preview IDs, try to
-	// upgrade to a real ID via admin REST first (cheap, instant).
-	const cachedIsPreview = cachedSetId?.startsWith('preview_') ?? false;
-	if (cachedSetId && !cachedIsPreview) return cachedSetId;
+	// Use cached ID directly (preview or real). Preview IDs work for the first report;
+	// after it succeeds, cacheRealSetIds populates real IDs on all other matches.
+	if (cachedSetId) return cachedSetId;
 
 	const groups = tournament.startggPhase1Groups;
 	if (groups && groups[roundNumber - 1]) {
 		const pgId = groups[roundNumber - 1].id;
 
-		// FAST PATH: try admin REST first — returns real set IDs instantly without
-		// waiting for GQL's preview→real conversion (saves 5-30s on subsequent reports).
+		// No cached ID — try admin REST for instant real IDs (bypasses GQL polling).
 		const adminSets = await fetchAdminPhaseGroupSets(pgId).catch(() => []);
 		if (adminSets.length > 0) {
 			const e1 = Number(entrantId1), e2 = Number(entrantId2);
@@ -251,10 +249,7 @@ async function resolveSetId(
 			if (match && !isNaN(match.id) && match.id > 0) return String(match.id);
 		}
 
-		// Still have a preview cached? Use it (conversion hasn't happened yet).
-		if (cachedSetId) return cachedSetId;
-
-		// Fallback: GQL lookup (handles edge cases where admin REST doesn't return a match)
+		// Fallback: GQL lookup
 		return findSetInPhaseGroup(pgId, entrantId1, entrantId2).catch(() => null);
 	}
 
