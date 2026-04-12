@@ -43,22 +43,28 @@ export const POST: RequestHandler = async ({ locals }) => {
 	let synced = 0;
 	let skipped = 0;
 	const perRound: Record<number, number> = {};
+	const debug: string[] = [];
+	debug.push(`Phase groups: ${tournament.startggPhase1Groups.length}`);
+	debug.push(`Rounds: ${tournament.rounds.length}`);
 
 	for (let i = 0; i < tournament.startggPhase1Groups.length; i++) {
 		const pg = tournament.startggPhase1Groups[i];
 		const roundNum = i + 1;
-		if (!pg?.id) continue;
+		if (!pg?.id) { debug.push(`R${roundNum}: no pg.id`); continue; }
 
 		const round = tournament.rounds.find((r) => r.number === roundNum);
-		if (!round) continue;
+		if (!round) { debug.push(`R${roundNum} (pg ${pg.id}): no round found`); continue; }
 
 		const data = await gql<{ phaseGroup: { sets: { nodes: GqlRecord[] } } }>(
 			PG_SETS_WITH_SCORES,
 			{ phaseGroupId: pg.id },
 			{ delay: 0 }
-		).catch(() => null);
+		).catch((e) => { debug.push(`R${roundNum} GQL error: ${String(e).slice(0, 100)}`); return null; });
 
 		const sets = data?.phaseGroup?.sets?.nodes ?? [];
+		debug.push(`R${roundNum} pg ${pg.id}: ${sets.length} sets from StartGG, ${round.matches.length} MSV matches`);
+		const withWinners = sets.filter((s) => s.winnerId).length;
+		debug.push(`  ${withWinners} sets have winnerId on StartGG`);
 
 		for (const set of sets) {
 			const slots = (set.slots ?? []) as GqlRecord[];
@@ -144,5 +150,5 @@ export const POST: RequestHandler = async ({ locals }) => {
 
 	await saveTournament(tournament);
 
-	return Response.json({ ok: true, synced, skipped, perRound });
+	return Response.json({ ok: true, synced, skipped, perRound, debug });
 };

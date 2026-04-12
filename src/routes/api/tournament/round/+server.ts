@@ -322,9 +322,9 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		}
 	}
 
-	// Pre-cache preview set IDs in the background. The distributed lock on reports
-	// handles the race if the user clicks before caching finishes — first report
-	// acquires the lock, drives conversion, concurrent reports wait.
+	// Cache preview set IDs — wait up to 4s for the common case (R1 finishes in ~1s,
+	// R2 in 2-4s). If it takes longer, background continues via waitUntil and the
+	// lock on reports handles the race.
 	if (pgId) {
 		if (!tournament.startggSync) {
 			tournament.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
@@ -333,11 +333,15 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		await saveTournament(tournament);
 
 		const conversionPromise = triggerConversionAndCache(tournament, nextRound, pgId).catch(() => {});
+		await Promise.race([
+			conversionPromise,
+			new Promise<void>((r) => setTimeout(r, 4000))
+		]);
 		try {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const ctx = (platform as any)?.context;
 			if (ctx?.waitUntil) ctx.waitUntil(conversionPromise);
-		} catch { /* not on Vercel — fire-and-forget */ }
+		} catch { /* not on Vercel */ }
 	}
 
 	// Optionally announce the new round to a Discord channel.

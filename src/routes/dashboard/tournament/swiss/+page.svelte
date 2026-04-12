@@ -29,8 +29,10 @@
 		syncResult = '';
 		const res = await fetch('/api/tournament/swiss/sync-from-startgg', { method: 'POST' });
 		const data = await res.json();
-		if (res.ok) syncResult = `Synced ${data.synced} matches (${data.skipped} skipped)`;
-		else error = data.error ?? 'Sync failed';
+		if (res.ok) {
+			const dbg = data.debug ? `\n\n${data.debug.join('\n')}` : '';
+			syncResult = `Synced ${data.synced} matches (${data.skipped} skipped)${dbg}`;
+		} else error = data.error ?? 'Sync failed';
 		syncingFromStartGG = false;
 		await loadTournament();
 	}
@@ -297,7 +299,7 @@
 						title="Sync from StartGG — pulls results and overwrites MSV Hub's Swiss state">
 						{syncingFromStartGG ? 'Syncing...' : 'Sync from StartGG'}
 					</button>
-					{#if syncResult}<span class="text-xs text-green-400">{syncResult}</span>{/if}
+					{#if syncResult}<pre class="text-xs text-green-400 whitespace-pre-wrap">{syncResult}</pre>{/if}
 				{/if}
 			</div>
 
