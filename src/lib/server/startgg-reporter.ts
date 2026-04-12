@@ -314,19 +314,36 @@ export async function reportSwissMatch(
 
 	let result = await reportSet(setId, winnerEntrant.startggEntrantId, reportExtra);
 
-	// If we used a cached preview ID and the report failed, the phase group has already
-	// converted to real IDs (another match triggered the conversion first). Re-lookup.
+	// If the preview ID failed, conversion likely just happened (another concurrent
+	// report triggered it). Admin REST now has real IDs — retry quickly.
 	if (!result.ok && setId.startsWith('preview_')) {
 		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
 		if (pgId) {
 			match.startggSetId = undefined;
-			const freshId = await findSetInPhaseGroup(
-				pgId,
-				topEntrant.startggEntrantId,
-				botEntrant.startggEntrantId
-			).catch(() => null);
-			if (freshId && !freshId.startsWith('preview_')) {
-				setId = freshId;
+			// Retry admin REST a few times — small window while conversion settles
+			let realId: string | null = null;
+			const e1 = Number(topEntrant.startggEntrantId);
+			const e2 = Number(botEntrant.startggEntrantId);
+			for (let attempt = 0; attempt < 4; attempt++) {
+				if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 1000));
+				const adminSets = await fetchAdminPhaseGroupSets(pgId).catch(() => []);
+				if (adminSets.length > 0) {
+					const m = adminSets.find((s) =>
+						(s.entrant1Id === e1 && s.entrant2Id === e2) ||
+						(s.entrant1Id === e2 && s.entrant2Id === e1)
+					);
+					if (m && !isNaN(m.id) && m.id > 0) {
+						realId = String(m.id);
+						break;
+					}
+				}
+			}
+			// Fallback to GQL if admin REST didn't yield a match
+			if (!realId) {
+				realId = await findSetInPhaseGroup(pgId, e1, e2).catch(() => null);
+			}
+			if (realId && !realId.startsWith('preview_')) {
+				setId = realId;
 				result = await reportSet(setId, winnerEntrant.startggEntrantId, reportExtra);
 			}
 		}
