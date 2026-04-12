@@ -153,101 +153,32 @@ export async function triggerConversionAndCache(
 	roundNumber: number,
 	phaseGroupId: number
 ): Promise<void> {
-	console.log(`[cache] Triggering conversion for round ${roundNumber}, PG ${phaseGroupId}`);
+	console.log(`[cache] Caching preview set IDs for round ${roundNumber}, PG ${phaseGroupId}`);
 
-	// Step 1: Fetch preview set IDs via GQL
+	// Fetch preview set IDs via GQL. Keep retrying until sets exist (StartGG takes
+	// time to generate after pushPairings for R2+). Preview IDs work for reporting.
 	let nodes: GqlNode[] = [];
 	for (let attempt = 0; attempt < 10; attempt++) {
-		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, attempt <= 3 ? 2000 : 4000));
+		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, attempt <= 3 ? 1500 : 3000));
 		try {
 			const data = await gql<PGData>(PHASE_GROUP_SETS_QUERY, { phaseGroupId }, { delay: 0 });
 			nodes = (data?.phaseGroup?.sets?.nodes ?? []) as GqlNode[];
 		} catch { /* retry */ }
-		if (nodes.length > 0) break;
+		// Require sets WITH entrants populated (empty preview slots are useless)
+		const hasEntrants = nodes.some((n) =>
+			(n.slots ?? []).every((s) => s.entrant?.id)
+		);
+		if (hasEntrants) break;
 	}
-	console.log(`[cache] Got ${nodes.length} preview sets via GQL`);
-
-	if (nodes.length === 0) {
-		// Couldn't get preview IDs — mark ready anyway so reports can proceed (they'll
-		// fall back to findSetInPhaseGroup).
-		const fresh0 = await getActiveTournament();
-		if (fresh0) {
-			const s0 = ensureSync(fresh0);
-			s0.cacheReady = true;
-			await saveTournament(fresh0);
-		}
-		return;
-	}
-
-	// Step 2: Find a preview set with valid entrants to dummy-report
-	let dummySetId: string | null = null;
-	let dummyWinnerEntrantId: number | null = null;
-	for (const n of nodes) {
-		const ids = (n.slots ?? [])
-			.map((s) => Number(s.entrant?.id))
-			.filter((id): id is number => !isNaN(id) && id > 0);
-		if (ids.length === 2) {
-			dummySetId = String(n.id);
-			dummyWinnerEntrantId = ids[0];
-			break;
-		}
-	}
-
-	if (dummySetId && dummyWinnerEntrantId) {
-		console.log(`[cache] Dummy-reporting ${dummySetId} to trigger conversion`);
-		const dummyResult = await reportSet(dummySetId, dummyWinnerEntrantId, {
-			loserEntrantId: (nodes.find((n) => String(n.id) === dummySetId)?.slots ?? [])
-				.map((s) => Number(s.entrant?.id))
-				.find((id) => id !== dummyWinnerEntrantId),
-			winnerScore: 1,
-			loserScore: 0,
-			isDQ: false
-		}).catch((e) => ({ ok: false as const, error: String(e) }));
-
-		if (dummyResult.ok) {
-			// Fetch real IDs from admin REST
-			const realSetId = dummyResult.reportedSetId ?? dummySetId;
-			console.log(`[cache] Dummy reported, resetting ${realSetId}`);
-			await resetSet(realSetId).catch(() => {});
-		} else {
-			console.log(`[cache] Dummy report failed: ${dummyResult.error}`);
-		}
-	}
-
-	// Step 3: Fetch real IDs via admin REST (now available post-conversion)
-	let adminSets: Awaited<ReturnType<typeof fetchAdminPhaseGroupSets>> = [];
-	for (let attempt = 0; attempt < 5; attempt++) {
-		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 1500));
-		adminSets = await fetchAdminPhaseGroupSets(phaseGroupId).catch(() => []);
-		if (adminSets.length > 0) break;
-	}
+	console.log(`[cache] Got ${nodes.length} sets via GQL`);
 
 	const fresh = await getActiveTournament();
 	if (!fresh) return;
-	const round = fresh.rounds.find((r) => r.number === roundNumber);
 
-	if (round) {
+	const round = fresh.rounds.find((r) => r.number === roundNumber);
+	if (round && nodes.length > 0) {
 		const entrantMap = new Map(fresh.entrants.map((e) => [e.id, e]));
-		if (adminSets.length > 0) {
-			// Prefer real IDs from admin REST
-			for (const match of round.matches) {
-				const top = entrantMap.get(match.topPlayerId);
-				const bot = entrantMap.get(match.bottomPlayerId);
-				if (!top?.startggEntrantId || !bot?.startggEntrantId) continue;
-				const e1 = Number(top.startggEntrantId);
-				const e2 = Number(bot.startggEntrantId);
-				const as = adminSets.find((s) =>
-					(s.entrant1Id === e1 && s.entrant2Id === e2) ||
-					(s.entrant1Id === e2 && s.entrant2Id === e1)
-				);
-				if (as) match.startggSetId = String(as.id);
-			}
-			console.log(`[cache] Cached ${adminSets.length} real set IDs`);
-		} else {
-			// Fallback: use the preview IDs from GQL
-			applyNodesToRound(nodes, round, entrantMap);
-			console.log(`[cache] Fallback: cached preview set IDs`);
-		}
+		applyNodesToRound(nodes, round, entrantMap);
 	}
 
 	const sync = ensureSync(fresh);
