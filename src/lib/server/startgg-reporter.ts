@@ -7,7 +7,7 @@
  */
 
 import { findSetInPhaseGroup, findSetByEntrants, reportSet, resetSet, gql, PHASE_GROUP_SETS_QUERY, PHASE_GROUP_SEEDS_QUERY, fetchAllEntrants } from '$lib/server/startgg';
-import { fetchAdminPhaseGroupSets } from '$lib/server/startgg-admin';
+import { fetchAdminPhaseGroupSets, fetchAdminPhaseGroupSetsRaw, completeSetViaAdminRest } from '$lib/server/startgg-admin';
 import { saveTournament, getActiveTournament } from '$lib/server/store';
 import type { TournamentState, SwissMatch, BracketMatch, StartggSyncState } from '$lib/types/tournament';
 
@@ -299,104 +299,100 @@ export async function reportSwissMatch(
 	const winnerEntrant = entrantMap.get(match.winnerId);
 
 	if (!topEntrant?.startggEntrantId || !botEntrant?.startggEntrantId || !winnerEntrant?.startggEntrantId) {
-		const msg = `StartGG entrant IDs not found for ${topEntrant?.gamerTag ?? match.topPlayerId} (${topEntrant?.startggEntrantId ?? 'missing'}) vs ${botEntrant?.gamerTag ?? match.bottomPlayerId} (${botEntrant?.startggEntrantId ?? 'missing'}) — was tournament loaded from a StartGG event?`;
+		const msg = `StartGG entrant IDs not found for ${topEntrant?.gamerTag ?? match.topPlayerId} vs ${botEntrant?.gamerTag ?? match.bottomPlayerId}`;
 		addError(sync, match.id, msg);
 		return { ok: false, error: msg };
 	}
 
-	// Resolve the StartGG set ID. findSetInPhaseGroup already retries internally
-	// during the preview→real conversion window, so no outer retry loop needed.
-	let setId = await resolveSetId(
-		tournament,
-		topEntrant.startggEntrantId,
-		botEntrant.startggEntrantId,
-		roundNumber,
-		match.startggSetId
-	);
-
-	if (!setId) {
-		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
-		const msg = `Set not found for ${topEntrant.gamerTag} (entrant ${topEntrant.startggEntrantId}) vs ${botEntrant.gamerTag} (entrant ${botEntrant.startggEntrantId}) in phase group ${pgId ?? 'N/A'} (round ${roundNumber}). Unreported set may be missing — check StartGG phase group setup.`;
+	const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
+	if (!pgId) {
+		const msg = `No phase group for round ${roundNumber}`;
 		addError(sync, match.id, msg);
 		return { ok: false, error: msg };
 	}
 
-	const loserEntrant = winnerEntrant === topEntrant ? botEntrant : topEntrant;
+	const e1Id = Number(topEntrant.startggEntrantId);
+	const e2Id = Number(botEntrant.startggEntrantId);
 	const winnerScore = match.winnerId === match.topPlayerId ? match.topScore : match.bottomScore;
 	const loserScore  = match.winnerId === match.topPlayerId ? match.bottomScore : match.topScore;
 
-	const reportExtra = {
-		loserEntrantId: loserEntrant.startggEntrantId,
-		winnerScore,
-		loserScore,
-		isDQ: match.isDQ
-	};
-
-	let result = await reportSet(setId, winnerEntrant.startggEntrantId, reportExtra);
-
-	// If the preview ID failed, conversion likely just happened (another concurrent
-	// report triggered it). Admin REST now has real IDs — retry quickly.
-	if (!result.ok && setId.startsWith('preview_')) {
-		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
-		if (pgId) {
-			match.startggSetId = undefined;
-			// Retry admin REST a few times — small window while conversion settles
-			let realId: string | null = null;
-			const e1 = Number(topEntrant.startggEntrantId);
-			const e2 = Number(botEntrant.startggEntrantId);
-			for (let attempt = 0; attempt < 4; attempt++) {
-				if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 1000));
-				const adminSets = await fetchAdminPhaseGroupSets(pgId).catch(() => []);
-				if (adminSets.length > 0) {
-					const m = adminSets.find((s) =>
-						(s.entrant1Id === e1 && s.entrant2Id === e2) ||
-						(s.entrant1Id === e2 && s.entrant2Id === e1)
-					);
-					if (m && !isNaN(m.id) && m.id > 0) {
-						realId = String(m.id);
-						break;
-					}
-				}
-			}
-			// Fallback to GQL if admin REST didn't yield a match
-			if (!realId) {
-				realId = await findSetInPhaseGroup(pgId, e1, e2).catch(() => null);
-			}
-			if (realId && !realId.startsWith('preview_')) {
-				setId = realId;
-				result = await reportSet(setId, winnerEntrant.startggEntrantId, reportExtra);
-			}
+	// DQ still goes through GraphQL (different payload shape); internal REST is
+	// used for normal score reports.
+	if (match.isDQ) {
+		const setIdGql = await resolveSetId(tournament, e1Id, e2Id, roundNumber, match.startggSetId);
+		if (!setIdGql) {
+			const msg = `Set not found for ${topEntrant.gamerTag} vs ${botEntrant.gamerTag} in phase group ${pgId} (round ${roundNumber})`;
+			addError(sync, match.id, msg);
+			return { ok: false, error: msg };
 		}
+		const loserEntrant = winnerEntrant === topEntrant ? botEntrant : topEntrant;
+		const result = await reportSet(setIdGql, winnerEntrant.startggEntrantId, {
+			loserEntrantId: loserEntrant.startggEntrantId,
+			winnerScore, loserScore, isDQ: true
+		});
+		if (result.ok) {
+			match.startggSetId = result.reportedSetId ?? setIdGql;
+			clearErrorsForMatch(sync, match.id);
+		} else {
+			addError(sync, match.id, result.error ?? 'Unknown StartGG error');
+		}
+		return result;
 	}
 
-	// If the set is already completed (misreport fix or re-report), reset first then re-report.
-	if (!result.ok && result.error?.includes('Cannot report completed set')) {
-		const resetResult = await resetSet(setId);
-		if (resetResult.ok) {
-			result = await reportSet(setId, winnerEntrant.startggEntrantId, reportExtra);
-		}
+	// Normal score report via internal REST API (~500-700ms per set).
+	// 1. Fetch raw set data for this phase group (includes both preview + real IDs with full payload).
+	// 2. Find the set matching this pair.
+	// 3. PUT to /api/-/rest/set/{id}/complete.
+	const rawSets = await fetchAdminPhaseGroupSetsRaw(pgId).catch(() => []);
+	if (rawSets.length === 0) {
+		const msg = `StartGG returned no sets for phase group ${pgId} (round ${roundNumber}). Pool may not be ready yet.`;
+		addError(sync, match.id, msg);
+		return { ok: false, error: msg };
 	}
+
+	const targetSet = rawSets.find((s) =>
+		(Number(s.entrant1Id) === e1Id && Number(s.entrant2Id) === e2Id) ||
+		(Number(s.entrant1Id) === e2Id && Number(s.entrant2Id) === e1Id)
+	);
+	if (!targetSet) {
+		const msg = `Set not found for ${topEntrant.gamerTag} (entrant ${e1Id}) vs ${botEntrant.gamerTag} (entrant ${e2Id}) in phase group ${pgId} (round ${roundNumber})`;
+		addError(sync, match.id, msg);
+		return { ok: false, error: msg };
+	}
+
+	// If this set is already reported on StartGG (misreport fix), reset first
+	if (targetSet.winnerId) {
+		await resetSet(String(targetSet.id)).catch(() => {});
+	}
+
+	// Determine scores in the set's entrant1/entrant2 order
+	const setE1 = Number(targetSet.entrant1Id);
+	const setWinnerIsE1 = setE1 === winnerEntrant.startggEntrantId;
+	const e1Score = setWinnerIsE1 ? winnerScore : loserScore;
+	const e2Score = setWinnerIsE1 ? loserScore : winnerScore;
+
+	const result = await completeSetViaAdminRest(
+		String(targetSet.id),
+		targetSet,
+		e1Score ?? 0,
+		e2Score ?? 0
+	);
 
 	if (result.ok) {
-		match.startggSetId = result.reportedSetId ?? setId;
+		// Save the real set ID (internal REST returns it even for preview inputs)
+		match.startggSetId = result.realSetId ?? String(targetSet.id);
 		clearErrorsForMatch(sync, match.id);
 
-		// After any successful report, cache all real set IDs for this round via admin REST.
-		// This covers both the preview→real conversion AND round 2+ where sets may not have
-		// been pre-cached by triggerConversionAndCache yet.
-		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
-		if (pgId) {
-			const round = tournament.rounds.find((r) => r.number === roundNumber);
-			const hasUncached = round?.matches.some((m) => !m.startggSetId) ?? false;
-			if (setId.startsWith('preview_') || hasUncached) {
-				await cacheRealSetIds(tournament, roundNumber, pgId);
-			}
+		// After first report triggers conversion, populate real IDs on other matches
+		// so concurrent/subsequent reports skip the fetch-sets step.
+		if (String(targetSet.id).startsWith('preview_')) {
+			await cacheRealSetIds(tournament, roundNumber, pgId);
 		}
+		return { ok: true };
 	} else {
 		addError(sync, match.id, result.error ?? 'Unknown StartGG error');
+		return { ok: false, error: result.error };
 	}
-
-	return result;
 }
 
 // ── Bracket reporting ───────────────────────────────────────────────────

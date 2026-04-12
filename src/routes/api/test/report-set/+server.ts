@@ -60,10 +60,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const result = await completeSetViaAdminRest(
 		String(target.id),
 		target,
-		winnerEntrantId,
 		e1Score,
-		e2Score,
-		body.isDQ ?? false
+		e2Score
 	);
 	const t3 = Date.now();
 

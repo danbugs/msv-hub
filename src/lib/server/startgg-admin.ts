@@ -346,31 +346,41 @@ export async function fetchAdminPhaseGroupSetsRaw(
 
 /**
  * Report a set result via StartGG's INTERNAL REST API (the one their UI uses).
- * Much faster than the public GraphQL reportBracketSet mutation.
+ * MUCH faster than the public GraphQL reportBracketSet mutation (~500-700ms vs seconds).
  *
  * Works with both preview IDs ("preview_3251999_1_0") and real IDs ("101575015").
- * The response returns the real set ID after conversion.
+ * Returns the real set ID after conversion.
+ *
+ * Required HTTP method: PUT. Payload must include the full set object plus:
+ *   - entrant1Score, entrant2Score
+ *   - winnerId: null (server infers from scores)
+ *   - entrant1, entrant2 (top-level IDs)
+ *   - mutations.ffaData for preview IDs
  */
 export async function completeSetViaAdminRest(
 	setId: string,
 	setData: Record<string, unknown>,
-	winnerEntrantId: number,
 	entrant1Score: number,
-	entrant2Score: number,
-	isDQ: boolean
+	entrant2Score: number
 ): Promise<{ ok: boolean; realSetId?: string; error?: string }> {
-	// Build payload: start with the existing set data, apply score/winner mutations
+	const isPreview = setId.startsWith('preview_');
+
 	const payload: Record<string, unknown> = {
 		...setData,
-		entrant1Score: isDQ ? -1 : entrant1Score,
-		entrant2Score: isDQ ? -1 : entrant2Score,
-		winnerId: winnerEntrantId,
+		entrant1: Number(setData.entrant1Id),
+		entrant2: Number(setData.entrant2Id),
+		entrant1Score,
+		entrant2Score,
+		winnerId: null, // server infers from scores
 		isLast: false,
 		games: []
 	};
+	if (isPreview) {
+		payload.mutations = { ffaData: { [setId]: { isFFA: false } } };
+	}
 
 	const res = await adminFetch(`https://www.start.gg/api/-/rest/set/${setId}/complete`, {
-		method: 'POST',
+		method: 'PUT',
 		body: JSON.stringify(payload)
 	});
 
