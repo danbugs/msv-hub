@@ -407,6 +407,11 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	// This triggers pairing regeneration for the next active round.
 	const wasMisreport = match.winnerId !== undefined;
 	const winnerChanged = match.winnerId !== undefined && match.winnerId !== winnerId;
+	// Snapshot original state so we can revert if StartGG report fails (for new reports)
+	const origWinnerId = match.winnerId;
+	const origTopScore = match.topScore;
+	const origBottomScore = match.bottomScore;
+	const origIsDQ = match.isDQ;
 	match.winnerId = winnerId;
 	if (isDQ) { match.isDQ = true; match.topScore = undefined; match.bottomScore = undefined; }
 	else { match.isDQ = false; if (topScore !== undefined) match.topScore = topScore; if (bottomScore !== undefined) match.bottomScore = bottomScore; }
@@ -449,12 +454,22 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	// Report to StartGG — save match result immediately, then merge StartGG metadata.
+	// Report to StartGG.
 	const sgResult = await reportSwissMatch(tournament, targetRound.number, match).catch(
 		(e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) })
 	);
 
 	if (gotLock) await releaseLock(lockKey);
+
+	// If StartGG reporting failed AND this was a new report (not a fix/misreport),
+	// revert local state so the UI doesn't show the match as reported when it isn't.
+	// For misreport fixes, keep the original winner so tournament state doesn't break.
+	if (!sgResult.ok && !wasMisreport) {
+		match.winnerId = origWinnerId;
+		match.topScore = origTopScore;
+		match.bottomScore = origBottomScore;
+		match.isDQ = origIsDQ;
+	}
 
 	// Safe merge: re-load fresh state so concurrent reports don't overwrite each other.
 	// Only apply this specific match's changes to the latest state.
