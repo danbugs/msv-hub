@@ -73,16 +73,10 @@ export const POST: RequestHandler = async ({ locals }) => {
 		await clearPhaseEntrants(swissEventId, phase.id, phase.name, isFinalStandings ? 6 : 4);
 	}
 
-	// Step 2b: Clear entrants from bracket event phases too
-	for (const bracketEventId of [mainEventId, redEventId]) {
-		if (!bracketEventId) continue;
-		const bPhaseData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
-			EVENT_PHASES_QUERY, { eventId: bracketEventId }
-		);
-		for (const phase of bPhaseData?.event?.phases ?? []) {
-			await clearPhaseEntrants(bracketEventId, phase.id, `Bracket: ${phase.name}`);
-		}
-	}
+	// Step 2b: Do NOT call addEntrantsToPhase for bracket events —
+	// it would convert DE bracket phases into Swiss (groupTypeId: 4).
+	// Instead, rely on restartPhase (already done) + updateParticipantEvents
+	// (below) to remove players from bracket events entirely.
 
 	// Step 3: Remove all participants from bracket events (keep only Swiss)
 	const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];

@@ -17,6 +17,22 @@
 
 	// No polling needed — preview IDs work for first report, real IDs cached instantly after.
 
+	let pushingToBrackets = $state(false);
+	let pushError = $state('');
+
+	async function pushAndGoToBrackets() {
+		pushingToBrackets = true;
+		pushError = '';
+		const res = await fetch('/api/tournament/startgg-sync', { method: 'POST' });
+		const data = await res.json().catch(() => ({}));
+		if (res.ok) {
+			window.location.href = '/dashboard/tournament/brackets';
+		} else {
+			pushError = (data as { error?: string }).error ?? 'Failed to push bracket to StartGG';
+			pushingToBrackets = false;
+		}
+	}
+
 	onMount(loadTournament);
 
 	async function loadTournament() {
@@ -282,18 +298,6 @@
 			{/if}
 
 			<!-- StartGG sync banners -->
-			{#if tournament.currentRound === 1 && isRoundComplete() && !isFinalRoundComplete() && !dismissedBanners.has('round1-done')}
-				<div class="mt-4 flex items-start gap-2 rounded-lg border border-blue-700 bg-blue-950/60 px-4 py-3 text-sm text-blue-200">
-					<span class="flex-1">
-						<span class="font-semibold">StartGG:</span> Before starting round 2, add all players to
-						<strong>Swiss rounds 2–{tournament.settings.numRounds} and Final Standings</strong> phase groups on StartGG.
-						This lets result reporting work for all remaining rounds.
-					</span>
-					<button onclick={() => dismissedBanners = new Set([...dismissedBanners, 'round1-done'])}
-						class="shrink-0 text-blue-400 hover:text-blue-200 text-base leading-none" title="Dismiss">✕</button>
-				</div>
-			{/if}
-
 			{#if isFinalRoundComplete() && !dismissedBanners.has('final-done')}
 				<div class="mt-4 flex items-start gap-2 rounded-lg border border-amber-700 bg-amber-950/60 px-4 py-3 text-sm text-amber-200">
 					<span class="flex-1">
@@ -537,23 +541,29 @@
 					{#each [mainPlayers[mainPlayers.length - 1]] as lastMain}
 						{#each [tournament.finalStandings.find((s) => s.bracket === 'redemption')] as firstRed}
 							{#if lastMain && firstRed && lastMain.wins === firstRed.wins && lastMain.losses === firstRed.losses}
-								{@const diff = Math.round(lastMain.totalScore - firstRed.totalScore)}
-								{@const reasons = (() => {
-									const r = [];
-									if (lastMain.winPoints > firstRed.winPoints) r.push('beat higher-seeded opponents');
-									if (lastMain.lossPoints > firstRed.lossPoints) r.push('lost to stronger players');
-									if (lastMain.initialSeed < firstRed.initialSeed && r.length === 0) r.push(`had a higher initial seed (#${lastMain.initialSeed} vs #${firstRed.initialSeed})`);
-									if (lastMain.cinderellaBonus > firstRed.cinderellaBonus) r.push('overperformed their seeding (underdog bonus)');
-									return r;
+								{@const rawDiff = lastMain.totalScore - firstRed.totalScore}
+								{@const reason = (() => {
+									// Determine the actual dominant reason — don't accumulate
+									if (Math.abs(rawDiff) >= 0.5) {
+										// Actual point difference — figure out main driver
+										if (lastMain.winPoints > firstRed.winPoints + 0.1) return 'beat higher-seeded opponents (more win points)';
+										if (lastMain.lossPoints > firstRed.lossPoints + 0.1) return 'lost to stronger players (more loss points)';
+										if (lastMain.cinderellaBonus > firstRed.cinderellaBonus + 0.1) return 'overperformed their seed (Cinderella bonus)';
+										return 'had a slight points edge';
+									}
+									// Points effectively tied — falls to initial seed tiebreaker
+									if (lastMain.initialSeed < firstRed.initialSeed) return `had a higher initial seed (#${lastMain.initialSeed} vs #${firstRed.initialSeed})`;
+									return 'tiebreaker';
 								})()}
+								{@const diffLabel = Math.abs(rawDiff) >= 0.5 ? `${rawDiff.toFixed(1)} more points` : 'tied on points'}
 								<div class="mt-4 rounded-lg border border-amber-700 bg-amber-900/20 p-3 text-sm text-amber-300 space-y-2">
 									<p><strong>{firstRed.gamerTag}</strong> ({firstRed.wins}-{firstRed.losses}, seed #{firstRed.initialSeed}) was placed in Redemption
 									over <strong>{lastMain.gamerTag}</strong> ({lastMain.wins}-{lastMain.losses}, seed #{lastMain.initialSeed}) who made Main.</p>
 									<p class="text-xs text-amber-400">
-										Both went {lastMain.wins}-{lastMain.losses}. <strong>{lastMain.gamerTag}</strong> earned <strong>{diff} more point{diff !== 1 ? 's' : ''}</strong>{reasons.length > 0 ? ` because they ${reasons.join(' and ')}` : ''}.
+										Both went {lastMain.wins}-{lastMain.losses}. <strong>{lastMain.gamerTag}</strong> {diffLabel} — {reason}.
 									</p>
 									<p class="text-xs text-gray-500">
-										Score: {lastMain.gamerTag} {lastMain.totalScore.toFixed(0)} pts vs {firstRed.gamerTag} {firstRed.totalScore.toFixed(0)} pts
+										Score: {lastMain.gamerTag} {lastMain.totalScore.toFixed(1)} pts vs {firstRed.gamerTag} {firstRed.totalScore.toFixed(1)} pts
 									</p>
 								</div>
 							{/if}
@@ -562,13 +572,17 @@
 
 					<!-- Split recommendation -->
 					<div class="mt-4 rounded-lg border border-violet-700 bg-violet-900/20 p-3 text-sm text-violet-300">
-						<strong>Next step:</strong> Go to Brackets and click <strong>Run Bracket Split</strong>.
-						This will automatically assign {mainPlayers.length} players to Main and {tournament.finalStandings.filter(s => s.bracket === 'redemption').length} players to Redemption on StartGG, push seeding, and prepare for reporting.
+						<strong>Next step:</strong> Click below to push the bracket split to StartGG
+						({mainPlayers.length} players to Main, {tournament.finalStandings.filter(s => s.bracket === 'redemption').length} to Redemption) and start bracket reporting.
 					</div>
 				{/each}
-				<a href="/dashboard/tournament/brackets" class="mt-4 inline-block text-sm text-violet-400 hover:text-violet-300">
-					Go to Brackets &rarr;
-				</a>
+				<button onclick={pushAndGoToBrackets} disabled={pushingToBrackets}
+					class="mt-4 rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50">
+					{pushingToBrackets ? 'Pushing to StartGG…' : 'Push to StartGG & Start Brackets →'}
+				</button>
+				{#if pushError}
+					<p class="mt-2 text-sm text-red-400">{pushError}</p>
+				{/if}
 			</div>
 		{/if}
 	{/if}
