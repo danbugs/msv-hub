@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 /**
- * Test script for StartGG internal REST reporting.
+ * Stress-test StartGG internal REST reporting with CONCURRENT reports.
  *
  * Usage:
- *   node scripts/test-internal-rest.mjs <phaseGroupId>
+ *   node scripts/test-internal-rest.mjs <phaseGroupId> [concurrency=16]
  *
- * Prerequisites:
- *   - .env with STARTGG_EMAIL + STARTGG_PASSWORD
- *   - An active Swiss tournament on StartGG in the given phase group with
- *     unreported sets (ideally a fresh test tournament reset to Round 1).
+ * Fires N concurrent PUT requests to /api/-/rest/set/{id}/complete, mimicking
+ * TOs clicking "report" on multiple matches simultaneously. Tracks success/
+ * failure and per-request timing.
  */
 
 import { readFileSync } from 'node:fs';
@@ -27,168 +26,173 @@ try {
 
 const EMAIL = process.env.STARTGG_EMAIL;
 const PASSWORD = process.env.STARTGG_PASSWORD;
-if (!EMAIL || !PASSWORD) {
-	console.error('STARTGG_EMAIL + STARTGG_PASSWORD must be in .env');
-	process.exit(1);
-}
 
 const phaseGroupId = Number(process.argv[2]);
+const concurrency = Number(process.argv[3]) || 16;
 if (!phaseGroupId) {
-	console.error('Usage: node scripts/test-internal-rest.mjs <phaseGroupId>');
+	console.error('Usage: node scripts/test-internal-rest.mjs <phaseGroupId> [concurrency=16]');
 	process.exit(1);
 }
 
 // ── Login ───────────────────────────────────────────────────────────────
-console.log(`\n[1] Logging in as ${EMAIL}...`);
+console.log(`\n[1] Logging in...`);
 const loginRes = await fetch('https://www.start.gg/api/-/rest/user/login', {
 	method: 'POST',
 	headers: { 'Content-Type': 'application/json', 'Client-Version': '20' },
 	body: JSON.stringify({
-		email: EMAIL,
-		password: PASSWORD,
-		rememberMe: true,
-		validationKey: 'LOGIN_userlogin',
-		expand: []
+		email: EMAIL, password: PASSWORD, rememberMe: true,
+		validationKey: 'LOGIN_userlogin', expand: []
 	})
 });
+const cookie = (loginRes.headers.get('set-cookie') ?? '').match(/(gg_session=[^;]+)/)?.[1];
+if (!cookie) { console.error('Login failed'); process.exit(1); }
+console.log(`    ✓ Logged in`);
 
-if (!loginRes.ok) {
-	console.error(`Login failed: HTTP ${loginRes.status}`);
-	const text = await loginRes.text().catch(() => '');
-	console.error(text.slice(0, 500));
-	process.exit(1);
-}
-
-const cookieHeader = loginRes.headers.get('set-cookie') ?? '';
-const cookie = cookieHeader.match(/(gg_session=[^;]+)/)?.[1];
-if (!cookie) {
-	console.error('No gg_session cookie');
-	process.exit(1);
-}
-console.log(`    ✓ Logged in, got gg_session cookie`);
-
-// ── Fetch phase group sets ──────────────────────────────────────────────
+// ── Fetch sets ──────────────────────────────────────────────────────────
 console.log(`\n[2] Fetching sets for phase group ${phaseGroupId}...`);
-const t0 = Date.now();
 const setsRes = await fetch(
 	`https://www.start.gg/api/-/rest/admin/phase_group/${phaseGroupId}?id=${phaseGroupId}&admin=true&expand=%5B%22sets%22%5D&reset=false`,
 	{ headers: { Cookie: cookie, 'Client-Version': '20' } }
 );
-const t1 = Date.now();
-
-if (!setsRes.ok) {
-	console.error(`HTTP ${setsRes.status}`);
-	process.exit(1);
-}
-
 const setsData = await setsRes.json();
 const allSets = setsData?.entities?.sets ?? [];
-console.log(`    ✓ Got ${allSets.length} sets in ${t1 - t0}ms`);
+const unreported = allSets.filter((s) => !s.winnerId && Number(s.entrant1Id) > 0 && Number(s.entrant2Id) > 0);
+console.log(`    ${allSets.length} total, ${unreported.length} unreported`);
 
-// Filter to sets with entrants (skip placeholder/empty sets)
-const readySets = allSets.filter((s) => Number(s.entrant1Id) > 0 && Number(s.entrant2Id) > 0);
-const unreported = readySets.filter((s) => !s.winnerId);
-console.log(`    ${readySets.length} with entrants, ${unreported.length} unreported`);
-
-if (unreported.length === 0) {
-	console.error('No unreported sets to test with!');
-	process.exit(1);
+if (unreported.length < concurrency) {
+	console.log(`    Only ${unreported.length} unreported sets, running with that many`);
 }
 
-// ── Report first unreported set ─────────────────────────────────────────
-const target = unreported[0];
-console.log(`\n[3] Reporting set ${target.id}`);
-console.log(`    entrant1=${target.entrant1Id}, entrant2=${target.entrant2Id}`);
+const targets = unreported.slice(0, concurrency);
 
-// Debug: log the set structure
-console.log('    Set object keys:', Object.keys(target).join(', '));
-console.log('    Set object (raw):', JSON.stringify(target, null, 2).slice(0, 2000));
+// ── Concurrent report ───────────────────────────────────────────────────
+console.log(`\n[3] Firing ${targets.length} concurrent PUT requests...`);
 
-// Entrant1 wins 2-0 for the test. Mimic StartGG UI payload exactly (including mutations block for preview IDs).
-const isPreview = String(target.id).startsWith('preview_');
-const payload = {
-	...target,
-	entrant1: Number(target.entrant1Id),
-	entrant2: Number(target.entrant2Id),
-	entrant1Score: 2,
-	entrant2Score: 0,
-	winnerId: null, // server infers from scores (matches user-captured payload)
-	isLast: false,
-	games: []
-};
-if (isPreview) {
-	payload.mutations = { ffaData: { [target.id]: { isFFA: false } } };
-}
-console.log('    Sending payload keys:', Object.keys(payload).join(', '));
+function buildPayload(set, winnerEntrantId, isDQ) {
+	const e1 = Number(set.entrant1Id);
+	const e2 = Number(set.entrant2Id);
+	const winnerIsE1 = winnerEntrantId === e1;
 
-const t2 = Date.now();
-const reportRes = await fetch(`https://www.start.gg/api/-/rest/set/${target.id}/complete`, {
-	method: 'PUT',
-	headers: {
-		'Content-Type': 'application/json',
-		Cookie: cookie,
-		'Client-Version': '20'
-	},
-	body: JSON.stringify(payload)
-});
-const t3 = Date.now();
+	let e1Score, e2Score;
+	if (isDQ) {
+		// Loser gets -1 (DQ marker). Winner gets 0.
+		e1Score = winnerIsE1 ? 0 : -1;
+		e2Score = winnerIsE1 ? -1 : 0;
+	} else {
+		e1Score = winnerIsE1 ? 2 : 0;
+		e2Score = winnerIsE1 ? 0 : 2;
+	}
 
-console.log(`    HTTP ${reportRes.status} in ${t3 - t2}ms`);
-
-if (!reportRes.ok) {
-	const text = await reportRes.text().catch(() => '');
-	console.error(`    ✗ Failed: ${text.slice(0, 500)}`);
-	process.exit(1);
-}
-
-const reportData = await reportRes.json().catch(() => ({}));
-const returnedSetId = reportData?.id ?? reportData?.entities?.sets?.[0]?.id;
-console.log(`    ✓ Reported. returned setId: ${returnedSetId}`);
-
-// ── Fetch again to verify ───────────────────────────────────────────────
-console.log(`\n[4] Re-fetching sets to confirm...`);
-const t4 = Date.now();
-const verifyRes = await fetch(
-	`https://www.start.gg/api/-/rest/admin/phase_group/${phaseGroupId}?id=${phaseGroupId}&admin=true&expand=%5B%22sets%22%5D&reset=false`,
-	{ headers: { Cookie: cookie, 'Client-Version': '20' } }
-);
-const t5 = Date.now();
-const verifyData = await verifyRes.json();
-const verifySets = verifyData?.entities?.sets ?? [];
-const reportedNow = verifySets.filter((s) => s.winnerId).length;
-console.log(`    ✓ Verified in ${t5 - t4}ms. ${reportedNow} sets now have winnerId`);
-
-// ── Report a SECOND set to verify real IDs work after conversion ────────
-const nextUnreported = verifySets.find((s) => !s.winnerId && Number(s.entrant1Id) > 0 && Number(s.entrant2Id) > 0);
-if (nextUnreported) {
-	console.log(`\n[5] Reporting second set ${nextUnreported.id} (real ID after conversion)...`);
-	const payload2 = {
-		...nextUnreported,
-		entrant1: Number(nextUnreported.entrant1Id),
-		entrant2: Number(nextUnreported.entrant2Id),
-		entrant1Score: 2,
-		entrant2Score: 0,
+	const payload = {
+		...set,
+		entrant1: e1,
+		entrant2: e2,
+		entrant1Score: e1Score,
+		entrant2Score: e2Score,
 		winnerId: null,
 		isLast: false,
 		games: []
 	};
-	const t6 = Date.now();
-	const r2 = await fetch(`https://www.start.gg/api/-/rest/set/${nextUnreported.id}/complete`, {
-		method: 'PUT',
-		headers: { 'Content-Type': 'application/json', Cookie: cookie, 'Client-Version': '20' },
-		body: JSON.stringify(payload2)
-	});
-	const t7 = Date.now();
-	if (r2.ok) {
-		console.log(`    ✓ Reported in ${t7 - t6}ms`);
-	} else {
-		const text = await r2.text().catch(() => '');
-		console.log(`    ✗ HTTP ${r2.status} in ${t7 - t6}ms: ${text.slice(0, 200)}`);
+	if (String(set.id).startsWith('preview_')) {
+		payload.mutations = { ffaData: { [set.id]: { isFFA: false } } };
 	}
+	return payload;
 }
 
-console.log(`\n=== SUMMARY ===`);
-console.log(`Fetch sets: ${t1 - t0}ms`);
-console.log(`Report 1:   ${t3 - t2}ms (preview ID)`);
-console.log(`Verify:     ${t5 - t4}ms`);
-console.log(`\n✅ Internal REST reporting works!`);
+async function fetchSets() {
+	const r = await fetch(
+		`https://www.start.gg/api/-/rest/admin/phase_group/${phaseGroupId}?id=${phaseGroupId}&admin=true&expand=%5B%22sets%22%5D&reset=false`,
+		{ headers: { Cookie: cookie, 'Client-Version': '20' } }
+	);
+	const d = await r.json();
+	return d?.entities?.sets ?? [];
+}
+
+async function putReport(set) {
+	const payload = buildPayload(set, Number(set.entrant1Id), false);
+	const res = await fetch(`https://www.start.gg/api/-/rest/set/${set.id}/complete`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json', Cookie: cookie, 'Client-Version': '20' },
+		body: JSON.stringify(payload)
+	});
+	return res;
+}
+
+async function reportOne(initialSet, idx) {
+	const t0 = Date.now();
+	let set = initialSet;
+	let lastErr = null;
+	for (let attempt = 0; attempt < 6; attempt++) {
+		try {
+			if (attempt > 0) {
+				// Jittered backoff: 200ms, 500ms, 1s, 2s, 3s
+				const base = [200, 500, 1000, 2000, 3000][attempt - 1] ?? 3000;
+				await new Promise((r) => setTimeout(r, base + Math.random() * base * 0.3));
+			}
+			const res = await putReport(set);
+			if (res.ok) {
+				const data = await res.json().catch(() => ({}));
+				const realId = data?.id ?? data?.entities?.sets?.[0]?.id;
+				return { idx, setId: set.id, ok: true, ms: Date.now() - t0, realId, attempts: attempt + 1 };
+			}
+			const text = await res.text().catch(() => '');
+			lastErr = `HTTP ${res.status}: ${text.slice(0, 120)}`;
+			// "Match data out of date" → re-fetch the set (post-conversion) and retry
+			if (res.status === 400 && text.includes('out of date')) {
+				const fresh = await fetchSets();
+				const updated = fresh.find((s) =>
+					!s.winnerId &&
+					((Number(s.entrant1Id) === Number(initialSet.entrant1Id) && Number(s.entrant2Id) === Number(initialSet.entrant2Id)) ||
+					 (Number(s.entrant1Id) === Number(initialSet.entrant2Id) && Number(s.entrant2Id) === Number(initialSet.entrant1Id)))
+				);
+				if (updated) { set = updated; continue; }
+				// No updated set found — set might already be reported
+				const reported = fresh.find((s) =>
+					s.winnerId &&
+					((Number(s.entrant1Id) === Number(initialSet.entrant1Id) && Number(s.entrant2Id) === Number(initialSet.entrant2Id)) ||
+					 (Number(s.entrant1Id) === Number(initialSet.entrant2Id) && Number(s.entrant2Id) === Number(initialSet.entrant1Id)))
+				);
+				if (reported) {
+					return { idx, setId: set.id, ok: true, ms: Date.now() - t0, realId: reported.id, attempts: attempt + 1, note: 'already-reported' };
+				}
+			}
+			// 500 errors are transient concurrent-write conflicts — retry
+			if (res.status === 500) continue;
+			break;
+		} catch (e) {
+			lastErr = String(e).slice(0, 150);
+		}
+	}
+	return { idx, setId: initialSet.id, ok: false, ms: Date.now() - t0, error: lastErr };
+}
+
+const startAll = Date.now();
+const results = await Promise.all(targets.map((s, i) => reportOne(s, i)));
+const totalMs = Date.now() - startAll;
+
+// ── Summary ─────────────────────────────────────────────────────────────
+console.log(`\n=== RESULTS (concurrency=${targets.length}, total=${totalMs}ms) ===`);
+results.sort((a, b) => a.idx - b.idx);
+for (const r of results) {
+	const status = r.ok ? '✓' : '✗';
+	const detail = r.ok ? `→ ${r.realId} (${r.attempts} att)` : `${r.error}`;
+	console.log(`  [${String(r.idx).padStart(2, ' ')}] ${status} ${String(r.setId).padEnd(25, ' ')} ${String(r.ms).padStart(4, ' ')}ms  ${detail}`);
+}
+
+const ok = results.filter((r) => r.ok).length;
+const fail = results.filter((r) => !r.ok).length;
+const avgMs = Math.round(results.reduce((s, r) => s + r.ms, 0) / results.length);
+const maxMs = Math.max(...results.map((r) => r.ms));
+const minMs = Math.min(...results.map((r) => r.ms));
+
+console.log(`\n  Success: ${ok}/${results.length}`);
+console.log(`  Failed:  ${fail}`);
+console.log(`  Timing:  min=${minMs}ms avg=${avgMs}ms max=${maxMs}ms`);
+console.log(`  Wall:    ${totalMs}ms (all ran in parallel)`);
+
+if (fail > 0) {
+	console.log(`\n⚠️  ${fail} request(s) failed — concurrent reporting hit a race condition`);
+	process.exit(1);
+} else {
+	console.log(`\n✅ All concurrent reports succeeded`);
+}

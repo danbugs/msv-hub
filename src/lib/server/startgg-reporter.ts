@@ -316,78 +316,22 @@ export async function reportSwissMatch(
 	const winnerScore = match.winnerId === match.topPlayerId ? match.topScore : match.bottomScore;
 	const loserScore  = match.winnerId === match.topPlayerId ? match.bottomScore : match.topScore;
 
-	// DQ still goes through GraphQL (different payload shape); internal REST is
-	// used for normal score reports.
-	if (match.isDQ) {
-		const setIdGql = await resolveSetId(tournament, e1Id, e2Id, roundNumber, match.startggSetId);
-		if (!setIdGql) {
-			const msg = `Set not found for ${topEntrant.gamerTag} vs ${botEntrant.gamerTag} in phase group ${pgId} (round ${roundNumber})`;
-			addError(sync, match.id, msg);
-			return { ok: false, error: msg };
-		}
-		const loserEntrant = winnerEntrant === topEntrant ? botEntrant : topEntrant;
-		const result = await reportSet(setIdGql, winnerEntrant.startggEntrantId, {
-			loserEntrantId: loserEntrant.startggEntrantId,
-			winnerScore, loserScore, isDQ: true
-		});
-		if (result.ok) {
-			match.startggSetId = result.reportedSetId ?? setIdGql;
-			clearErrorsForMatch(sync, match.id);
-		} else {
-			addError(sync, match.id, result.error ?? 'Unknown StartGG error');
-		}
-		return result;
-	}
-
-	// Normal score report via internal REST API (~500-700ms per set).
-	// 1. Fetch raw set data for this phase group (includes both preview + real IDs with full payload).
-	// 2. Find the set matching this pair.
-	// 3. PUT to /api/-/rest/set/{id}/complete.
-	const rawSets = await fetchAdminPhaseGroupSetsRaw(pgId).catch(() => []);
-	if (rawSets.length === 0) {
-		const msg = `StartGG returned no sets for phase group ${pgId} (round ${roundNumber}). Pool may not be ready yet.`;
-		addError(sync, match.id, msg);
-		return { ok: false, error: msg };
-	}
-
-	const targetSet = rawSets.find((s) =>
-		(Number(s.entrant1Id) === e1Id && Number(s.entrant2Id) === e2Id) ||
-		(Number(s.entrant1Id) === e2Id && Number(s.entrant2Id) === e1Id)
-	);
-	if (!targetSet) {
-		const msg = `Set not found for ${topEntrant.gamerTag} (entrant ${e1Id}) vs ${botEntrant.gamerTag} (entrant ${e2Id}) in phase group ${pgId} (round ${roundNumber})`;
-		addError(sync, match.id, msg);
-		return { ok: false, error: msg };
-	}
-
-	// If this set is already reported on StartGG (misreport fix), reset first
-	if (targetSet.winnerId) {
-		await resetSet(String(targetSet.id)).catch(() => {});
-	}
-
-	// Determine scores in the set's entrant1/entrant2 order
-	const setE1 = Number(targetSet.entrant1Id);
-	const setWinnerIsE1 = setE1 === winnerEntrant.startggEntrantId;
-	const e1Score = setWinnerIsE1 ? winnerScore : loserScore;
-	const e2Score = setWinnerIsE1 ? loserScore : winnerScore;
-
+	// Report via internal REST API (~500ms-4s per set with concurrency retry).
+	// Handles preview→real conversion races and StartGG's per-phase-group write
+	// serialization (500 errors) via jittered backoff internally.
 	const result = await completeSetViaAdminRest(
-		String(targetSet.id),
-		targetSet,
-		e1Score ?? 0,
-		e2Score ?? 0
+		pgId,
+		e1Id,
+		e2Id,
+		winnerEntrant.startggEntrantId,
+		winnerScore ?? 2,
+		loserScore ?? 0,
+		match.isDQ ?? false
 	);
 
 	if (result.ok) {
-		// Save the real set ID (internal REST returns it even for preview inputs)
-		match.startggSetId = result.realSetId ?? String(targetSet.id);
+		match.startggSetId = result.realSetId;
 		clearErrorsForMatch(sync, match.id);
-
-		// After first report triggers conversion, populate real IDs on other matches
-		// so concurrent/subsequent reports skip the fetch-sets step.
-		if (String(targetSet.id).startsWith('preview_')) {
-			await cacheRealSetIds(tournament, roundNumber, pgId);
-		}
 		return { ok: true };
 	} else {
 		addError(sync, match.id, result.error ?? 'Unknown StartGG error');

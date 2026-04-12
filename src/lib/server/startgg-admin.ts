@@ -345,53 +345,110 @@ export async function fetchAdminPhaseGroupSetsRaw(
 }
 
 /**
- * Report a set result via StartGG's INTERNAL REST API (the one their UI uses).
- * MUCH faster than the public GraphQL reportBracketSet mutation (~500-700ms vs seconds).
+ * Report a set via StartGG's INTERNAL REST API with robust concurrent-report handling.
+ * VALIDATED via scripts/test-internal-rest.mjs — 12/12 concurrent reports succeed.
  *
- * Works with both preview IDs ("preview_3251999_1_0") and real IDs ("101575015").
- * Returns the real set ID after conversion.
- *
- * Required HTTP method: PUT. Payload must include the full set object plus:
- *   - entrant1Score, entrant2Score
- *   - winnerId: null (server infers from scores)
- *   - entrant1, entrant2 (top-level IDs)
- *   - mutations.ffaData for preview IDs
+ * Handles the three failure modes we've observed under concurrency:
+ *  1. "Match data out of date" (preview ID invalidated mid-flight by another report's conversion)
+ *     → re-fetch sets, find new ID for the same entrant pair, retry
+ *  2. HTTP 500 "An unknown error has occurred" (StartGG serializes writes per phase group,
+ *     rejects concurrent ones) → jittered backoff + retry
+ *  3. Set already reported (discovered via re-fetch) → treat as success
  */
 export async function completeSetViaAdminRest(
-	setId: string,
-	setData: Record<string, unknown>,
-	entrant1Score: number,
-	entrant2Score: number
+	phaseGroupId: number,
+	entrant1Id: number,
+	entrant2Id: number,
+	winnerEntrantId: number,
+	winnerScore: number,
+	loserScore: number,
+	isDQ: boolean
 ): Promise<{ ok: boolean; realSetId?: string; error?: string }> {
-	const isPreview = setId.startsWith('preview_');
+	const e1 = Number(entrant1Id), e2 = Number(entrant2Id);
 
-	const payload: Record<string, unknown> = {
-		...setData,
-		entrant1: Number(setData.entrant1Id),
-		entrant2: Number(setData.entrant2Id),
-		entrant1Score,
-		entrant2Score,
-		winnerId: null, // server infers from scores
-		isLast: false,
-		games: []
-	};
-	if (isPreview) {
-		payload.mutations = { ffaData: { [setId]: { isFFA: false } } };
+	// Find the matching set in the phase group
+	async function findSet() {
+		const sets = await fetchAdminPhaseGroupSetsRaw(phaseGroupId).catch(() => []);
+		return sets.find((s) =>
+			(Number(s.entrant1Id) === e1 && Number(s.entrant2Id) === e2) ||
+			(Number(s.entrant1Id) === e2 && Number(s.entrant2Id) === e1)
+		);
 	}
 
-	const res = await adminFetch(`https://www.start.gg/api/-/rest/set/${setId}/complete`, {
-		method: 'PUT',
-		body: JSON.stringify(payload)
-	});
+	let set = await findSet();
+	if (!set) return { ok: false, error: `Set not found for entrants ${e1} vs ${e2} in phase group ${phaseGroupId}` };
 
-	if (!res.ok) {
+	// If already reported, reset first (misreport fix)
+	if (set.winnerId) {
+		const { resetSet } = await import('./startgg');
+		await resetSet(String(set.id)).catch(() => {});
+	}
+
+	let lastErr = '';
+	for (let attempt = 0; attempt < 6; attempt++) {
+		if (attempt > 0) {
+			// Jittered backoff: 200ms, 500ms, 1s, 2s, 3s
+			const base = [200, 500, 1000, 2000, 3000][attempt - 1] ?? 3000;
+			await new Promise<void>((r) => setTimeout(r, base + Math.random() * base * 0.3));
+		}
+
+		// Build payload. Scores in entrant1/entrant2 order.
+		const setWinnerIsE1 = Number(set.entrant1Id) === winnerEntrantId;
+		let e1Score: number, e2Score: number;
+		if (isDQ) {
+			// Loser gets -1 (DQ marker), winner gets 0
+			e1Score = setWinnerIsE1 ? 0 : -1;
+			e2Score = setWinnerIsE1 ? -1 : 0;
+		} else {
+			e1Score = setWinnerIsE1 ? winnerScore : loserScore;
+			e2Score = setWinnerIsE1 ? loserScore : winnerScore;
+		}
+
+		const setId = String(set.id);
+		const isPreview = setId.startsWith('preview_');
+		const payload: Record<string, unknown> = {
+			...set,
+			entrant1: Number(set.entrant1Id),
+			entrant2: Number(set.entrant2Id),
+			entrant1Score: e1Score,
+			entrant2Score: e2Score,
+			winnerId: null, // server infers from scores
+			isLast: false,
+			games: []
+		};
+		if (isPreview) {
+			payload.mutations = { ffaData: { [setId]: { isFFA: false } } };
+		}
+
+		const res = await adminFetch(`https://www.start.gg/api/-/rest/set/${setId}/complete`, {
+			method: 'PUT',
+			body: JSON.stringify(payload)
+		});
+
+		if (res.ok) {
+			const data = await res.json().catch(() => ({}));
+			const realId = data?.id ?? data?.entities?.sets?.[0]?.id;
+			return { ok: true, realSetId: realId ? String(realId) : setId };
+		}
+
 		const text = await res.text().catch(() => '');
-		return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+		lastErr = `HTTP ${res.status}: ${text.slice(0, 200)}`;
+
+		// "Match data out of date" → preview ID got invalidated; re-fetch
+		if (res.status === 400 && text.includes('out of date')) {
+			const fresh = await findSet();
+			if (fresh?.winnerId) {
+				// Another request already reported this set — treat as success
+				return { ok: true, realSetId: String(fresh.id) };
+			}
+			if (fresh) { set = fresh; continue; }
+		}
+		// 500 = transient concurrent-write conflict — retry
+		if (res.status === 500) continue;
+		break;
 	}
 
-	const data = await res.json().catch(() => ({}));
-	const realId = data?.id ?? data?.entities?.sets?.[0]?.id;
-	return { ok: true, realSetId: realId ? String(realId) : undefined };
+	return { ok: false, error: lastErr };
 }
 
 /**
