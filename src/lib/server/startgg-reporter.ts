@@ -156,10 +156,11 @@ export async function triggerConversionAndCache(
 	console.log(`[cache] Caching set IDs for round ${roundNumber}, PG ${phaseGroupId}`);
 
 	// STEP 1: Try admin REST first — returns real set IDs instantly, even right after
-	// pushing pairings (GQL often lags). This makes round 2+ reports instant.
+	// pushing pairings (GQL often lags). Retry aggressively — StartGG can take
+	// 10-20s to generate sets for later rounds.
 	let adminSets: Awaited<ReturnType<typeof fetchAdminPhaseGroupSets>> = [];
-	for (let attempt = 0; attempt < 5; attempt++) {
-		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 1500));
+	for (let attempt = 0; attempt < 15; attempt++) {
+		if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 2000));
 		adminSets = await fetchAdminPhaseGroupSets(phaseGroupId).catch(() => []);
 		if (adminSets.length > 0) break;
 	}
@@ -268,16 +269,21 @@ async function resolveSetId(
 	const groups = tournament.startggPhase1Groups;
 	if (groups && groups[roundNumber - 1]) {
 		const pgId = groups[roundNumber - 1].id;
+		const e1 = Number(entrantId1), e2 = Number(entrantId2);
 
-		// No cached ID — try admin REST for instant real IDs (bypasses GQL polling).
-		const adminSets = await fetchAdminPhaseGroupSets(pgId).catch(() => []);
-		if (adminSets.length > 0) {
-			const e1 = Number(entrantId1), e2 = Number(entrantId2);
+		// No cached ID — retry admin REST aggressively (StartGG can take 10-20s to
+		// generate sets after pushPairings). Uses the report request's timeout budget.
+		for (let attempt = 0; attempt < 10; attempt++) {
+			if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 1500));
+			const adminSets = await fetchAdminPhaseGroupSets(pgId).catch(() => []);
+			if (adminSets.length === 0) continue;
 			const match = adminSets.find((s) =>
 				(s.entrant1Id === e1 && s.entrant2Id === e2) ||
 				(s.entrant1Id === e2 && s.entrant2Id === e1)
 			);
 			if (match && !isNaN(match.id) && match.id > 0) return String(match.id);
+			// Sets exist but this pair isn't among them — stop retrying, fall to GQL
+			break;
 		}
 
 		// Fallback: GQL lookup
