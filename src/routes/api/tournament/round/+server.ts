@@ -322,8 +322,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		}
 	}
 
-	// Cache preview set IDs in background. No conversion needed — preview IDs work for
-	// the first report. After that, cacheRealSetIds() instantly fetches real IDs.
+	// Cache set IDs synchronously (up to 8s), with background continuation for longer delays.
+	// Waiting here guarantees most rounds have IDs ready by the time the user can click report.
 	if (pgId) {
 		if (!tournament.startggSync) {
 			tournament.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
@@ -332,11 +332,18 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		await saveTournament(tournament);
 
 		const conversionPromise = triggerConversionAndCache(tournament, nextRound, pgId).catch(() => {});
+		// Wait up to 8s for cache — if it finishes, reports are instant; if not, we still
+		// return (on-demand retry in resolveSetId handles the rest).
+		await Promise.race([
+			conversionPromise,
+			new Promise<void>((r) => setTimeout(r, 8000))
+		]);
+		// Let cache keep running in background (on Vercel) if it didn't finish in 8s
 		try {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const ctx = (platform as any)?.context;
 			if (ctx?.waitUntil) ctx.waitUntil(conversionPromise);
-		} catch { /* not on Vercel — fire-and-forget */ }
+		} catch { /* not on Vercel */ }
 	}
 
 	// Optionally announce the new round to a Discord channel.

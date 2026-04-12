@@ -271,10 +271,10 @@ async function resolveSetId(
 		const pgId = groups[roundNumber - 1].id;
 		const e1 = Number(entrantId1), e2 = Number(entrantId2);
 
-		// No cached ID — retry admin REST aggressively (StartGG can take 10-20s to
-		// generate sets after pushPairings). Uses the report request's timeout budget.
-		for (let attempt = 0; attempt < 10; attempt++) {
-			if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 1500));
+		// No cached ID — retry admin REST up to ~6s (Vercel Hobby 10s budget minus
+		// the reportSet call). Most cases will resolve on first try.
+		for (let attempt = 0; attempt < 5; attempt++) {
+			if (attempt > 0) await new Promise<void>((r) => setTimeout(r, 1200));
 			const adminSets = await fetchAdminPhaseGroupSets(pgId).catch(() => []);
 			if (adminSets.length === 0) continue;
 			const match = adminSets.find((s) =>
