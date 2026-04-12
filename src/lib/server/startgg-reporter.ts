@@ -232,16 +232,24 @@ async function resolveSetId(
 ): Promise<string | null> {
 	if (cachedSetId) return cachedSetId;
 
-	// Try phase-group-scoped lookup. If we have phase group info for this round,
-	// trust it exclusively — a full event scan risks finding a set in a different
-	// phase (brackets, final standings) and silently reporting to the wrong place.
 	const groups = tournament.startggPhase1Groups;
 	if (groups && groups[roundNumber - 1]) {
-		return findSetInPhaseGroup(
-			groups[roundNumber - 1].id,
-			entrantId1,
-			entrantId2
-		).catch(() => null);
+		const pgId = groups[roundNumber - 1].id;
+
+		// FAST PATH: try admin REST first — returns real set IDs instantly without
+		// waiting for GQL's preview→real conversion (saves 5-30s on round 2+ first report).
+		const adminSets = await fetchAdminPhaseGroupSets(pgId).catch(() => []);
+		if (adminSets.length > 0) {
+			const e1 = Number(entrantId1), e2 = Number(entrantId2);
+			const match = adminSets.find((s) =>
+				(s.entrant1Id === e1 && s.entrant2Id === e2) ||
+				(s.entrant1Id === e2 && s.entrant2Id === e1)
+			);
+			if (match) return String(match.id);
+		}
+
+		// Fallback: GQL lookup (handles edge cases where admin REST doesn't return a match)
+		return findSetInPhaseGroup(pgId, entrantId1, entrantId2).catch(() => null);
 	}
 
 	// No phase group info — fall back to full event scan (only safe path when
@@ -346,13 +354,14 @@ export async function reportSwissMatch(
 		match.startggSetId = result.reportedSetId ?? setId;
 		clearErrorsForMatch(sync, match.id);
 
-		// If we just reported a preview set, conversion happens server-side.
-		// Instantly cache all real IDs via the admin REST endpoint.
-		console.log(`[report] Set ${setId} reported ok, isPreview=${setId.startsWith('preview_')}`);
-		if (setId.startsWith('preview_')) {
-			const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
-			console.log(`[report] Triggering admin REST cache for PG ${pgId}`);
-			if (pgId) {
+		// After any successful report, cache all real set IDs for this round via admin REST.
+		// This covers both the preview→real conversion AND round 2+ where sets may not have
+		// been pre-cached by triggerConversionAndCache yet.
+		const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
+		if (pgId) {
+			const round = tournament.rounds.find((r) => r.number === roundNumber);
+			const hasUncached = round?.matches.some((m) => !m.startggSetId) ?? false;
+			if (setId.startsWith('preview_') || hasUncached) {
 				await cacheRealSetIds(tournament, roundNumber, pgId);
 			}
 		}

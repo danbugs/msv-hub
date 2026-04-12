@@ -20,6 +20,21 @@
 	let pushingToBrackets = $state(false);
 	let pushError = $state('');
 
+	let syncingFromStartGG = $state(false);
+	let syncResult = $state('');
+
+	async function syncFromStartGG() {
+		if (!confirm('Sync Swiss rounds from StartGG? This overwrites MSV Hub match results with StartGG\'s current state.')) return;
+		syncingFromStartGG = true;
+		syncResult = '';
+		const res = await fetch('/api/tournament/swiss/sync-from-startgg', { method: 'POST' });
+		const data = await res.json();
+		if (res.ok) syncResult = `Synced ${data.synced} matches (${data.skipped} skipped)`;
+		else error = data.error ?? 'Sync failed';
+		syncingFromStartGG = false;
+		await loadTournament();
+	}
+
 	async function pushAndGoToBrackets() {
 		pushingToBrackets = true;
 		pushError = '';
@@ -275,6 +290,14 @@
 							<option value={ch.value}>{ch.label}</option>
 						{/each}
 					</select>
+				{/if}
+				{#if tournament.currentRound > 0}
+					<button onclick={syncFromStartGG} disabled={syncingFromStartGG}
+						class="ml-auto rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-500 hover:border-violet-700 hover:text-violet-400 transition-colors disabled:opacity-50"
+						title="Sync from StartGG — pulls results and overwrites MSV Hub's Swiss state">
+						{syncingFromStartGG ? 'Syncing...' : 'Sync from StartGG'}
+					</button>
+					{#if syncResult}<span class="text-xs text-green-400">{syncResult}</span>{/if}
 				{/if}
 			</div>
 
