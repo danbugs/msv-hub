@@ -140,8 +140,16 @@
 	function canFix(match: BracketMatch): boolean {
 		if (!match.winnerId) return false;
 		const allMatches = bracket.matches;
-		const checked = new Set<string>();
 
+		// Special case: GF can't be fixed if GF Reset has been reported.
+		// (GF doesn't have winnerNextMatchId pointing to GFR in our data model.)
+		const isGF = match.id.includes('-GF-') && !match.id.includes('-GFR-');
+		if (isGF) {
+			const gfr = allMatches.find((m) => m.id.includes('-GFR-'));
+			if (gfr?.winnerId) return false;
+		}
+
+		const checked = new Set<string>();
 		function anyDownstreamReported(m: BracketMatch): boolean {
 			if (checked.has(m.id)) return false;
 			checked.add(m.id);
