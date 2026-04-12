@@ -71,6 +71,10 @@ export const POST: RequestHandler = async ({ locals }) => {
 		if (phase.id === r1Phase?.id) continue;
 		const isFinalStandings = phase.name.toLowerCase().includes('final');
 		await clearPhaseEntrants(swissEventId, phase.id, phase.name, isFinalStandings ? 6 : 4);
+		// clearPhaseEntrants (PUT to /phase/{id}) re-marks the phase as "In progress".
+		// Restart once more so the phase shows as unstarted on StartGG.
+		const restartResult = await restartPhase(phase.id).catch((e) => ({ ok: false, error: String(e) }));
+		log(`  ${restartResult.ok ? '✓' : '✗'} ${phase.name}: final restart`);
 	}
 
 	// Step 2b: Do NOT call addEntrantsToPhase for bracket events —
