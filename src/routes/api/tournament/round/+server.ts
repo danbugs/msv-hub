@@ -322,9 +322,9 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		}
 	}
 
-	// Trigger conversion (dummy-report + reset) and cache real set IDs.
-	// Await up to 8s synchronously so reports are instant when the user starts clicking.
-	// If it takes longer, keep running in background via waitUntil.
+	// Pre-cache preview set IDs in the background. The distributed lock on reports
+	// handles the race if the user clicks before caching finishes — first report
+	// acquires the lock, drives conversion, concurrent reports wait.
 	if (pgId) {
 		if (!tournament.startggSync) {
 			tournament.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
@@ -333,15 +333,11 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		await saveTournament(tournament);
 
 		const conversionPromise = triggerConversionAndCache(tournament, nextRound, pgId).catch(() => {});
-		await Promise.race([
-			conversionPromise,
-			new Promise<void>((r) => setTimeout(r, 8000))
-		]);
 		try {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const ctx = (platform as any)?.context;
 			if (ctx?.waitUntil) ctx.waitUntil(conversionPromise);
-		} catch { /* not on Vercel */ }
+		} catch { /* not on Vercel — fire-and-forget */ }
 	}
 
 	// Optionally announce the new round to a Discord channel.
@@ -438,6 +434,22 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				if (reloadedMatch?.startggSetId && !reloadedMatch.startggSetId.startsWith('preview_')) {
 					match.startggSetId = reloadedMatch.startggSetId;
 				}
+			}
+		} else {
+			// Got the lock — reload tournament to pick up any preview IDs the background
+			// cache may have saved between when we loaded and now. If cacheReady is still
+			// false, wait briefly for it before reporting.
+			for (let attempt = 0; attempt < 6; attempt++) {
+				const reloaded = await getActiveTournament();
+				if (!reloaded) break;
+				const rr = reloaded.rounds.find((r) => r.number === targetRound!.number);
+				const rm = rr?.matches.find((m) => m.id === matchId);
+				if (rm?.startggSetId) {
+					match.startggSetId = rm.startggSetId;
+					break;
+				}
+				if (reloaded.startggSync?.cacheReady) break;
+				await new Promise<void>((r) => setTimeout(r, 1000));
 			}
 		}
 	}
