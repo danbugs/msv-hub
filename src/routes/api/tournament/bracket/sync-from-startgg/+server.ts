@@ -83,138 +83,112 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	let bracket = generateBracket(bracketName, players, standings);
-
-	// StartGG may have different player assignments in WR1 than what generateBracket
-	// produces (happens when standings changed after bracket was pushed to StartGG).
-	// Override WR1 player positions to match StartGG's actual pairings, keyed by
-	// set identifier (A=matchIndex 0, B=1, ...).
 	type Slot = { entrant?: { id?: number } };
-	function identifierToMatchIndex(id: string): number {
-		if (!id) return -1;
-		let n = 0;
-		for (let i = 0; i < id.length; i++) {
-			n = n * 26 + (id.charCodeAt(i) - 64); // 'A' = 65 → 1
-		}
-		return n - 1;
-	}
-	const wr1Sets = (sets as GqlRecord[]).filter((s) => s.fullRoundText === 'Winners Round 1');
-	for (const s of wr1Sets) {
-		const idx = identifierToMatchIndex(s.identifier as string);
-		const slots = (s.slots ?? []) as Slot[];
-		const sgE1 = Number(slots[0]?.entrant?.id);
-		const sgE2 = Number(slots[1]?.entrant?.id);
-		const msvE1 = bracketEntrantToMsvHub.get(sgE1);
-		const msvE2 = bracketEntrantToMsvHub.get(sgE2);
-		if (!msvE1 || !msvE2 || idx < 0) continue;
-		const msvMatch = bracket.matches.find((m: BracketMatch) => m.round === 1 && m.matchIndex === idx);
-		if (msvMatch) {
-			msvMatch.topPlayerId = msvE1;
-			msvMatch.bottomPlayerId = msvE2;
-		}
+
+	const debug: string[] = [];
+	debug.push(`Reported sets on StartGG: ${(sets as GqlRecord[]).filter((s) => s.winnerId).length}, bracket matches: ${bracket.matches.length}`);
+
+	// Classify each StartGG set by its bracket side + round.
+	// StartGG: round>0 = winners, round<0 = losers. fullRoundText for GF/GFR.
+	type Bucket = 'W' | 'L' | 'GF' | 'GFR';
+	function bucketOf(s: GqlRecord): Bucket | null {
+		const text = String(s.fullRoundText ?? '');
+		if (text === 'Grand Final Reset') return 'GFR';
+		if (text === 'Grand Final') return 'GF';
+		const r = Number(s.round);
+		if (r > 0) return 'W';
+		if (r < 0) return 'L';
+		return null;
 	}
 
-	// Step 4: Apply StartGG results to the fresh bracket
-	// Multiple passes — each pass processes sets whose players are already placed in the bracket.
-	// After each pass, advancePlayer places players for the next round.
-	const reportedSets = (sets as GqlRecord[]).filter((s) => s.winnerId);
+	// Group all sets (reported or not) by bucket+round so we can map StartGG structure → MSV matches
+	const setsByKey = new Map<string, GqlRecord[]>();
+	for (const s of sets as GqlRecord[]) {
+		const b = bucketOf(s);
+		if (!b) continue;
+		const key = (b === 'GF' || b === 'GFR') ? b : `${b}${Math.abs(Number(s.round))}`;
+		if (!setsByKey.has(key)) setsByKey.set(key, []);
+		setsByKey.get(key)!.push(s);
+	}
+
+	// Helper: MSV match ID prefix for a bucket/round
+	function msvMatchesFor(key: string): BracketMatch[] {
+		if (key === 'GF') return bracket.matches.filter((m) => m.id.includes('-GF-') && !m.id.includes('-GFR-'));
+		if (key === 'GFR') return bracket.matches.filter((m) => m.id.includes('-GFR-'));
+		const side = key[0] as 'W' | 'L';
+		const round = Number(key.slice(1));
+		const prefix = `${bracketName}-${side}${round}-`;
+		return bracket.matches.filter((m) => m.id.startsWith(prefix));
+	}
+
+	function parseScores(s: GqlRecord, msvE1Id: string, topId: string | undefined): { topScore?: number; bottomScore?: number } {
+		const ds = s.displayScore as string | undefined;
+		if (!ds) return {};
+		const parts = ds.split(' - ');
+		if (parts.length !== 2) return {};
+		const s1 = Number(parts[0].replace(/[^0-9]/g, ''));
+		const s2 = Number(parts[1].replace(/[^0-9]/g, ''));
+		if (isNaN(s1) || isNaN(s2)) return {};
+		if (msvE1Id === topId) return { topScore: s1, bottomScore: s2 };
+		return { topScore: s2, bottomScore: s1 };
+	}
 
 	let synced = 0;
-	let notFound = 0;
-	const applied = new Set<string>();
-	const debug: string[] = [];
-	debug.push(`Reported sets on StartGG: ${reportedSets.length}, bracket matches: ${bracket.matches.length}`);
+	let unmatched = 0;
 
-	for (let pass = 0; pass < 20; pass++) {
-		let progressThisPass = 0;
+	// For each group, sort StartGG sets by identifier, sort MSV matches by matchIndex,
+	// and align 1:1. Directly set player/winner/score data on each MSV match.
+	for (const [key, setsInGroup] of setsByKey) {
+		const msvMatches = msvMatchesFor(key).sort((a, b) => a.matchIndex - b.matchIndex);
+		// Sort StartGG sets by identifier (A, B, ... AA, AB, ...) — lexicographic works for these
+		const sortedSets = [...setsInGroup].sort((a, b) => {
+			const ai = String(a.identifier ?? '');
+			const bi = String(b.identifier ?? '');
+			if (ai.length !== bi.length) return ai.length - bi.length;
+			return ai.localeCompare(bi);
+		});
 
-	for (const set of reportedSets) {
-		if (applied.has(String(set.id))) continue;
-		const slots = set.slots ?? [];
-		const sgWinnerId = Number(set.winnerId);
-		const sgE1 = Number(slots[0]?.entrant?.id);
-		const sgE2 = Number(slots[1]?.entrant?.id);
-		if (!sgE1 || !sgE2 || !sgWinnerId) { if (pass === 0) debug.push(`  Set ${set.id}: no entrants/winner on StartGG`); continue; }
-
-		const msvE1 = bracketEntrantToMsvHub.get(sgE1);
-		const msvE2 = bracketEntrantToMsvHub.get(sgE2);
-		const msvWinner = bracketEntrantToMsvHub.get(sgWinnerId);
-		if (!msvE1 || !msvE2 || !msvWinner) {
-			if (pass === 0) debug.push(`  Set ${set.id}: couldn't map entrants ${sgE1}/${sgE2}/${sgWinnerId} to MSV`);
-			notFound++;
-			continue;
+		if (sortedSets.length !== msvMatches.length) {
+			debug.push(`  ${key}: StartGG has ${sortedSets.length} sets, MSV has ${msvMatches.length} matches — size mismatch`);
 		}
 
-		// Find matching bracket match. Prefer unreported matches, but fall back to
-		// any match with these two players — StartGG is the source of truth, so we
-		// overwrite any mismatched local state.
-		let match = bracket.matches.find((m: BracketMatch) =>
-			!m.winnerId &&
-			((m.topPlayerId === msvE1 && m.bottomPlayerId === msvE2) ||
-			 (m.topPlayerId === msvE2 && m.bottomPlayerId === msvE1))
-		);
-		if (!match) {
-			match = bracket.matches.find((m: BracketMatch) =>
-				(m.topPlayerId === msvE1 && m.bottomPlayerId === msvE2) ||
-				(m.topPlayerId === msvE2 && m.bottomPlayerId === msvE1)
-			);
-		}
-		if (!match) { continue; } // Not placed yet — try next pass after earlier rounds resolve
+		const n = Math.min(sortedSets.length, msvMatches.length);
+		for (let i = 0; i < n; i++) {
+			const s = sortedSets[i];
+			const m = msvMatches[i];
+			const slots = (s.slots ?? []) as Slot[];
+			const sgE1 = Number(slots[0]?.entrant?.id);
+			const sgE2 = Number(slots[1]?.entrant?.id);
+			const msvE1 = sgE1 ? bracketEntrantToMsvHub.get(sgE1) : undefined;
+			const msvE2 = sgE2 ? bracketEntrantToMsvHub.get(sgE2) : undefined;
+			const sgWinnerId = Number(s.winnerId);
+			const msvWinner = sgWinnerId ? bracketEntrantToMsvHub.get(sgWinnerId) : undefined;
 
-		// Extract scores from displayScore
-		let topScore: number | undefined;
-		let bottomScore: number | undefined;
-		const displayScore = set.displayScore as string | undefined;
-		if (displayScore) {
-			const parts = displayScore.split(' - ');
-			if (parts.length === 2) {
-				const s1 = Number(parts[0].replace(/[^0-9]/g, ''));
-				const s2 = Number(parts[1].replace(/[^0-9]/g, ''));
-				if (!isNaN(s1) && !isNaN(s2)) {
-					if (msvE1 === match.topPlayerId) { topScore = s1; bottomScore = s2; }
-					else { topScore = s2; bottomScore = s1; }
+			// Assign players (StartGG is source of truth). Missing slots → leave undefined.
+			m.topPlayerId = msvE1;
+			m.bottomPlayerId = msvE2;
+			m.startggSetId = String(s.id);
+
+			if (msvWinner && (msvWinner === msvE1 || msvWinner === msvE2)) {
+				m.winnerId = msvWinner;
+				const { topScore, bottomScore } = parseScores(s, msvE1!, m.topPlayerId);
+				m.topScore = topScore;
+				m.bottomScore = bottomScore;
+				synced++;
+			} else {
+				m.winnerId = undefined;
+				m.topScore = undefined;
+				m.bottomScore = undefined;
+				if (sgWinnerId) {
+					debug.push(`  ${key} set ${s.id}: couldn't map winner ${sgWinnerId}`);
+					unmatched++;
 				}
 			}
 		}
-
-		// Skip if already reported with the correct winner (idempotent)
-		if (match.winnerId === msvWinner && match.startggSetId === String(set.id)) {
-			applied.add(String(set.id));
-			synced++;
-			progressThisPass++;
-			continue;
-		}
-
-		try {
-			bracket = reportBracketMatch(bracket, match.id, msvWinner, undefined, undefined, topScore, bottomScore);
-			const updatedMatch = bracket.matches.find((m: BracketMatch) => m.id === match.id);
-			if (updatedMatch) updatedMatch.startggSetId = String(set.id);
-			applied.add(String(set.id));
-			synced++;
-			progressThisPass++;
-		} catch (e) {
-			debug.push(`  Set ${set.id} (${set.fullRoundText}): reportBracketMatch threw: ${String(e).slice(0, 120)}`);
-		}
 	}
 
-	if (progressThisPass === 0) {
-		debug.push(`Pass ${pass + 1}: no progress, stopping. ${reportedSets.length - synced} sets unmatched`);
-		break;
-	}
-	}
-
-	notFound = reportedSets.length - synced;
-
-	// Log which sets couldn't be applied
-	if (notFound > 0 && notFound < 30) {
-		for (const set of reportedSets) {
-			if (applied.has(String(set.id))) continue;
-			const slots = set.slots ?? [];
-			const sgE1 = Number(slots[0]?.entrant?.id);
-			const sgE2 = Number(slots[1]?.entrant?.id);
-			const fullRoundText = set.fullRoundText ?? 'unknown';
-			debug.push(`  Unmatched: "${fullRoundText}" set ${set.id} (entrants ${sgE1} vs ${sgE2})`);
-		}
-	}
+	const totalReported = (sets as GqlRecord[]).filter((s) => s.winnerId).length;
+	const notFound = totalReported - synced;
 
 	tournament.brackets[bracketName] = bracket;
 
@@ -226,5 +200,5 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	await saveTournament(tournament);
-	return Response.json({ ok: true, bracketName, synced, notFound, totalSetsOnStartGG: reportedSets.length, debug });
+	return Response.json({ ok: true, bracketName, synced, notFound, totalSetsOnStartGG: totalReported, debug });
 };
