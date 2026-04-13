@@ -10,6 +10,8 @@
 	let setupCount = $derived(attendance.filter((a) => a.pledgedSetup).length);
 	let presentCount = $derived(attendance.filter((a) => a.present).length);
 	let setupDeployedCount = $derived(attendance.filter((a) => a.setupDeployed).length);
+	let lateCount = $derived(attendance.filter((a) => a.late).length);
+	let accountedCount = $derived(attendance.filter((a) => a.present || a.late).length);
 	let setupsNeeded = $derived(Math.max(0, 16 - setupCount - 1)); // -1 for venue setup
 
 	onMount(async () => {
@@ -39,20 +41,28 @@
 		refreshing = false;
 	}
 
-	async function toggleFlag(gamerTag: string, flag: 'present' | 'setupDeployed') {
+	async function toggleFlag(gamerTag: string, flag: 'present' | 'setupDeployed' | 'late') {
 		const attendee = attendance.find((a) => a.gamerTag === gamerTag);
 		if (!attendee) return;
 		const newValue = !attendee[flag];
 
-		// Optimistic update
-		attendance = attendance.map((a) =>
-			a.gamerTag === gamerTag ? { ...a, [flag]: newValue } : a
-		);
+		// Optimistic update. Marking late/present are mutually exclusive.
+		attendance = attendance.map((a) => {
+			if (a.gamerTag !== gamerTag) return a;
+			const patch: Partial<AttendeeStatus> = { [flag]: newValue };
+			if (newValue && flag === 'present') patch.late = false;
+			if (newValue && flag === 'late') patch.present = false;
+			return { ...a, ...patch };
+		});
+
+		const body: Record<string, unknown> = { gamerTag, [flag]: newValue };
+		if (newValue && flag === 'present') body.late = false;
+		if (newValue && flag === 'late') body.present = false;
 
 		const res = await fetch('/api/tournament/attendance', {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ gamerTag, [flag]: newValue })
+			body: JSON.stringify(body)
 		});
 		if (!res.ok) {
 			// Revert
@@ -75,7 +85,7 @@
 	{/if}
 
 	<!-- Summary cards -->
-	<div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+	<div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
 		<div class="rounded-lg border border-gray-800 bg-gray-900 p-3 text-center">
 			<div class="text-2xl font-bold text-white">{attendance.length}</div>
 			<div class="text-xs text-gray-500">Registered</div>
@@ -83,6 +93,10 @@
 		<div class="rounded-lg border border-gray-800 bg-gray-900 p-3 text-center">
 			<div class="text-2xl font-bold text-green-400">{presentCount}</div>
 			<div class="text-xs text-gray-500">Present</div>
+		</div>
+		<div class="rounded-lg border border-gray-800 bg-gray-900 p-3 text-center">
+			<div class="text-2xl font-bold text-sky-400">{lateCount}</div>
+			<div class="text-xs text-gray-500">Late ({accountedCount} accounted)</div>
 		</div>
 		<div class="rounded-lg border border-gray-800 bg-gray-900 p-3 text-center">
 			<div class="text-2xl font-bold {setupCount >= 16 ? 'text-green-400' : 'text-amber-400'}">{setupCount + 1}</div>
@@ -119,6 +133,7 @@
 						<th class="px-2 py-2">Player</th>
 						<th class="px-2 py-2 text-center w-20">Setup</th>
 						<th class="px-2 py-2 text-center w-20">Present</th>
+						<th class="px-2 py-2 text-center w-20">Late</th>
 						<th class="px-2 py-2 text-center w-20">Deployed</th>
 						<th class="px-2 py-2 text-right text-xs">Registered</th>
 					</tr>
@@ -129,7 +144,7 @@
 						if (a.pledgedSetup !== b.pledgedSetup) return a.pledgedSetup ? -1 : 1;
 						return a.gamerTag.localeCompare(b.gamerTag);
 					}) as attendee}
-						<tr class="border-b border-gray-800 {attendee.present ? 'bg-green-950/20' : ''}">
+						<tr class="border-b border-gray-800 {attendee.present ? 'bg-green-950/20' : attendee.late ? 'bg-sky-950/20' : ''}">
 							<td class="px-2 py-1.5">
 								<span class="text-white">{attendee.gamerTag}</span>
 								{#if attendee.pledgedSetup}
@@ -148,6 +163,13 @@
 									class="rounded px-2 py-0.5 text-xs transition-colors
 										{attendee.present ? 'bg-green-700/40 text-green-300' : 'bg-gray-800 text-gray-500 hover:text-white'}">
 									{attendee.present ? '✓ Here' : 'Mark'}
+								</button>
+							</td>
+							<td class="px-2 py-1.5 text-center">
+								<button onclick={() => toggleFlag(attendee.gamerTag, 'late')}
+									class="rounded px-2 py-0.5 text-xs transition-colors
+										{attendee.late ? 'bg-sky-700/40 text-sky-300' : 'bg-gray-800 text-gray-500 hover:text-white'}">
+									{attendee.late ? '⏰ Late' : 'Mark'}
 								</button>
 							</td>
 							<td class="px-2 py-1.5 text-center">

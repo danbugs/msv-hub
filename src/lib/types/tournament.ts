@@ -62,6 +62,8 @@ export interface AttendeeStatus {
 	present?: boolean;
 	/** TO confirmed player has set up their station */
 	setupDeployed?: boolean;
+	/** Player arriving late — accounted for but not at venue yet */
+	late?: boolean;
 	/** Registration timestamp from StartGG */
 	registeredAt?: string;
 	/** Discord user ID for pinging */

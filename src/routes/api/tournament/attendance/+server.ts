@@ -16,6 +16,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		setupCount: (tournament.attendance ?? []).filter((a) => a.pledgedSetup).length,
 		presentCount: (tournament.attendance ?? []).filter((a) => a.present).length,
 		setupDeployedCount: (tournament.attendance ?? []).filter((a) => a.setupDeployed).length,
+		lateCount: (tournament.attendance ?? []).filter((a) => a.late).length,
 		totalPlayers: tournament.entrants.length
 	});
 };
@@ -102,10 +103,11 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
 
-	const { gamerTag, present, setupDeployed } = await request.json() as {
+	const { gamerTag, present, setupDeployed, late } = await request.json() as {
 		gamerTag: string;
 		present?: boolean;
 		setupDeployed?: boolean;
+		late?: boolean;
 	};
 
 	if (!gamerTag) return Response.json({ error: 'gamerTag required' }, { status: 400 });
@@ -116,6 +118,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	if (present !== undefined) attendance[idx].present = present;
 	if (setupDeployed !== undefined) attendance[idx].setupDeployed = setupDeployed;
+	if (late !== undefined) attendance[idx].late = late;
 
 	tournament.attendance = attendance;
 	await saveTournament(tournament);
