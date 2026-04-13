@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { getActiveTournament, saveTournament } from '$lib/server/store';
+import { getActiveTournament, saveTournament, getDiscordConfig } from '$lib/server/store';
 import { exportAttendees } from '$lib/server/startgg-admin';
 import { gql } from '$lib/server/startgg';
 import type { AttendeeStatus } from '$lib/types/tournament';
@@ -27,26 +27,39 @@ export const POST: RequestHandler = async ({ locals }) => {
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
 
-	// Get tournament ID — try startggEventId first, then resolve from slug
+	// Get tournament ID — try startggEventId, tournament slug, then Discord config slug as fallback
 	let tournamentId = 0;
 	if (tournament.startggEventId) {
-		// Get tournament ID from event ID
 		const eData = await gql<{ event: { tournament: { id: number } } }>(
 			'query($id:ID!){event(id:$id){tournament{id}}}', { id: tournament.startggEventId }
 		);
 		tournamentId = eData?.event?.tournament?.id ?? 0;
 	}
+
+	async function resolveFromEventSlug(eventSlug: string): Promise<number> {
+		const slugMatch = eventSlug.match(/tournament\/([^/]+)/);
+		if (!slugMatch) return 0;
+		const tData = await gql<{ tournament: { id: number } }>(
+			'query($slug:String!){tournament(slug:$slug){id}}', { slug: slugMatch[1] }
+		);
+		return tData?.tournament?.id ?? 0;
+	}
+
 	if (!tournamentId && tournament.startggEventSlug) {
-		const slugMatch = tournament.startggEventSlug.match(/tournament\/([^/]+)/);
-		if (slugMatch) {
-			const tData = await gql<{ tournament: { id: number } }>(
-				'query($slug:String!){tournament(slug:$slug){id}}', { slug: slugMatch[1] }
-			);
-			tournamentId = tData?.tournament?.id ?? 0;
+		tournamentId = await resolveFromEventSlug(tournament.startggEventSlug);
+	}
+	// Fallback: use Discord config's eventSlug (set when configuring the announcement)
+	if (!tournamentId) {
+		const config = await getDiscordConfig();
+		if (config.eventSlug) {
+			tournamentId = await resolveFromEventSlug(config.eventSlug);
 		}
 	}
 	if (!tournamentId) {
-		return Response.json({ error: `Could not resolve tournament ID (eventId=${tournament.startggEventId}, slug=${tournament.startggEventSlug})` }, { status: 400 });
+		const config = await getDiscordConfig();
+		return Response.json({
+			error: `Could not resolve tournament ID. Set the event slug in Discord Setup or link the tournament to a StartGG event. (tournament.eventId=${tournament.startggEventId}, tournament.slug=${tournament.startggEventSlug}, discord.slug=${config.eventSlug})`
+		}, { status: 400 });
 	}
 
 	console.log(`[attendance] Resolved tournament ID: ${tournamentId}`);
