@@ -1120,8 +1120,11 @@ export function reportBracketMatch(
 	// a feeder advancement put the same player in both slots of a downstream match.
 	for (const m of updated.matches) {
 		if (m.topPlayerId && m.bottomPlayerId && m.topPlayerId === m.bottomPlayerId) {
-			console.error(`[bracket] DUPLICATE PLAYER in ${m.id}: ${m.topPlayerId} vs itself — clearing bottom slot`);
+			console.error(`[bracket] DUPLICATE PLAYER in ${m.id}: ${m.topPlayerId} vs itself — clearing bottom slot + winnerId`);
 			m.bottomPlayerId = undefined;
+			m.winnerId = undefined;
+			m.topScore = undefined;
+			m.bottomScore = undefined;
 		}
 	}
 

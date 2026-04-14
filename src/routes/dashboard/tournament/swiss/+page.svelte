@@ -605,10 +605,19 @@
 						({mainPlayers.length} players to Main, {tournament.finalStandings.filter(s => s.bracket === 'redemption').length} to Redemption) and start bracket reporting.
 					</div>
 				{/each}
-				<button onclick={pushAndGoToBrackets} disabled={pushingToBrackets}
-					class="mt-4 rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50">
-					{pushingToBrackets ? 'Pushing to StartGG…' : 'Push to StartGG & Start Brackets →'}
-				</button>
+				<div class="mt-4 flex flex-wrap items-center gap-3">
+					<button onclick={pushAndGoToBrackets} disabled={pushingToBrackets}
+						class="rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50">
+						{pushingToBrackets ? 'Pushing to StartGG…' : 'Push to StartGG & Start Brackets →'}
+					</button>
+					<select bind:value={roundAnnounceChannel}
+						class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 focus:border-violet-500 focus:outline-none"
+						title="Channel to announce bracket start">
+						{#each ANNOUNCE_CHANNELS as ch}
+							<option value={ch.value}>{ch.label}</option>
+						{/each}
+					</select>
+				</div>
 				{#if pushError}
 					<p class="mt-2 text-sm text-red-400">{pushError}</p>
 				{/if}

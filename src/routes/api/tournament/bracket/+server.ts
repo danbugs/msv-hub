@@ -86,10 +86,37 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		(e) => ({ ok: false, queued: false, error: e instanceof Error ? e.message : String(e) })
 	);
 
-	// Save directly. Bracket reports should not be concurrent for the same match
-	// (UI has per-match lock). Player advancement is deterministic from the match result,
-	// so saving the full tournament state is safe.
-	await saveTournament(tournament);
+	// Concurrency-safe save: reload the latest tournament from Redis and merge our
+	// bracket changes into it. Protects against two bracket reports racing where
+	// the second one loads stale state and overwrites the first's winner.
+	const fresh = await getActiveTournament();
+	if (fresh?.brackets && fresh.brackets[bracketName]) {
+		const freshBracket = fresh.brackets[bracketName];
+		const ourBracket = tournament.brackets[bracketName];
+		// Merge: for each match in the fresh bracket, if OUR version has a winner
+		// and fresh doesn't (or has a different winner we just set), take ours.
+		// Otherwise keep fresh (which may have winners set by another concurrent report).
+		const ourMatchMap = new Map(ourBracket.matches.map((m) => [m.id, m]));
+		for (let i = 0; i < freshBracket.matches.length; i++) {
+			const fm = freshBracket.matches[i];
+			const om = ourMatchMap.get(fm.id);
+			if (!om) continue;
+			// If we just modified this match (the one being reported), take our version
+			if (fm.id === matchId) {
+				freshBracket.matches[i] = om;
+				continue;
+			}
+			// Otherwise, PRESERVE fresh's winner if it has one (don't overwrite concurrent reports)
+			if (fm.winnerId) continue;
+			// Take our version (may have player advancement placed)
+			freshBracket.matches[i] = om;
+		}
+		if (tournament.phase === 'completed') fresh.phase = 'completed';
+		await saveTournament(fresh);
+		tournament.brackets[bracketName] = freshBracket;
+	} else {
+		await saveTournament(tournament);
+	}
 	return Response.json({
 		ok: true,
 		bracket: tournament.brackets[bracketName],
