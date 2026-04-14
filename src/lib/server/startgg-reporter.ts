@@ -16,6 +16,26 @@ import type { TournamentState, SwissMatch, BracketMatch, StartggSyncState } from
 // This cache maps Swiss entrant ID → bracket entrant ID via player ID matching.
 let _bracketEntrantCache: Map<string, Map<number, number>> | null = null;
 
+// Bracket phase group ID cache — each bracket event has one phase group.
+const _bracketPgIdCache = new Map<number, number>();
+async function getBracketPhaseGroupId(bracketEventId: number): Promise<number | null> {
+	const cached = _bracketPgIdCache.get(bracketEventId);
+	if (cached) return cached;
+	const epData = await gql<{ event: { phases: { id: number }[] } }>(
+		'query($eventId:ID!){event(id:$eventId){phases{id}}}', { eventId: bracketEventId }, { delay: 0 }
+	).catch(() => null);
+	const bPhaseId = epData?.event?.phases?.[0]?.id;
+	if (!bPhaseId) return null;
+	const { fetchPhaseGroups: fpg } = await import('$lib/server/startgg');
+	const groups = await fpg(bPhaseId).catch(() => []);
+	const pgId = (groups as { id?: number }[])[0]?.id;
+	if (pgId) {
+		_bracketPgIdCache.set(bracketEventId, pgId);
+		return pgId;
+	}
+	return null;
+}
+
 type SeedNode = { entrant?: { id?: number; participants?: { player?: { id?: number } }[] } };
 
 async function buildBracketEntrantTranslation(
@@ -423,6 +443,48 @@ async function _doReportBracketMatch(
 		bracketWinnerEntrantId = translation.get(winnerEntrant.startggEntrantId) ?? winnerEntrant.startggEntrantId;
 	}
 
+	const loserEntrant = winnerEntrant === topEntrant ? botEntrant : topEntrant;
+	const bracketLoserEntrantId = winnerEntrant === topEntrant ? bracketBotEntrantId : bracketTopEntrantId;
+	const winnerScore = match.winnerId === match.topPlayerId ? match.topScore : match.bottomScore;
+	const loserScore  = match.winnerId === match.topPlayerId ? match.bottomScore : match.topScore;
+
+	// Build per-game character data from match's topCharacters/bottomCharacters
+	const gameCharacters: { entrantId: number; characters: string[] }[] = [];
+	if (match.topCharacters?.length) {
+		gameCharacters.push({ entrantId: bracketTopEntrantId, characters: match.topCharacters });
+	}
+	if (match.bottomCharacters?.length) {
+		gameCharacters.push({ entrantId: bracketBotEntrantId, characters: match.bottomCharacters });
+	}
+
+	const hasCharData = !match.isDQ && (gameCharacters.length > 0 || !!match.gameWinners?.length);
+
+	// FAST PATH: for matches without per-game character data (early rounds),
+	// use internal REST — same reliable fast path as Swiss reports.
+	if (!hasCharData) {
+		const bracketPhaseGroupId = await getBracketPhaseGroupId(bracketEventId);
+		if (bracketPhaseGroupId) {
+			const result = await completeSetViaAdminRest(
+				bracketPhaseGroupId,
+				bracketTopEntrantId,
+				bracketBotEntrantId,
+				bracketWinnerEntrantId,
+				winnerScore ?? 2,
+				loserScore ?? 0,
+				match.isDQ ?? false
+			);
+			if (result.ok) {
+				match.startggSetId = result.realSetId;
+				clearErrorsForMatch(sync, match.id);
+				sync.pendingBracketMatchIds = sync.pendingBracketMatchIds.filter((id) => id !== pendingKey);
+				return { ok: true };
+			}
+			addError(sync, match.id, result.error ?? 'Unknown StartGG error');
+			return { ok: false, error: result.error };
+		}
+	}
+
+	// GQL PATH: for top-8/BO5 matches with character data (public API supports character selections)
 	let setId = match.startggSetId ?? null;
 	if (!setId) {
 		setId = await findSetByEntrants(
@@ -436,20 +498,6 @@ async function _doReportBracketMatch(
 		const msg = `Bracket set not found on StartGG for ${topEntrant.gamerTag} vs ${botEntrant.gamerTag}`;
 		addError(sync, match.id, msg);
 		return { ok: false, error: msg };
-	}
-
-	const loserEntrant = winnerEntrant === topEntrant ? botEntrant : topEntrant;
-	const bracketLoserEntrantId = winnerEntrant === topEntrant ? bracketBotEntrantId : bracketTopEntrantId;
-	const winnerScore = match.winnerId === match.topPlayerId ? match.topScore : match.bottomScore;
-	const loserScore  = match.winnerId === match.topPlayerId ? match.bottomScore : match.topScore;
-
-	// Build per-game character data from match's topCharacters/bottomCharacters
-	const gameCharacters: { entrantId: number; characters: string[] }[] = [];
-	if (match.topCharacters?.length) {
-		gameCharacters.push({ entrantId: bracketTopEntrantId, characters: match.topCharacters });
-	}
-	if (match.bottomCharacters?.length) {
-		gameCharacters.push({ entrantId: bracketBotEntrantId, characters: match.bottomCharacters });
 	}
 
 	const reportExtra = {
