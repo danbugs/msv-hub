@@ -93,10 +93,10 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (fresh?.brackets && fresh.brackets[bracketName]) {
 		const freshBracket = fresh.brackets[bracketName];
 		const ourBracket = tournament.brackets[bracketName];
-		// Merge: for each match in the fresh bracket, if OUR version has a winner
-		// and fresh doesn't (or has a different winner we just set), take ours.
-		// Otherwise keep fresh (which may have winners set by another concurrent report).
+		const freshMatchIds = new Set(freshBracket.matches.map((m) => m.id));
 		const ourMatchMap = new Map(ourBracket.matches.map((m) => [m.id, m]));
+
+		// Merge existing fresh matches
 		for (let i = 0; i < freshBracket.matches.length; i++) {
 			const fm = freshBracket.matches[i];
 			const om = ourMatchMap.get(fm.id);
@@ -106,11 +106,22 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				freshBracket.matches[i] = om;
 				continue;
 			}
-			// Otherwise, PRESERVE fresh's winner if it has one (don't overwrite concurrent reports)
+			// Preserve fresh's winner if it has one (don't overwrite concurrent reports)
 			if (fm.winnerId) continue;
 			// Take our version (may have player advancement placed)
 			freshBracket.matches[i] = om;
 		}
+
+		// Append matches that exist in OUR bracket but not fresh (e.g. newly-created GFR)
+		for (const om of ourBracket.matches) {
+			if (!freshMatchIds.has(om.id)) {
+				freshBracket.matches.push(om);
+			}
+		}
+
+		// Remove matches that OUR bracket dropped (e.g. GFR deleted when GF flipped to top-winner)
+		freshBracket.matches = freshBracket.matches.filter((fm) => ourMatchMap.has(fm.id));
+
 		if (tournament.phase === 'completed') fresh.phase = 'completed';
 		await saveTournament(fresh);
 		tournament.brackets[bracketName] = freshBracket;

@@ -10,6 +10,7 @@
 	let reportingMatch = $state<BracketMatch | null>(null);
 	let reportWinnerId = $state('');
 	let reportScore = $state('');
+	let submittingReport = $state(false);
 	// Per-game character tracking: index = game number
 	let gameTopChars = $state<string[]>([]);
 	let gameBotChars = $state<string[]>([]);
@@ -53,9 +54,17 @@
 	// Per-game winner: 'top' or 'bottom' for each game
 	let gameWinners = $state<('top' | 'bottom')[]>([]);
 
+	// Cache for game rows that get shrunk off (so expanding again restores them)
+	let gameTopCharsCache: string[] = [];
+	let gameBotCharsCache: string[] = [];
+
 	function resizeGameArrays(n: number) {
-		gameTopChars = Array.from({ length: n }, (_, i) => gameTopChars[i] ?? '');
-		gameBotChars = Array.from({ length: n }, (_, i) => gameBotChars[i] ?? '');
+		// Save entries we're about to drop so a later expansion can restore them
+		for (let i = n; i < gameTopChars.length; i++) if (gameTopChars[i]) gameTopCharsCache[i] = gameTopChars[i];
+		for (let i = n; i < gameBotChars.length; i++) if (gameBotChars[i]) gameBotCharsCache[i] = gameBotChars[i];
+
+		gameTopChars = Array.from({ length: n }, (_, i) => gameTopChars[i] || gameTopCharsCache[i] || '');
+		gameBotChars = Array.from({ length: n }, (_, i) => gameBotChars[i] || gameBotCharsCache[i] || '');
 		gameTopSearch = Array.from({ length: n }, (_, i) => gameTopSearch[i] ?? '');
 		gameBotSearch = Array.from({ length: n }, (_, i) => gameBotSearch[i] ?? '');
 	}
@@ -79,7 +88,48 @@
 	}
 
 	function toggleGameWinner(gameIdx: number) {
-		gameWinners = gameWinners.map((w, i) => i === gameIdx ? (w === 'top' ? 'bottom' : 'top') : w);
+		if (!reportingMatch) return;
+		// Toggle the specified game, then walk the sequence to find the first point where
+		// someone reaches 3 wins. That determines the final score + match winner, and
+		// trims/extends the game list to match.
+		const toggled = gameWinners.map((w, i) => i === gameIdx ? (w === 'top' ? 'bottom' : 'top') : w);
+
+		// First, walk forward and stop when either side reaches 3 wins (set is over).
+		const clipped: ('top' | 'bottom')[] = [];
+		let topCount = 0, botCount = 0;
+		for (const w of toggled) {
+			clipped.push(w);
+			if (w === 'top') topCount++;
+			else botCount++;
+			if (topCount >= 3 || botCount >= 3) break;
+		}
+
+		// If no one has reached 3 yet, pad remaining games so the in-progress leader takes it.
+		if (topCount < 3 && botCount < 3) {
+			const leader: 'top' | 'bottom' = topCount >= botCount ? 'top' : 'bottom';
+			while ((leader === 'top' ? topCount : botCount) < 3) {
+				clipped.push(leader);
+				if (leader === 'top') topCount++;
+				else botCount++;
+			}
+		}
+
+		gameWinners = clipped;
+
+		// Update reportScore based on final counts
+		const finalWinnerWins = Math.max(topCount, botCount);
+		const finalLoserWins = Math.min(topCount, botCount);
+		reportScore = `${finalWinnerWins}-${finalLoserWins}`;
+
+		// Match winner = side with more wins
+		const matchWinnerSide: 'top' | 'bottom' = topCount > botCount ? 'top' : 'bottom';
+		const newWinnerId = matchWinnerSide === 'top' ? reportingMatch.topPlayerId : reportingMatch.bottomPlayerId;
+		if (newWinnerId && newWinnerId !== reportWinnerId) {
+			reportWinnerId = newWinnerId;
+		}
+
+		// Resize character arrays to match game count (preserves existing entries where possible)
+		resizeGameArrays(clipped.length);
 	}
 
 	function setGameChar(side: 'top' | 'bot', gameIdx: number, char: string) {
@@ -151,6 +201,8 @@
 		gameTopSearch = [];
 		gameBotSearch = [];
 		gameWinners = [];
+		gameTopCharsCache = [];
+		gameBotCharsCache = [];
 		// Pre-fill from existing characters (restore per-game if available)
 		if (match.topCharacters?.length || match.bottomCharacters?.length) {
 			const existing = match.topCharacters ?? match.bottomCharacters ?? [];
@@ -265,8 +317,9 @@
 	}
 
 	async function submitReport() {
-		if (!reportingMatch || !reportWinnerId || !reportScore) return;
+		if (!reportingMatch || !reportWinnerId || !reportScore || submittingReport) return;
 		error = '';
+		submittingReport = true;
 
 		const isDQ = reportScore === 'DQ';
 		const [topScore, bottomScore] = isDQ ? [0, 0] : parseScore(reportScore, reportWinnerId, reportingMatch);
@@ -292,9 +345,11 @@
 		if (!res.ok) {
 			const data = await res.json();
 			error = data.error ?? 'Failed to report match';
+			submittingReport = false;
 		} else {
 			reportingMatch = null;
 			await loadTournament();
+			submittingReport = false;
 		}
 	}
 </script>
@@ -558,12 +613,20 @@
 							</div>
 						{/if}
 												<div class="mt-5 flex gap-2">
-							<button onclick={submitReport} disabled={!reportWinnerId || !reportScore}
-								class="flex-1 rounded-lg bg-violet-600 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50">
-								Submit
+							<button onclick={submitReport} disabled={!reportWinnerId || !reportScore || submittingReport}
+								class="flex-1 rounded-lg bg-violet-600 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50 inline-flex items-center justify-center gap-2">
+								{#if submittingReport}
+									<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+										<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"/>
+										<path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+									</svg>
+									Submitting…
+								{:else}
+									Submit
+								{/if}
 							</button>
-							<button onclick={() => reportingMatch = null}
-								class="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:text-white">
+							<button onclick={() => reportingMatch = null} disabled={submittingReport}
+								class="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50">
 								Cancel
 							</button>
 						</div>
