@@ -52,9 +52,22 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		const otherName = bracketName === 'main' ? 'redemption' : 'main';
 		const otherBracket = tournament.brackets[otherName];
 		const otherHasStream = otherBracket?.matches.some((m) => m.isStream && !m.winnerId) ?? false;
+
+		// Cumulative stream appearances across all Swiss rounds + brackets.
+		// Used to spread stream time across more players instead of same seeds each week.
+		const streamCountByPlayer = new Map<string, number>();
+		const tally = (ids: (string | undefined)[]) => {
+			for (const id of ids) if (id) streamCountByPlayer.set(id, (streamCountByPlayer.get(id) ?? 0) + 1);
+		};
+		for (const r of tournament.rounds) for (const m of r.matches) if (m.isStream) tally([m.topPlayerId, m.bottomPlayerId]);
+		for (const bn of ['main', 'redemption'] as const) {
+			const b = tournament.brackets?.[bn];
+			if (b) for (const m of b.matches) if (m.isStream) tally([m.topPlayerId, m.bottomPlayerId]);
+		}
+
 		tournament.brackets[bracketName] = reportBracketMatch(
 			bracket, matchId, winnerId, topCharacters, bottomCharacters, topScore, bottomScore,
-			tournament.settings, bracketName, otherHasStream, gameWinners, isDQ
+			tournament.settings, bracketName, otherHasStream, gameWinners, isDQ, streamCountByPlayer
 		);
 	} catch (err) {
 		return Response.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 400 });

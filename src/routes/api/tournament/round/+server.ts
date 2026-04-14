@@ -227,7 +227,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		return { id: `r${nextRound}-m${matchId++}`, topPlayerId: top[0], bottomPlayerId: bot[0] };
 	});
 
-	// Collect players who were on stream last round to avoid repeat stream appearances
+	// Collect players who were on stream last round to avoid back-to-back appearances
 	const lastCompleted = completedRounds.at(-1);
 	const recentStreamIds = new Set(
 		lastCompleted?.matches
@@ -236,9 +236,25 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			.filter(Boolean) as string[]
 	);
 
+	// Cumulative stream counts: every stream appearance across all Swiss rounds AND brackets.
+	// Used to spread stream time across more players.
+	const streamCountByPlayer = new Map<string, number>();
+	function tally(ids: (string | undefined)[]) {
+		for (const id of ids) if (id) streamCountByPlayer.set(id, (streamCountByPlayer.get(id) ?? 0) + 1);
+	}
+	for (const r of tournament.rounds) {
+		for (const m of r.matches) {
+			if (m.isStream) tally([m.topPlayerId, m.bottomPlayerId]);
+		}
+	}
+	for (const bracketName of ['main', 'redemption'] as const) {
+		const b = tournament.brackets?.[bracketName];
+		if (b) for (const m of b.matches) if (m.isStream) tally([m.topPlayerId, m.bottomPlayerId]);
+	}
+
 	// Get stream recommendations and assign stations
 	const pairingIds = pairings.map(([t, b]) => [t[0], b[0]] as [string, string]);
-	const streamRecs = recommendStreamMatches(pairingIds, standings, tournament.entrants, recentStreamIds);
+	const streamRecs = recommendStreamMatches(pairingIds, standings, tournament.entrants, recentStreamIds, streamCountByPlayer);
 
 	// Fix match IDs in stream recs to match our generated IDs
 	const recsWithFixedIds = streamRecs.map((rec) => {
@@ -539,7 +555,16 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				const recentStreamIds = new Set(
 					lastCompleted?.matches.filter((m) => m.isStream).flatMap((m) => [m.topPlayerId, m.bottomPlayerId]).filter(Boolean) as string[]
 				);
-				const streamRecs = recommendStreamMatches(pairingIds, standings, latestState.entrants, recentStreamIds);
+				const streamCountByPlayer2 = new Map<string, number>();
+				const tallyFn = (ids: (string | undefined)[]) => {
+					for (const id of ids) if (id) streamCountByPlayer2.set(id, (streamCountByPlayer2.get(id) ?? 0) + 1);
+				};
+				for (const r of latestState.rounds) for (const m of r.matches) if (m.isStream) tallyFn([m.topPlayerId, m.bottomPlayerId]);
+				for (const bracketName of ['main', 'redemption'] as const) {
+					const b = latestState.brackets?.[bracketName];
+					if (b) for (const m of b.matches) if (m.isStream) tallyFn([m.topPlayerId, m.bottomPlayerId]);
+				}
+				const streamRecs = recommendStreamMatches(pairingIds, standings, latestState.entrants, recentStreamIds, streamCountByPlayer2);
 				const recsFixed = streamRecs.map((rec) => {
 					const m = newMatches.find((nm) =>
 						rec.topPlayer === latestState.entrants.find((e) => e.id === nm.topPlayerId)?.gamerTag

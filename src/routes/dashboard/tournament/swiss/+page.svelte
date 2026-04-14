@@ -40,7 +40,11 @@
 	async function pushAndGoToBrackets() {
 		pushingToBrackets = true;
 		pushError = '';
-		const res = await fetch('/api/tournament/startgg-sync', { method: 'POST' });
+		const res = await fetch('/api/tournament/startgg-sync', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ announceChannel: roundAnnounceChannel })
+		});
 		const data = await res.json().catch(() => ({}));
 		if (res.ok) {
 			window.location.href = '/dashboard/tournament/brackets';

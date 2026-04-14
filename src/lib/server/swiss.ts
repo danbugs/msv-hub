@@ -132,8 +132,19 @@ export function calculateSwissPairings(
 	function getPairingQuality(p1: PlayerEntry, p2: PlayerEntry): number {
 		const seedDiff = Math.abs(p1[1].seed - p2[1].seed);
 		// Heavy penalty for matching players with different win-loss differentials
-		const recordDiff = Math.abs((p1[1].wins - p1[1].losses) - (p2[1].wins - p2[1].losses));
-		const recordPenalty = recordDiff * 200;
+		const wl1 = p1[1].wins - p1[1].losses;
+		const wl2 = p2[1].wins - p2[1].losses;
+		const recordDiff = Math.abs(wl1 - wl2);
+		let recordPenalty = recordDiff * 200;
+
+		// CROSS-GROUP FAIRNESS: don't waste a "qualifying match" player (at 0 W/L
+		// differential, e.g. 2-2) on an already-qualified player (differential ≥ 2,
+		// e.g. 3-1 or 4-0). Prefer pairing qualified vs qualified or qualified vs
+		// already-eliminated-ish (wl ≤ -2). Adds a big extra penalty to the bad case.
+		if ((wl1 >= 2 && wl2 === 0) || (wl2 >= 2 && wl1 === 0)) {
+			recordPenalty += 1500;
+		}
+
 		// Within a record group, prefer MAXIMUM seed spread (top seeds play bottom seeds).
 		// Lower score = better. Invert seedDiff so larger spread scores lower.
 		const maxSpread = totalPlayers;
@@ -423,7 +434,9 @@ export function assignBracketStations(
 	bracket: BracketState,
 	settings: TournamentSettings,
 	bracketName?: 'main' | 'redemption',
-	otherBracketHasStream?: boolean
+	otherBracketHasStream?: boolean,
+	/** Cumulative stream appearances per player across all rounds + brackets */
+	streamCountByPlayer?: Map<string, number>
 ): BracketState {
 	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
 
@@ -436,8 +449,18 @@ export function assignBracketStations(
 	// Only auto-assign stream for main bracket, and only if no other bracket has stream
 	const activeStream = updated.matches.find((m) => m.isStream && !m.winnerId);
 	if (bracketName !== 'redemption' && !activeStream && !otherBracketHasStream) {
+		// Prefer the latest round, then within that round prefer matches whose players
+		// have fewer prior stream appearances (variability).
 		const maxReadyRound = Math.max(...ready.map((m) => Math.abs(m.round)));
-		const streamCandidate = ready.find((m) => Math.abs(m.round) === maxReadyRound);
+		const topRoundMatches = ready.filter((m) => Math.abs(m.round) === maxReadyRound);
+		const streamCount = (id?: string) => (id ? streamCountByPlayer?.get(id) ?? 0 : 0);
+		topRoundMatches.sort((a, b) => {
+			const aC = streamCount(a.topPlayerId) + streamCount(a.bottomPlayerId);
+			const bC = streamCount(b.topPlayerId) + streamCount(b.bottomPlayerId);
+			if (aC !== bC) return aC - bC; // fewer appearances wins
+			return Math.random() - 0.5;     // small jitter so it's not deterministic
+		});
+		const streamCandidate = topRoundMatches[0];
 		if (streamCandidate) {
 			const idx = updated.matches.findIndex((m) => m.id === streamCandidate.id);
 			for (let i = 0; i < updated.matches.length; i++) {
@@ -503,7 +526,9 @@ export function recommendStreamMatches(
 	pairings: [string, string][],
 	standings: Map<string, PlayerStanding>,
 	entrants: Entrant[],
-	recentStreamPlayerIds?: Set<string>
+	recentStreamPlayerIds?: Set<string>,
+	/** Cumulative stream appearances per player across all rounds + brackets */
+	streamCountByPlayer?: Map<string, number>
 ): StreamRecommendation[] {
 	const entrantMap = new Map(entrants.map((e) => [e.id, e]));
 
@@ -563,11 +588,26 @@ export function recommendStreamMatches(
 			hypeScore -= 10;
 		}
 
-		// Penalty for players who were on stream last round
+		// Penalty for players who were on stream last round (prevents back-to-back)
 		if (recentStreamPlayerIds?.has(topId) || recentStreamPlayerIds?.has(botId)) {
 			hypeScore -= 25;
 			reasons.push('⚠ recently on stream');
 		}
+
+		// Cumulative penalty: -10 per prior stream appearance, per player.
+		// Spreads stream time across more people over a season.
+		const topCount = streamCountByPlayer?.get(topId) ?? 0;
+		const botCount = streamCountByPlayer?.get(botId) ?? 0;
+		const cumulativePenalty = (topCount + botCount) * 10;
+		if (cumulativePenalty > 0) {
+			hypeScore -= cumulativePenalty;
+			if (topCount > 0 || botCount > 0) {
+				reasons.push(`on stream ${topCount + botCount}× already`);
+			}
+		}
+
+		// Small random jitter so stream picks aren't deterministic week-over-week
+		hypeScore += Math.random() * 5;
 
 		const matchId = `r${currentRound}-${topId}-${botId}`;
 		return {
@@ -1049,7 +1089,8 @@ export function reportBracketMatch(
 	bracketName?: 'main' | 'redemption',
 	otherBracketHasStream?: boolean,
 	gameWinners?: ('top' | 'bottom')[],
-	isDQ?: boolean
+	isDQ?: boolean,
+	streamCountByPlayer?: Map<string, number>
 ): BracketState {
 	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
 	const match = updated.matches.find((m) => m.id === matchId);
@@ -1113,7 +1154,7 @@ export function reportBracketMatch(
 		}
 	}
 
-	return settings ? assignBracketStations(updated, settings, bracketName, otherBracketHasStream) : updated;
+	return settings ? assignBracketStations(updated, settings, bracketName, otherBracketHasStream, streamCountByPlayer) : updated;
 }
 
 function optimizeBracketArrangement(

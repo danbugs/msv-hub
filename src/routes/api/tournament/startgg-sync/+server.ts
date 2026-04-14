@@ -10,13 +10,18 @@
  */
 
 import type { RequestHandler } from './$types';
+import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { flushPendingBracketMatches } from '$lib/server/startgg-reporter';
 import { pushBracketSeeding, gql, EVENT_PHASES_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
 import { assignBracketSplit } from '$lib/server/startgg-admin';
+import { sendMessage } from '$lib/server/discord';
 
-export const POST: RequestHandler = async ({ locals }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+	const body = await request.json().catch(() => ({}));
+	const announceChannel = ((body as { announceChannel?: string }).announceChannel ?? '').trim();
 
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
@@ -102,6 +107,25 @@ export const POST: RequestHandler = async ({ locals }) => {
 
 	// Step 3: Flush pending bracket reports
 	const { reported, failed } = await flushPendingBracketMatches(tournament);
+
+	// Step 4: Optionally announce bracket start to Discord.
+	if (announceChannel) {
+		const CHANNEL_IDS: Record<string, string> = {
+			'general':        '1066863005591162961',
+			'announcements':  '1066863301885173800',
+			'talk-to-balrog': '1317322917129879562'
+		};
+		const channelId = CHANNEL_IDS[announceChannel] ?? announceChannel;
+		const appUrl = (env as Record<string, string | undefined>)['APP_URL']
+			? `https://${(env as Record<string, string | undefined>)['APP_URL']}`
+			: '';
+		const tSlugMatch = eventSlug?.match(/^(tournament\/[^/]+)/);
+		const tournamentUrl = tSlugMatch ? `https://start.gg/${tSlugMatch[1]}` : '';
+		const lines = ['🏆 Brackets are starting!'];
+		if (tournamentUrl) lines.push(`Bracket on StartGG: ${tournamentUrl}`);
+		if (appUrl) lines.push(`MSV Hub live: ${appUrl}/live/${tournament.slug}`);
+		await sendMessage(channelId, lines.join('\n')).catch(() => { /* best-effort */ });
+	}
 
 	return Response.json({
 		ok: true,
