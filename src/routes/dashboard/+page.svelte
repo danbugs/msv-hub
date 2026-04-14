@@ -73,7 +73,7 @@
 						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
 							<li>Go to <strong class="text-gray-200">Attendees</strong> and add the weekly TOs. Aim for <strong class="text-gray-200">3 TOs per event (no more than 4)</strong>.</li>
 							<li>If short on TOs, ping volunteers and offer them priority registration.</li>
-							<li>When adding a TO, register them for <strong class="text-gray-200">all three events</strong> (Swiss, Main Bracket, Redemption Bracket).</li>
+							<li>When adding a TO, register them for <strong class="text-gray-200">Swiss only</strong> (MSV Hub auto-assigns them to Main/Redemption via bracket split).</li>
 							<li>In custom options, select whether the TO is bringing a setup (TOs usually should). Select <strong class="text-gray-200">no</strong> to it being "past Wednesday 8:30 AM".</li>
 							<li>Mark that the TO consents to being livestreamed during the event.</li>
 						</ol>
@@ -103,7 +103,7 @@
 							<li>Check the <strong class="text-gray-200">previous event's waitlist</strong>. Find the last person who was tagged (non-inclusive).</li>
 							<li>Take note of the <strong class="text-gray-200">next 8 people</strong> and whether they are bringing a setup.</li>
 							<li>Go to the latest <strong class="text-gray-200">priority-registration</strong> forum post and ping those 8 people. Note in the message that they have until end of day to reply. Check a previous post for the standard message format.</li>
-							<li><strong class="text-gray-200">At end of day:</strong> add everyone who responded yes as <strong class="text-gray-200">attendees to the StartGG tournament</strong>. When adding them, register for all three events and correctly fill in the custom options (e.g., whether they are bringing a setup).</li>
+							<li><strong class="text-gray-200">At end of day:</strong> add everyone who responded yes as <strong class="text-gray-200">attendees to the StartGG tournament</strong>. When adding them, register for <strong class="text-gray-200">Swiss only</strong> and correctly fill in the custom options (e.g., whether they are bringing a setup).</li>
 							<li>Go to the tournament dashboard and set <strong class="text-gray-200">Registration</strong> to admins-only so you can re-open it at 8:30 AM on Wednesday.</li>
 							<li>Set the <strong class="text-gray-200">Homepage</strong> to public and discoverable, and <strong class="text-gray-200">Events</strong> visibility to public with brackets and seeding visible.</li>
 						</ol>

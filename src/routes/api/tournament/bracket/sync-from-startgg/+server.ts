@@ -1,7 +1,7 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { fetchAllSets, fetchAllEntrants, gql, PHASE_GROUP_SEEDS_QUERY } from '$lib/server/startgg';
-import { generateBracket, reportBracketMatch } from '$lib/server/swiss';
+import { generateBracket, reportBracketMatch, assignBracketStations } from '$lib/server/swiss';
 import type { BracketMatch } from '$lib/types/tournament';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -239,7 +239,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const totalReported = (sets as GqlRecord[]).filter((s) => s.winnerId).length;
 	const notFound = totalReported - synced;
 
-	tournament.brackets[bracketName] = bracket;
+	// Reassign stations after sync so active (unreported) matches get stations
+	const otherBracket = tournament.brackets[bracketName === 'main' ? 'redemption' : 'main'];
+	const otherHasStream = otherBracket?.matches.some((m) => m.isStream && !m.winnerId) ?? false;
+	tournament.brackets[bracketName] = assignBracketStations(bracket, tournament.settings, bracketName, otherHasStream);
 
 	// Clear errors for this bracket
 	if (tournament.startggSync) {

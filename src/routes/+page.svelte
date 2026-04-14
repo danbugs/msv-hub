@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 
 	let email = $state('');
 	let code = $state('');
@@ -34,7 +34,9 @@
 		});
 		loading = false;
 		if (res.ok) {
-			goto('/dashboard');
+			// Refresh layout data so the nav picks up the new user immediately
+			await invalidateAll();
+			await goto('/dashboard');
 		} else {
 			error = 'Invalid or expired code.';
 		}

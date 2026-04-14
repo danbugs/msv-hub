@@ -425,7 +425,7 @@
 				{@const bot = getEntrant(reportingMatch.bottomPlayerId)}
 				{@const isTop8 = bracket ? isTop8Match(reportingMatch, bracket) : false}
 				{@const isBo5 = activeBracket === 'main' ? isTop8 : (bracket ? isFinalsMatch(reportingMatch, bracket) : false)}
-				{@const showChars = isTop8}
+				{@const showChars = isTop8 || isBo5}
 
 				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
 					<div class="w-full max-w-sm rounded-xl bg-gray-900 border border-gray-700 p-5">

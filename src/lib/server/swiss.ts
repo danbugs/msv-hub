@@ -467,6 +467,10 @@ export function assignBracketStations(
 			.map((m) => m.station!)
 	);
 
+	// If our bracket's pool is exhausted, overflow into the other bracket's half
+	// (so every active match still gets a unique station rather than going blank or duplicate).
+	const fullPool = allRegular;
+
 	for (let i = 0; i < updated.matches.length; i++) {
 		const m = updated.matches[i];
 		if (!m.topPlayerId || !m.bottomPlayerId || m.winnerId || m.station !== undefined) continue;
@@ -478,8 +482,15 @@ export function assignBracketStations(
 			assigned = true;
 			break;
 		}
-		if (!assigned && stationPool.length > 0) {
-			updated.matches[i] = { ...m, station: stationPool[0] };
+		if (!assigned) {
+			// Bracket's half is full — try any unused station across the whole tournament
+			for (const s of fullPool) {
+				if (usedStations.has(s)) continue;
+				updated.matches[i] = { ...m, station: s };
+				usedStations.add(s);
+				assigned = true;
+				break;
+			}
 		}
 	}
 
@@ -986,7 +997,6 @@ export function generateBracket(
 	}
 
 	const bracketPlayers = sortedPlayers.map((p, i) => ({ entrantId: p.entrantId, seed: i + 1 }));
-	normalizeSeedOrder(matches, bracketPlayers);
 
 	const state: BracketState = {
 		name,
@@ -997,23 +1007,6 @@ export function generateBracket(
 	};
 
 	return settings ? assignBracketStations(state, settings, name as 'main' | 'redemption') : state;
-}
-
-/** Swap top/bottom so the better-seeded player is always on top (cosmetic, doesn't affect wiring). */
-function normalizeSeedOrder(matches: BracketMatch[], players: { entrantId: string; seed: number }[]): void {
-	const seedMap = new Map(players.map((p) => [p.entrantId, p.seed]));
-	for (const m of matches) {
-		if (!m.topPlayerId || !m.bottomPlayerId || m.winnerId) continue;
-		// Don't normalize GF or GFR — top must be winners finalist, bottom must be losers finalist
-		if (m.id.includes('-GFR-')) continue;
-		const maxR = Math.max(...matches.filter((x) => x.round > 0 && !x.id.includes('-GFR-')).map((x) => x.round));
-		if (m.round === maxR && !m.winnerNextMatchId) continue; // This is GF
-		const topSeed = seedMap.get(m.topPlayerId) ?? Infinity;
-		const botSeed = seedMap.get(m.bottomPlayerId) ?? Infinity;
-		if (botSeed < topSeed) {
-			[m.topPlayerId, m.bottomPlayerId] = [m.bottomPlayerId, m.topPlayerId];
-		}
-	}
 }
 
 function advancePlayer(allMatches: BracketMatch[], completedMatch: BracketMatch) {
@@ -1080,7 +1073,16 @@ export function reportBracketMatch(
 	}
 
 	advancePlayer(updated.matches, match);
-	normalizeSeedOrder(updated.matches, updated.players);
+
+	// Defensive: detect duplicate-player in any match and clear the duplicate.
+	// This should never happen with correct advancement logic; if it does, it means
+	// a feeder advancement put the same player in both slots of a downstream match.
+	for (const m of updated.matches) {
+		if (m.topPlayerId && m.bottomPlayerId && m.topPlayerId === m.bottomPlayerId) {
+			console.error(`[bracket] DUPLICATE PLAYER in ${m.id}: ${m.topPlayerId} vs itself — clearing bottom slot`);
+			m.bottomPlayerId = undefined;
+		}
+	}
 
 	// Grand Finals Reset logic
 	const maxRound = Math.max(...updated.matches.filter((m) => !m.id.includes('-GFR-')).map((m) => m.round));
