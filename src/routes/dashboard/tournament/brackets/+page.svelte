@@ -35,7 +35,22 @@
 	function filteredChars(search: string, already: string[]): string[] {
 		if (!search.trim()) return [];
 		const q = search.toLowerCase();
-		return CHARACTERS.filter((c) => c.toLowerCase().includes(q) && !already.includes(c)).slice(0, 8);
+		// Rank: exact match > starts-with > contains > word-start match (covers "K. Rool" for "rool")
+		function rank(name: string): number {
+			const n = name.toLowerCase();
+			if (n === q) return 0;
+			if (n.startsWith(q)) return 1;
+			// any word in the name starts with q
+			if (n.split(/\s+|\./).some((w) => w.startsWith(q))) return 2;
+			if (n.includes(q)) return 3;
+			return 99;
+		}
+		return CHARACTERS
+			.filter((c) => c.toLowerCase().includes(q) && !already.includes(c))
+			.map((c) => [c, rank(c)] as const)
+			.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+			.map(([c]) => c)
+			.slice(0, 8);
 	}
 
 	// Simple color from character name hash for visual distinction
