@@ -449,25 +449,31 @@ export function assignBracketStations(
 	// Only auto-assign stream for main bracket, and only if no other bracket has stream
 	const activeStream = updated.matches.find((m) => m.isStream && !m.winnerId);
 	if (bracketName !== 'redemption' && !activeStream && !otherBracketHasStream) {
-		// Prefer the latest round, then within that round prefer matches whose players
-		// have fewer prior stream appearances (variability).
-		const maxReadyRound = Math.max(...ready.map((m) => Math.abs(m.round)));
-		const topRoundMatches = ready.filter((m) => Math.abs(m.round) === maxReadyRound);
+		// Priority: GFR > GF > Winners (highest round) > Losers (deepest round).
+		// This prevents LR1 (abs round 3) from stealing stream priority from WR2 (abs round 2)
+		// just because StartGG numbers LR rounds starting at -3 in a 16-player DE.
+		function priority(m: BracketMatch): number {
+			if (m.id.includes('-GFR-')) return 100000;
+			if (m.id.includes('-GF-')) return 90000;
+			if (m.round > 0) return 10000 + m.round; // winners: higher round = higher priority
+			return Math.abs(m.round); // losers: deeper round = higher priority
+		}
+		const maxP = Math.max(...ready.map((m) => priority(m)));
+		const topPMatches = ready.filter((m) => priority(m) === maxP);
 		const streamCount = (id?: string) => (id ? streamCountByPlayer?.get(id) ?? 0 : 0);
-		topRoundMatches.sort((a, b) => {
+		topPMatches.sort((a, b) => {
 			const aC = streamCount(a.topPlayerId) + streamCount(a.bottomPlayerId);
 			const bC = streamCount(b.topPlayerId) + streamCount(b.bottomPlayerId);
-			if (aC !== bC) return aC - bC; // fewer appearances wins
+			if (aC !== bC) return aC - bC; // fewer prior appearances wins
 			return Math.random() - 0.5;     // small jitter so it's not deterministic
 		});
-		const streamCandidate = topRoundMatches[0];
+		const streamCandidate = topPMatches[0];
 		if (streamCandidate) {
 			const idx = updated.matches.findIndex((m) => m.id === streamCandidate.id);
-			for (let i = 0; i < updated.matches.length; i++) {
-				if (updated.matches[i].isStream && updated.matches[i].winnerId) {
-					updated.matches[i] = { ...updated.matches[i], isStream: false };
-				}
-			}
+			// NOTE: do NOT clear isStream from previously-streamed matches.
+			// Keep the flag as history so the UI can show the path stream took through
+			// the bracket. activeStream check already gates on !winnerId, so retaining
+			// the flag on reported matches doesn't block reassignment.
 			updated.matches[idx] = { ...updated.matches[idx], station: settings.streamStation, isStream: true };
 		}
 	}
