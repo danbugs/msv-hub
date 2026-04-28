@@ -369,7 +369,7 @@
 	}
 </script>
 
-<main class="mx-auto max-w-7xl px-4 py-8">
+<main class="px-4 py-8">
 	<a href="/dashboard" class="text-sm text-violet-400 hover:text-violet-300">&larr; Dashboard</a>
 	<div class="mt-4 flex flex-wrap items-center gap-4">
 		<h1 class="text-2xl font-bold text-white">Brackets</h1>
