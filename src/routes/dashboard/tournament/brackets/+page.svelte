@@ -29,7 +29,7 @@
 		'Ryu', 'Ken', 'Cloud', 'Corrin', 'Bayonetta', 'Inkling', 'Ridley', 'Simon', 'Richter',
 		'King K. Rool', 'Isabelle', 'Incineroar', 'Piranha Plant', 'Joker', 'Hero',
 		'Banjo & Kazooie', 'Terry', 'Byleth', 'Min Min', 'Steve', 'Sephiroth', 'Pyra/Mythra',
-		'Kazuya', 'Sora'
+		'Kazuya', 'Sora', 'Mii Brawler', 'Mii Swordfighter', 'Mii Gunner'
 	];
 
 	function filteredChars(search: string, already: string[]): string[] {
@@ -440,54 +440,59 @@
 			<a href="/dashboard/tournament/swiss" class="block mt-2 text-violet-400 hover:text-violet-300">Go to Swiss &rarr;</a>
 		</div>
 	{:else}
-		<!-- Bracket selector -->
-		<div class="mt-4 flex gap-2">
-			<button onclick={() => activeBracket = 'main'}
-				class="rounded-lg px-4 py-2 text-sm font-medium transition-colors {activeBracket === 'main' ? 'bg-violet-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}">
-				Main Bracket
-			</button>
-			<button onclick={() => activeBracket = 'redemption'}
-				class="rounded-lg px-4 py-2 text-sm font-medium transition-colors {activeBracket === 'redemption' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}">
-				Redemption Bracket
-			</button>
-			<button onclick={syncFromStartGG} disabled={syncingFromStartGG}
-				class="ml-auto rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-500 hover:border-violet-700 hover:text-violet-400 transition-colors disabled:opacity-50"
-				title="Sync from StartGG — pulls results and overwrites MSV Hub's bracket state">
-				{syncingFromStartGG ? 'Syncing...' : 'Sync from StartGG'}
-			</button>
-			{#if syncResult}<pre class="ml-2 text-xs text-green-400 whitespace-pre-wrap">{syncResult}</pre>{/if}
+		<!-- Both brackets side by side -->
+		<div class="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
+			{#each ['main', 'redemption'] as bracketName (bracketName)}
+				{@const bracket = tournament!.brackets![bracketName as 'main' | 'redemption']}
+				{#if bracket}
+					{@const totalMatches = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).length}
+					{@const doneMatches = bracket.matches.filter((m) => m.winnerId).length}
+					{@const readyMatches = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId && !m.winnerId)}
+					{@const calledMatches = readyMatches.filter((m) => m.calledAt)}
+
+					<section class="min-w-0 rounded-xl border {bracketName === 'main' ? 'border-violet-800/50' : 'border-red-800/50'} bg-gray-900/50 p-4">
+						<div class="flex items-center justify-between mb-2">
+							<h2 class="text-sm font-semibold {bracketName === 'main' ? 'text-violet-300' : 'text-red-300'}">
+								{bracketName === 'main' ? 'Main Bracket' : 'Redemption Bracket'}
+							</h2>
+							<button onclick={() => { activeBracket = bracketName as 'main' | 'redemption'; syncFromStartGG(); }} disabled={syncingFromStartGG}
+								class="rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-500 hover:border-violet-700 hover:text-violet-400 transition-colors disabled:opacity-50">
+								{syncingFromStartGG && activeBracket === bracketName ? 'Syncing...' : 'Sync'}
+							</button>
+						</div>
+
+						<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+							<span>{bracket.players.length} players · {doneMatches}/{totalMatches} matches</span>
+							{#if readyMatches.length > 0}
+								<span class="{calledMatches.length === readyMatches.length ? 'text-green-400' : 'text-gray-400'}">
+									{calledMatches.length}/{readyMatches.length} called
+									{#if calledMatches.length === readyMatches.length}&nbsp;✓{/if}
+								</span>
+							{/if}
+							{#if bracket.matches.some((m) => m.isStream && !m.winnerId)}
+								{@const streamM = bracket.matches.find((m) => m.isStream && !m.winnerId)!}
+								<span class="text-violet-400">Stream: {getEntrant(streamM.topPlayerId)?.gamerTag} vs {getEntrant(streamM.bottomPlayerId)?.gamerTag}</span>
+							{/if}
+						</div>
+
+						{#if syncResult && activeBracket === bracketName}
+							<pre class="mt-1 text-xs text-green-400 whitespace-pre-wrap">{syncResult}</pre>
+						{/if}
+
+						<div class="mt-3 overflow-x-auto">
+							<BracketView
+								bracket={bracket}
+								entrants={tournament!.entrants}
+								onReport={(m) => { activeBracket = bracketName as 'main' | 'redemption'; openReport(m); }}
+								onCall={(m) => { activeBracket = bracketName as 'main' | 'redemption'; callMatch(m); }}
+								onStream={(m) => { activeBracket = bracketName as 'main' | 'redemption'; setStreamMatch(m); }} />
+						</div>
+					</section>
+				{/if}
+			{/each}
 		</div>
 
-		{@const bracket = getBracket()}
-		{#if bracket}
-			{@const totalMatches = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).length}
-			{@const doneMatches = bracket.matches.filter((m) => m.winnerId).length}
-			{@const readyMatches = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId && !m.winnerId)}
-			{@const calledMatches = readyMatches.filter((m) => m.calledAt)}
-
-			<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-				<span>{bracket.players.length} players · {doneMatches}/{totalMatches} matches complete</span>
-				{#if readyMatches.length > 0}
-					<span class="{calledMatches.length === readyMatches.length ? 'text-green-400' : 'text-gray-400'}">
-						{calledMatches.length}/{readyMatches.length} called
-						{#if calledMatches.length === readyMatches.length}&nbsp;✓{/if}
-					</span>
-				{/if}
-				{#if bracket.matches.some((m) => m.isStream && !m.winnerId)}
-					{@const streamM = bracket.matches.find((m) => m.isStream && !m.winnerId)!}
-					<span class="text-violet-400">Stream: {getEntrant(streamM.topPlayerId)?.gamerTag} vs {getEntrant(streamM.bottomPlayerId)?.gamerTag}</span>
-				{/if}
-			</div>
-
-			<!-- Visual bracket (scrollable) -->
-			<div class="mt-4">
-				<BracketView
-					bracket={bracket}
-					entrants={tournament!.entrants}
-					onReport={openReport}
-					onCall={callMatch}
-					onStream={setStreamMatch} />
-			</div>
+		{@const bracket = getBracket()}{#if bracket}
 
 			<!-- Report modal -->
 			{#if reportingMatch}
