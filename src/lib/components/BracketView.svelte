@@ -297,7 +297,20 @@
 		Show Projected
 	</label>
 </div>
-<div class="overflow-x-auto rounded-xl border border-gray-800 bg-gray-950 p-4">
+<div class="overflow-x-auto rounded-xl border border-gray-800 bg-gray-950 p-4 cursor-grab active:cursor-grabbing"
+	role="region" aria-label="Bracket"
+	onmousedown={(e) => {
+		const el = e.currentTarget;
+		if ((e.target as HTMLElement).closest('button, a, input, label')) return;
+		e.preventDefault();
+		const startX = e.clientX;
+		const startScroll = el.scrollLeft;
+		el.style.cursor = 'grabbing';
+		const onMove = (ev: MouseEvent) => { el.scrollLeft = startScroll - (ev.clientX - startX); };
+		const onUp = () => { el.style.cursor = ''; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+		window.addEventListener('mousemove', onMove);
+		window.addEventListener('mouseup', onUp);
+	}}>
 	<!-- Winners round labels -->
 	<div class="relative" style="width: {layout.width}px; height: 16px; margin-bottom: 2px">
 		{#each winnersRoundLabels as [x, match]}
