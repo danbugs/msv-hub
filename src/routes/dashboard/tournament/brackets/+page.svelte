@@ -450,13 +450,13 @@
 					{@const readyMatches = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId && !m.winnerId)}
 					{@const calledMatches = readyMatches.filter((m) => m.calledAt)}
 
-					<section class="min-w-0 rounded-xl border {bracketName === 'main' ? 'border-violet-800/50' : 'border-red-800/50'} bg-gray-900/50 p-4">
+					<section class="min-w-0 rounded-xl border {bracketName === 'main' ? 'border-sky-700/30' : 'border-red-700/30'} bg-gray-900/40 p-4">
 						<div class="flex items-center justify-between mb-2">
-							<h2 class="text-sm font-semibold {bracketName === 'main' ? 'text-violet-300' : 'text-red-300'}">
+							<h2 class="text-sm font-bold {bracketName === 'main' ? 'text-sky-400' : 'text-red-400'}">
 								{bracketName === 'main' ? 'Main Bracket' : 'Redemption Bracket'}
 							</h2>
 							<button onclick={() => { activeBracket = bracketName as 'main' | 'redemption'; syncFromStartGG(); }} disabled={syncingFromStartGG}
-								class="rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-500 hover:border-violet-700 hover:text-violet-400 transition-colors disabled:opacity-50">
+								class="rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-500 hover:border-sky-700 hover:text-sky-400 transition-colors disabled:opacity-50">
 								{syncingFromStartGG && activeBracket === bracketName ? 'Syncing...' : 'Sync'}
 							</button>
 						</div>
@@ -517,11 +517,11 @@
 						<!-- Step 1: Pick winner -->
 						<div class="mt-4 flex gap-2">
 							<button onclick={() => { reportWinnerId = reportingMatch!.topPlayerId!; reportScore = ''; }}
-								class="flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors {reportWinnerId === reportingMatch.topPlayerId ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
+								class="flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors {reportWinnerId === reportingMatch.topPlayerId ? 'bg-emerald-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
 								{top?.gamerTag ?? '?'}
 							</button>
 							<button onclick={() => { reportWinnerId = reportingMatch!.bottomPlayerId!; reportScore = ''; }}
-								class="flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors {reportWinnerId === reportingMatch.bottomPlayerId ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
+								class="flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors {reportWinnerId === reportingMatch.bottomPlayerId ? 'bg-emerald-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
 								{bot?.gamerTag ?? '?'}
 							</button>
 						</div>
@@ -570,12 +570,12 @@
 											<span class="text-xs text-gray-500">G{gameIdx + 1}</span>
 											<button type="button" onclick={() => toggleGameWinner(gameIdx)}
 												class="rounded px-1.5 py-0.5 text-xs font-medium transition-colors
-													{gameWinners[gameIdx] === 'top' ? 'bg-green-700/60 text-green-200' : 'bg-gray-700 text-gray-400 hover:text-white'}">
+													{gameWinners[gameIdx] === 'top' ? 'bg-emerald-600/40 text-emerald-200' : 'bg-gray-700 text-gray-400 hover:text-white'}">
 												{gameWinners[gameIdx] === 'top' ? 'W' : 'L'} {top?.gamerTag ?? '?'}
 											</button>
 											<button type="button" onclick={() => toggleGameWinner(gameIdx)}
 												class="rounded px-1.5 py-0.5 text-xs font-medium transition-colors
-													{gameWinners[gameIdx] === 'bottom' ? 'bg-green-700/60 text-green-200' : 'bg-gray-700 text-gray-400 hover:text-white'}">
+													{gameWinners[gameIdx] === 'bottom' ? 'bg-emerald-600/40 text-emerald-200' : 'bg-gray-700 text-gray-400 hover:text-white'}">
 												{gameWinners[gameIdx] === 'bottom' ? 'W' : 'L'} {bot?.gamerTag ?? '?'}
 											</button>
 										</div>

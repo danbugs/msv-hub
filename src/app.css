@@ -58,4 +58,25 @@
   --color-green-300:  oklch(38% 0.14 150);
   --color-green-400:  oklch(42% 0.15 150);
   --color-red-400:    oklch(42% 0.18 27);
+  --color-emerald-300: oklch(38% 0.14 163);
+  --color-emerald-400: oklch(42% 0.15 163);
+  --color-sky-300:     oklch(44% 0.16 235);
+  --color-sky-400:     oklch(48% 0.18 235);
+}
+
+/* Bracket connector lines */
+:root, [data-theme="dark"] {
+  --bracket-connector: #4b5563;
+}
+[data-theme="light"] {
+  --bracket-connector: #d1d5db;
+}
+
+/* Called match pulse */
+@keyframes msv-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+  50% { box-shadow: 0 0 12px 2px rgba(245, 158, 11, 0.08); }
+}
+.msv-pulse {
+  animation: msv-pulse 2s ease-in-out infinite;
 }
