@@ -235,10 +235,8 @@ Examples (don't copy, match this vibe, and pick a DIFFERENT topic each time):
 "what's the most hype match u've seen at micro?"
 "who's ur favorite player to watch at micro?"
 "what was ur first micro like?"`;
-
-
-
-
+	} else {
+		userPrompt = `Write a short one-liner about ${char} from Smash Ultimate. Keep it to 1 sentence. Corny puns on the name are ideal.`;
 	}
 
 	const systemPrompt = `You are Balrog, a Discord bot for MSV (Microspacing Vancouver), a Smash Bros Ultimate weekly local. You post short casual messages to #general. You're a bot, not a player.
