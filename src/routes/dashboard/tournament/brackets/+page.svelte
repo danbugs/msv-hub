@@ -448,9 +448,9 @@
 					{@const readyMatches = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId && !m.winnerId)}
 					{@const calledMatches = readyMatches.filter((m) => m.calledAt)}
 
-					<section class="min-w-0 rounded-xl border {bracketName === 'main' ? 'border-sky-700/30' : 'border-red-700/30'} bg-card/40 p-4">
+					<section class="min-w-0 rounded-xl border {bracketName === 'main' ? 'border-primary/20' : 'border-destructive/20'} bg-card/50 p-4" style="box-shadow: var(--shadow-card)">
 						<div class="flex items-center justify-between mb-2">
-							<h2 class="text-sm font-bold {bracketName === 'main' ? 'text-sky-400' : 'text-red-400'}">
+							<h2 class="text-sm font-bold {bracketName === 'main' ? 'text-primary' : 'text-destructive'}">
 								{bracketName === 'main' ? 'Main Bracket' : 'Redemption Bracket'}
 							</h2>
 							<Button variant="outline" size="sm" onclick={() => { activeBracket = bracketName as 'main' | 'redemption'; syncFromStartGG(); }} disabled={syncingFromStartGG}>
@@ -499,8 +499,8 @@
 				{@const isBo5 = activeBracket === 'main' ? isTop8 : (bracket ? isFinalsMatch(reportingMatch, bracket) : false)}
 				{@const showChars = isTop8 || isBo5}
 
-				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-					<div class="w-full max-w-sm rounded-xl bg-card border border-border p-5">
+				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+					<div class="w-full max-w-sm rounded-xl bg-card border border-border p-5 shadow-elevated">
 						<div class="flex items-start justify-between">
 							<div>
 								<h3 class="text-base font-semibold text-foreground">Report Match</h3>
@@ -652,7 +652,7 @@
 
 	<!-- Swiss summary (expandable) -->
 	{#if tournament?.rounds?.length}
-		<details class="mt-8 rounded-lg border border-border bg-card">
+		<details class="mt-8 rounded-lg border border-border bg-card" style="box-shadow: var(--shadow-card)">
 			<summary class="cursor-pointer px-4 py-3 text-sm font-medium text-foreground">Swiss Rounds & Final Standings</summary>
 			<div class="px-4 pb-4 space-y-4">
 				<!-- Swiss rounds -->

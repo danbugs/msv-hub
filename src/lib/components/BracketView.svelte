@@ -297,7 +297,7 @@
 		Show Projected
 	</label>
 </div>
-<div class="overflow-x-auto rounded-xl border border-border bg-background/80 p-5 cursor-grab active:cursor-grabbing"
+<div class="overflow-x-auto rounded-xl border border-border bg-background/60 p-5 cursor-grab active:cursor-grabbing"
 	role="region" aria-label="Bracket"
 	onmousedown={(e) => {
 		const el = e.currentTarget;
@@ -332,11 +332,11 @@
 		<svg class="absolute inset-0 pointer-events-none overflow-visible"
 			width={layout.width} height={layout.height}>
 			{#each layout.connectors as c}
-				<line x1={c.x1} y1={c.y1} x2={c.mx} y2={c.y1} stroke="var(--bracket-connector)" stroke-width="1.5" />
+				<line x1={c.x1} y1={c.y1} x2={c.mx} y2={c.y1} stroke="var(--bracket-connector)" stroke-width="1.5" stroke-linecap="round" />
 				{#if c.y1 !== c.y2}
-					<line x1={c.mx} y1={c.y1} x2={c.mx} y2={c.y2} stroke="var(--bracket-connector)" stroke-width="1.5" />
+					<line x1={c.mx} y1={c.y1} x2={c.mx} y2={c.y2} stroke="var(--bracket-connector)" stroke-width="1.5" stroke-linecap="round" />
 				{/if}
-				<line x1={c.mx} y1={c.y2} x2={c.x2} y2={c.y2} stroke="var(--bracket-connector)" stroke-width="1.5" />
+				<line x1={c.mx} y1={c.y2} x2={c.x2} y2={c.y2} stroke="var(--bracket-connector)" stroke-width="1.5" stroke-linecap="round" />
 			{/each}
 		</svg>
 
@@ -352,8 +352,8 @@
 			{@const called = ready && !!match.calledAt}
 			{@const accent = called ? 'var(--accent-called)' : match.isStream && ready ? 'var(--accent-stream)' : ready ? 'var(--accent-ready)' : match.winnerId ? 'var(--accent-completed)' : 'var(--accent-waiting)'}
 
-			<div class="absolute rounded-lg border border-border overflow-hidden bg-card {called ? 'msv-pulse' : ''}"
-				style="left: {x}px; top: {y}px; width: {CARD_W}px; border-left: 4px solid {accent}">
+			<div class="absolute rounded-lg border border-border overflow-hidden bg-card match-card {called ? 'msv-pulse accent-glow-called' : ''} {ready ? 'match-card-interactive' : ''}"
+				style="left: {x}px; top: {y}px; width: {CARD_W}px; border-left: 3px solid {accent}">
 
 				<!-- Top player -->
 				<div class="flex items-center gap-1.5 px-2 py-1.5 border-b border-border/50

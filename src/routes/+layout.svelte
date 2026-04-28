@@ -25,9 +25,9 @@
 
 <div class="min-h-screen bg-background text-foreground">
 	{#if data.user}
-		<nav class="border-b border-border bg-card/80 backdrop-blur">
-			<div class="flex items-center justify-between px-4 py-3">
-				<a href="/dashboard" class="text-lg font-bold text-primary">MSV Hub</a>
+		<nav class="nav-border bg-card/90 backdrop-blur-md">
+			<div class="flex items-center justify-between px-5 py-3">
+				<a href="/dashboard" class="text-lg font-extrabold tracking-tight text-primary hover:text-primary/85 transition-colors">MSV Hub</a>
 				<div class="flex items-center gap-4">
 					<span class="text-sm text-muted-foreground">{data.user.email}</span>
 					<button
