@@ -47,42 +47,12 @@
 			<div class="pb-6 pt-1 min-w-0 flex-1">
 				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Tuesday — Setup</p>
 
-				<!-- ① Create Event on StartGG -->
-				<button onclick={() => toggle('startgg-setup')}
-					class="w-full text-left rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
-					<div class="font-medium text-white">① Create Event on StartGG</div>
-					<div class="mt-0.5 text-sm text-gray-400">Create the next event, configure visibility, and add TOs</div>
-				</button>
-				{#if expandedStep === 'startgg-setup'}
-					<div class="mt-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4 text-sm text-gray-300 space-y-3">
-						<p class="font-medium text-white">Create the event:</p>
-						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Go to <strong class="text-gray-200">start.gg</strong> and create a new tournament.</li>
-							<li>Set the tournament name and add the Discord join link as the contact type.</li>
-							<li>Set the start date to <strong class="text-gray-200">6 PM Monday</strong> and end date to <strong class="text-gray-200">11 PM Monday</strong>.</li>
-							<li>Select <strong class="text-gray-200">Copy settings from previous event</strong> and link it to the Microspacing Hub.</li>
-						</ol>
-						<p class="font-medium text-white">Configure the event dashboard:</p>
-						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Set <strong class="text-gray-200">Homepage</strong> visibility to public (link only).</li>
-							<li>Set <strong class="text-gray-200">Events</strong> to public with brackets and seeding hidden.</li>
-							<li>Set <strong class="text-gray-200">Registration</strong> to public and <strong class="text-gray-200">Attendees</strong> to public.</li>
-							<li>Under <strong class="text-gray-200">Details</strong>, set the short slug to <code class="bg-gray-800 px-1 rounded text-xs text-violet-300">microspacing-van</code>.</li>
-						</ol>
-						<p class="font-medium text-white">Add TOs:</p>
-						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Go to <strong class="text-gray-200">Attendees</strong> and add the weekly TOs. Aim for <strong class="text-gray-200">3 TOs per event (no more than 4)</strong>.</li>
-							<li>If short on TOs, ping volunteers and offer them priority registration.</li>
-							<li>When adding a TO, register them for <strong class="text-gray-200">Swiss only</strong> (MSV Hub auto-assigns them to Main/Redemption via bracket split).</li>
-							<li>In custom options, select whether the TO is bringing a setup (TOs usually should). Select <strong class="text-gray-200">no</strong> to it being "past Wednesday 8:30 AM".</li>
-							<li>Mark that the TO consents to being livestreamed during the event.</li>
-						</ol>
-						<p class="font-medium text-white">Microsoft registration:</p>
-						<ol class="list-decimal list-inside space-y-1.5 text-gray-400">
-							<li>Post in the Microsoft Microspacing chat that registration is live.</li>
-						</ol>
-					</div>
-				{/if}
+				<!-- ① Create Event on StartGG (automated) -->
+				<a href="/dashboard/event-setup"
+					class="block rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
+					<div class="font-medium text-white">① Create Event on StartGG <span class="ml-1.5 text-xs font-normal text-green-400">automated</span></div>
+					<div class="mt-0.5 text-sm text-gray-400">Auto-created every Tuesday at 9 AM — manage TOs, config, and manual trigger</div>
+				</a>
 
 				<!-- ② Discord Setup -->
 				<a href="/dashboard/pre-tournament/discord"
