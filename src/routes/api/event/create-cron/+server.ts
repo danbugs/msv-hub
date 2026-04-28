@@ -103,6 +103,11 @@ async function handleCreateEvent(request: Request) {
 	}
 
 	const config = await getEventConfig();
+
+	if (config.paused) {
+		return Response.json({ ok: true, steps: [], reason: 'Event creation is paused' });
+	}
+
 	const eventNumber = config.nextEventNumber;
 	const eventName = `Microspacing Vancouver #${eventNumber}`;
 	const { startAt, endAt } = getNextMondayTimestamps();
@@ -226,18 +231,17 @@ async function handleCreateEvent(request: Request) {
 		});
 	}
 
-	// Step 9: Trigger pre-tournament Discord setup
+	// Step 9: Trigger pre-tournament Discord setup (uses CRON_SECRET auth)
 	await step('Trigger Discord pre-tournament setup', async () => {
 		const appUrl = env.APP_URL ?? 'http://localhost:5173';
 		const res = await fetch(`${appUrl}/api/discord/pre-tournament-setup`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
-				'Cookie': `session=${env.CRON_INTERNAL_SESSION ?? ''}`
+				'Authorization': `Bearer ${cronSecret}`
 			}
 		});
 		if (!res.ok) {
-			// Best-effort — pre-tournament setup can be triggered manually
 			const body = await res.text().catch(() => '');
 			throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
 		}

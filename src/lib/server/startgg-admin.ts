@@ -875,67 +875,91 @@ export interface TournamentRegistrationInfo {
 }
 
 /**
- * Discover registration configuration for a newly cloned tournament.
- * Queries the tournament's events/phases via GQL, then fetches pass type
- * and registration option IDs via the admin REST endpoint.
+ * Discover registration configuration for a tournament.
+ *
+ * Uses the internal GQL endpoint to query registrationOptions with their
+ * value IDs. The "Venue Fee" option's value ID serves as the passTypeId.
+ * Custom registration question value IDs are extracted by matching
+ * known field patterns: "bring a setup" → first value (= "Yes"),
+ * "past Wednesday" → second value (= "No"), "livestream" → checkbox value.
  */
 export async function getTournamentRegistrationInfo(
 	tournamentSlug: string
 ): Promise<TournamentRegistrationInfo | null> {
+	// Get events and phases via public GQL
 	type TData = {
 		tournament: {
 			id: number;
 			events: { id: number; name: string; phases: { id: number }[] }[];
 		};
 	};
-	const data = await gql<TData>(
+	const evData = await gql<TData>(
 		`query($slug: String!) {
 			tournament(slug: $slug) {
 				id
-				events {
-					id
-					name
-					phases { id }
-				}
+				events { id name phases { id } }
 			}
 		}`,
 		{ slug: tournamentSlug },
 		{ delay: 0 }
 	);
 
-	if (!data?.tournament?.events?.length) return null;
+	if (!evData?.tournament?.events?.length) return null;
 
-	const swissEvent = data.tournament.events[0];
+	const swissEvent = evData.tournament.events[0];
 	const phaseId = swissEvent.phases?.[0]?.id;
 	if (!phaseId) return null;
 
-	// Fetch tournament registration details via internal REST
-	const res = await adminFetch(
-		`https://www.start.gg/api/-/rest/tournament/${tournamentSlug}?expand=%5B%22registration%22%5D`,
-		{ method: 'GET' }
-	);
+	const tournamentId = evData.tournament.id;
 
-	let passTypeId = 0;
-	const regOptionValueIds: number[] = [];
-
-	if (res.ok) {
-		const regData = await res.json().catch(() => null);
-		const passTypes = regData?.entities?.registration?.passTypes
-			?? regData?.entities?.passTypes
-			?? regData?.passTypes;
-		if (Array.isArray(passTypes) && passTypes.length > 0) {
-			passTypeId = Number(passTypes[0].id);
-			const options = passTypes[0].registrationOptions ?? passTypes[0].options ?? [];
-			for (const opt of options) {
-				if (opt.values && Array.isArray(opt.values)) {
-					for (const val of opt.values) {
-						regOptionValueIds.push(Number(val.id));
-					}
-				} else if (opt.id) {
-					regOptionValueIds.push(Number(opt.id));
+	// Get registration options via admin GQL
+	type RegOpt = {
+		id: number;
+		name: string;
+		optionType: string;
+		fieldType: string;
+		values: { id: number }[];
+	};
+	type RegData = {
+		tournament: { registrationOptions: RegOpt[] };
+	};
+	const regData = await adminGql<RegData>(
+		`query($id: ID!) {
+			tournament(id: $id) {
+				registrationOptions {
+					id name optionType fieldType
+					values { id }
 				}
 			}
-		}
+		}`,
+		{ id: tournamentId }
+	);
+
+	const opts = regData?.tournament?.registrationOptions ?? [];
+
+	// passTypeId = value ID of the "Venue Fee" option (type=tournament)
+	const venueFee = opts.find((o) => o.optionType === 'tournament');
+	const passTypeId = venueFee?.values?.[0]?.id ?? 0;
+
+	// Registration option value IDs for TO registration:
+	//  1. "bring a setup" → first value (Yes)
+	//  2. "past Wednesday" → second value (No)
+	//  3. "livestream" → checkbox value (checked=true)
+	const regOptionValueIds: number[] = [];
+
+	const setupOpt = opts.find((o) => o.name?.toLowerCase().includes('bring a setup'));
+	if (setupOpt?.values?.length) {
+		regOptionValueIds.push(Number(setupOpt.values[0].id));
+	}
+
+	const wednesdayOpt = opts.find((o) => o.name?.toLowerCase().includes('past wednesday'));
+	if (wednesdayOpt?.values?.length && wednesdayOpt.values.length >= 2) {
+		regOptionValueIds.push(Number(wednesdayOpt.values[1].id));
+	}
+
+	const livestreamOpt = opts.find((o) => o.name?.toLowerCase().includes('livestream'));
+	if (livestreamOpt?.values?.length) {
+		regOptionValueIds.push(Number(livestreamOpt.values[0].id));
 	}
 
 	return {

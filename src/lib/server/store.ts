@@ -305,6 +305,8 @@ export interface EventConfig {
 	tos: TOConfig[];
 	lastCreatedTournamentId?: number;
 	lastCreatedTournamentSlug?: string;
+	/** When true, the Tuesday cron skips event creation. */
+	paused: boolean;
 	updatedAt: number;
 }
 
@@ -323,6 +325,7 @@ const DEFAULT_EVENT_CONFIG: EventConfig = {
 		{ name: 'Bochito', discriminator: 'ccda65ba', prefix: '', autoRegister: true },
 		{ name: 'Little Cheese', discriminator: 'acdd13db', prefix: '', autoRegister: false }
 	],
+	paused: false,
 	updatedAt: 0
 };
 

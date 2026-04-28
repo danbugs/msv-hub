@@ -18,6 +18,7 @@
 		tos: TOConfig[];
 		lastCreatedTournamentId?: number;
 		lastCreatedTournamentSlug?: string;
+		paused: boolean;
 		updatedAt: number;
 	}
 
@@ -69,6 +70,16 @@
 			message = 'Save failed';
 		}
 		saving = false;
+	}
+
+	async function togglePaused() {
+		if (!config) return;
+		const res = await fetch('/api/event/config', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ paused: !config.paused })
+		});
+		if (res.ok) config = await res.json();
 	}
 
 	async function addTO() {
@@ -172,6 +183,27 @@
 	{#if loading}
 		<div class="animate-pulse text-gray-500">Loading...</div>
 	{:else if config}
+
+		<!-- Pause Toggle -->
+		<section class="rounded-xl border {config.paused ? 'border-amber-700 bg-amber-900/10' : 'border-green-800 bg-green-900/10'} p-4 mb-6 flex items-center justify-between">
+			<div>
+				<p class="font-medium {config.paused ? 'text-amber-300' : 'text-green-300'}">
+					{config.paused ? 'Event creation paused' : 'Event creation active'}
+				</p>
+				<p class="text-sm text-gray-400 mt-0.5">
+					{config.paused
+						? 'The Tuesday cron will skip event creation until unpaused.'
+						: `Next run will create Microspacing Vancouver #${config.nextEventNumber}.`}
+				</p>
+			</div>
+			<button onclick={togglePaused}
+				class="rounded-lg px-4 py-2 text-sm font-medium transition-colors
+					{config.paused
+						? 'bg-green-800 text-white hover:bg-green-700'
+						: 'bg-amber-800 text-white hover:bg-amber-700'}">
+				{config.paused ? 'Unpause' : 'Pause'}
+			</button>
+		</section>
 
 		<!-- Event Config -->
 		<section class="rounded-xl border border-gray-800 bg-gray-900 p-5 mb-6">

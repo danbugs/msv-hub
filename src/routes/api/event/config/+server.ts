@@ -18,11 +18,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const body = await request.json();
-	const { nextEventNumber, srcTournamentId, shortSlug, discordLink } = body as {
+	const { nextEventNumber, srcTournamentId, shortSlug, discordLink, paused } = body as {
 		nextEventNumber?: number;
 		srcTournamentId?: number;
 		shortSlug?: string;
 		discordLink?: string;
+		paused?: boolean;
 	};
 
 	const updates: Record<string, unknown> = {};
@@ -30,6 +31,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (srcTournamentId !== undefined) updates.srcTournamentId = srcTournamentId;
 	if (shortSlug !== undefined) updates.shortSlug = shortSlug;
 	if (discordLink !== undefined) updates.discordLink = discordLink;
+	if (paused !== undefined) updates.paused = paused;
 
 	const updated = await saveEventConfig(updates);
 	return Response.json(updated);

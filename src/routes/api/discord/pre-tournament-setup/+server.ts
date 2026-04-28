@@ -61,8 +61,12 @@ interface StepResult {
 	detail: string;
 }
 
-export const POST: RequestHandler = async ({ locals, url }) => {
-	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+export const POST: RequestHandler = async ({ locals, url, request }) => {
+	// Accept either session auth or CRON_SECRET bearer token (for automated triggers)
+	const cronSecret = env.CRON_SECRET;
+	const authHeader = request.headers.get('Authorization') ?? '';
+	const cronAuth = cronSecret && authHeader === `Bearer ${cronSecret}`;
+	if (!locals.user && !cronAuth) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const dry = url.searchParams.get('dry') === 'true';
 
