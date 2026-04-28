@@ -284,6 +284,65 @@ export async function deleteTournament(slug: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Event creation config (automated Tuesday cron)
+// ---------------------------------------------------------------------------
+
+export interface TOConfig {
+	name: string;
+	discriminator: string;
+	playerId?: number;
+	prefix: string;
+	/** When true, this TO is auto-registered on event creation */
+	autoRegister: boolean;
+}
+
+export interface EventConfig {
+	nextEventNumber: number;
+	srcTournamentId: number;
+	hubIds: string[];
+	discordLink: string;
+	shortSlug: string;
+	tos: TOConfig[];
+	lastCreatedTournamentId?: number;
+	lastCreatedTournamentSlug?: string;
+	updatedAt: number;
+}
+
+const EVENT_CONFIG_KEY = 'event:config';
+
+const DEFAULT_EVENT_CONFIG: EventConfig = {
+	nextEventNumber: 139,
+	srcTournamentId: 904941,
+	hubIds: ['329'],
+	discordLink: 'https://discord.gg/jRQ7zC8aVw',
+	shortSlug: 'microspacing-van',
+	tos: [
+		{ name: 'Dantotto', discriminator: '566b1fb5', prefix: 'MSFT', autoRegister: true },
+		{ name: 'Momonokill', discriminator: 'e512184a', prefix: '', autoRegister: true },
+		{ name: 'Ticolol', discriminator: 'a5213bd8', prefix: '', autoRegister: true },
+		{ name: 'Bochito', discriminator: 'ccda65ba', prefix: '', autoRegister: true },
+		{ name: 'Little Cheese', discriminator: 'acdd13db', prefix: '', autoRegister: false }
+	],
+	updatedAt: 0
+};
+
+export async function getEventConfig(): Promise<EventConfig> {
+	const redis = getRedis();
+	const data = await redis.get<string>(EVENT_CONFIG_KEY);
+	if (!data) return { ...DEFAULT_EVENT_CONFIG, tos: [...DEFAULT_EVENT_CONFIG.tos] };
+	const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+	return { ...DEFAULT_EVENT_CONFIG, ...parsed };
+}
+
+export async function saveEventConfig(config: Partial<EventConfig>): Promise<EventConfig> {
+	const redis = getRedis();
+	const current = await getEventConfig();
+	const next: EventConfig = { ...current, ...config, updatedAt: Date.now() };
+	await redis.set(EVENT_CONFIG_KEY, JSON.stringify(next));
+	return next;
+}
+
+// ---------------------------------------------------------------------------
 // Distributed lock (SET NX with TTL) — serializes concurrent reports during
 // the preview→real conversion window.
 // ---------------------------------------------------------------------------

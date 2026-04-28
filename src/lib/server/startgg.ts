@@ -807,3 +807,35 @@ export async function pushBracketSeeding(
 	if (!data) return { ok: false, error: 'updatePhaseSeeding for bracket failed' };
 	return { ok: true };
 }
+
+/**
+ * Look up a start.gg user by their discriminator (8-char hex slug).
+ * Returns the player ID, gamerTag, and prefix needed for registration.
+ */
+export async function getUserByDiscriminator(
+	discriminator: string
+): Promise<{ userId: number; playerId: number; gamerTag: string; prefix: string } | null> {
+	type UserData = {
+		user: {
+			id: number;
+			player: { id: number; gamerTag: string; prefix: string | null } | null;
+		} | null;
+	};
+	const data = await gql<UserData>(
+		`query UserBySlug($slug: String!) {
+			user(slug: $slug) {
+				id
+				player { id gamerTag prefix }
+			}
+		}`,
+		{ slug: discriminator },
+		{ delay: 0 }
+	);
+	if (!data?.user?.player) return null;
+	return {
+		userId: data.user.id,
+		playerId: data.user.player.id,
+		gamerTag: data.user.player.gamerTag,
+		prefix: data.user.player.prefix ?? ''
+	};
+}

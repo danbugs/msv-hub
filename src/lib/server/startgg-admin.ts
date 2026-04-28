@@ -4,7 +4,8 @@
  */
 
 import { env } from '$env/dynamic/private';
-import { gql, EVENT_PHASES_QUERY, fetchPhaseGroups } from './startgg';
+import { gql, EVENT_PHASES_QUERY, fetchPhaseGroups, getUserByDiscriminator } from './startgg';
+import type { TOConfig } from './store';
 
 const PROD_GQL = 'https://www.start.gg/api/-/gql';
 const LOGIN_URL = 'https://www.start.gg/api/-/rest/user/login';
@@ -704,6 +705,326 @@ export async function finalizePlacements(
 		})
 	});
 
+	if (!res.ok) {
+		const text = await res.text().catch(() => '');
+		return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+	}
+	return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Automated event creation — clone, publish, register TOs, update slug
+// ---------------------------------------------------------------------------
+
+const CLONE_URL = 'https://www.start.gg/api/-/rest/tournament/cloneTournamentPublic';
+
+export interface CloneResult {
+	ok: boolean;
+	tournamentId?: number;
+	tournamentSlug?: string;
+	error?: string;
+}
+
+/**
+ * Clone a tournament from a template. Uses admin session cookies.
+ * The captcha field is set to empty — if start.gg requires a valid captcha
+ * for this endpoint even with an admin session, this call will fail and
+ * we'll need an alternative approach.
+ */
+export async function cloneTournament(opts: {
+	name: string;
+	startAt: number;
+	endAt: number;
+	srcTournamentId: number;
+	hubIds: string[];
+	discordLink: string;
+}): Promise<CloneResult> {
+	const payload = {
+		name: opts.name,
+		primaryContactType: 'discord',
+		primaryContact: opts.discordLink,
+		startAt: opts.startAt,
+		endAt: opts.endAt,
+		hubIds: opts.hubIds,
+		srcTournamentId: opts.srcTournamentId,
+		cloningOptions: {
+			details: true,
+			permissions: true,
+			events: true,
+			registrationOptions: true,
+			attendeeRequirements: true,
+			payments: true,
+			bracketSetup: true,
+			schedule: true,
+			stationsAndStreams: true,
+			blockList: true
+		},
+		captcha: '',
+		validationKey: 'create-new-tournament'
+	};
+
+	const res = await adminFetch(CLONE_URL, {
+		method: 'POST',
+		body: JSON.stringify(payload)
+	});
+
+	if (!res.ok) {
+		const text = await res.text().catch(() => '');
+		return { ok: false, error: `Clone failed HTTP ${res.status}: ${text.slice(0, 500)}` };
+	}
+
+	const data = await res.json().catch(() => null);
+	if (!data) return { ok: false, error: 'Clone returned unparseable response' };
+
+	const id = data.id ?? data.entities?.tournament?.id;
+	const slug = data.slug ?? data.entities?.tournament?.slug;
+	if (!id) return { ok: false, error: 'Clone response missing tournament ID' };
+
+	return { ok: true, tournamentId: Number(id), tournamentSlug: slug ? String(slug) : undefined };
+}
+
+/**
+ * Make a tournament's homepage public (visible via link).
+ * featureId 1 = homepage visibility.
+ */
+export async function publishHomepage(
+	tournamentId: number
+): Promise<{ ok: boolean; error?: string }> {
+	const data = await adminGql<{ updateProfilePublishing: { publishState: string } }>(
+		`mutation UpdatePublishing($profileType: String!, $profileId: ID!, $featureId: ID!, $publishState: PublishState!) {
+			updateProfilePublishing(profileType: $profileType, profileId: $profileId, featureId: $featureId, publishState: $publishState) {
+				id publishState __typename
+			}
+		}`,
+		{ profileType: 'tournament', profileId: tournamentId, featureId: 1, publishState: 'PUBLISHED' }
+	);
+	if (!data) return { ok: false, error: 'publishHomepage mutation failed' };
+	return { ok: true };
+}
+
+/**
+ * Make bracket and seeding public for all events in a tournament.
+ * featureId 5 = bracket/seeding visibility.
+ */
+export async function publishBracketSeeding(
+	tournamentId: number
+): Promise<{ ok: boolean; error?: string }> {
+	const data = await adminGql<{ bulkUpdateEventPublishing: { id: number }[] }>(
+		`mutation UpdatePhasePublishing($tournamentId: ID!, $featureId: ID!, $publishState: PublishState!, $eventId: ID) {
+			bulkUpdateEventPublishing(tournamentId: $tournamentId, featureId: $featureId, publishState: $publishState, eventId: $eventId) {
+				id __typename
+			}
+		}`,
+		{ tournamentId, featureId: 5, publishState: 'PUBLISHED' }
+	);
+	if (!data) return { ok: false, error: 'publishBracketSeeding mutation failed' };
+	return { ok: true };
+}
+
+/**
+ * Update tournament basic details — name, short slug, times, address, contact.
+ */
+export async function updateTournamentBasicDetails(
+	tournamentId: number,
+	fields: {
+		name: string;
+		shortSlug: string;
+		startAt: number;
+		endAt: number;
+		discordLink: string;
+	}
+): Promise<{ ok: boolean; error?: string }> {
+	const data = await adminGql(
+		`mutation UpdateBasicDetailsTournament($tournamentId: ID!, $fields: UpdateBasicFieldsTournament!) {
+			updateBasicFieldsTournament(tournamentId: $tournamentId, fields: $fields) {
+				id name slug shortSlug __typename
+			}
+		}`,
+		{
+			tournamentId,
+			fields: {
+				name: fields.name,
+				shortSlug: fields.shortSlug,
+				startAt: fields.startAt,
+				endAt: fields.endAt,
+				address: {
+					fullAddress: '725 Granville St Suite 700, Vancouver, BC V7Y 1G5, Canada',
+					placeId: 'ChIJMwJi79BxhlQR0iVeqmzGrY8',
+					city: 'Vancouver',
+					state: 'BC',
+					postalCode: 'V7Y 1G5',
+					countryCode: 'CA',
+					lat: 49.2820597,
+					lng: -123.1196942
+				},
+				primaryContactType: 'discord',
+				primaryContact: fields.discordLink
+			},
+			validationKey: 'updateTournament'
+		}
+	);
+	if (!data) return { ok: false, error: 'updateTournamentBasicDetails mutation failed' };
+	return { ok: true };
+}
+
+export interface TournamentRegistrationInfo {
+	eventId: number;
+	phaseId: number;
+	passTypeId: number;
+	registrationOptionValueIds: number[];
+}
+
+/**
+ * Discover registration configuration for a newly cloned tournament.
+ * Queries the tournament's events/phases via GQL, then fetches pass type
+ * and registration option IDs via the admin REST endpoint.
+ */
+export async function getTournamentRegistrationInfo(
+	tournamentSlug: string
+): Promise<TournamentRegistrationInfo | null> {
+	type TData = {
+		tournament: {
+			id: number;
+			events: { id: number; name: string; phases: { id: number }[] }[];
+		};
+	};
+	const data = await gql<TData>(
+		`query($slug: String!) {
+			tournament(slug: $slug) {
+				id
+				events {
+					id
+					name
+					phases { id }
+				}
+			}
+		}`,
+		{ slug: tournamentSlug },
+		{ delay: 0 }
+	);
+
+	if (!data?.tournament?.events?.length) return null;
+
+	const swissEvent = data.tournament.events[0];
+	const phaseId = swissEvent.phases?.[0]?.id;
+	if (!phaseId) return null;
+
+	// Fetch tournament registration details via internal REST
+	const res = await adminFetch(
+		`https://www.start.gg/api/-/rest/tournament/${tournamentSlug}?expand=%5B%22registration%22%5D`,
+		{ method: 'GET' }
+	);
+
+	let passTypeId = 0;
+	const regOptionValueIds: number[] = [];
+
+	if (res.ok) {
+		const regData = await res.json().catch(() => null);
+		const passTypes = regData?.entities?.registration?.passTypes
+			?? regData?.entities?.passTypes
+			?? regData?.passTypes;
+		if (Array.isArray(passTypes) && passTypes.length > 0) {
+			passTypeId = Number(passTypes[0].id);
+			const options = passTypes[0].registrationOptions ?? passTypes[0].options ?? [];
+			for (const opt of options) {
+				if (opt.values && Array.isArray(opt.values)) {
+					for (const val of opt.values) {
+						regOptionValueIds.push(Number(val.id));
+					}
+				} else if (opt.id) {
+					regOptionValueIds.push(Number(opt.id));
+				}
+			}
+		}
+	}
+
+	return {
+		eventId: swissEvent.id,
+		phaseId,
+		passTypeId,
+		registrationOptionValueIds: regOptionValueIds
+	};
+}
+
+/**
+ * Register a player (TO) for a tournament via the internal GQL endpoint.
+ * Resolves the player ID from their discriminator if not already known.
+ */
+export async function registerTOForTournament(
+	tournamentId: number,
+	to: TOConfig,
+	regInfo: TournamentRegistrationInfo
+): Promise<{ ok: boolean; playerId?: number; error?: string }> {
+	let playerId = to.playerId;
+	let prefix = to.prefix;
+	let gamerTag = to.name;
+
+	if (!playerId) {
+		const user = await getUserByDiscriminator(to.discriminator);
+		if (!user) return { ok: false, error: `Could not find player for discriminator ${to.discriminator}` };
+		playerId = user.playerId;
+		gamerTag = user.gamerTag;
+		prefix = user.prefix || to.prefix;
+	}
+
+	const registrationOptions: Record<string, unknown>[] = [];
+	if (regInfo.registrationOptionValueIds.length >= 1) {
+		registrationOptions.push({ paid: false, valueId: regInfo.registrationOptionValueIds[0] });
+	}
+	if (regInfo.registrationOptionValueIds.length >= 2) {
+		registrationOptions.push({ paid: false, valueId: regInfo.registrationOptionValueIds[1] });
+	}
+	if (regInfo.registrationOptionValueIds.length >= 3) {
+		registrationOptions.push({
+			paid: false,
+			valueId: regInfo.registrationOptionValueIds[2],
+			selection: { checked: true }
+		});
+	}
+
+	const variables = {
+		tournamentId,
+		fields: {
+			passTypeId: regInfo.passTypeId,
+			venueFeePaid: true,
+			events: [{
+				eventId: regInfo.eventId,
+				paid: true,
+				phaseId: regInfo.phaseId,
+				phaseGroupId: -1
+			}],
+			player: { id: playerId, prefix, gamerTag },
+			registrationOptions
+		}
+	};
+
+	const data = await adminGql<{ registerPlayer: { id: number } }>(
+		`mutation RegisterPlayer($tournamentId: ID!, $fields: RegisterPlayerData!) {
+			registerPlayer(tournamentId: $tournamentId, fields: $fields) {
+				id __typename
+			}
+		}`,
+		variables
+	);
+
+	if (!data?.registerPlayer) {
+		return { ok: false, error: 'RegisterPlayer mutation returned null' };
+	}
+
+	return { ok: true, playerId };
+}
+
+/**
+ * Remove (unregister) a participant from a tournament.
+ */
+export async function unregisterParticipant(
+	tournamentId: number,
+	participantId: number
+): Promise<{ ok: boolean; error?: string }> {
+	const res = await adminFetch(
+		`https://www.start.gg/api/-/rest/tournament/${tournamentId}/attendee/${participantId}`,
+		{ method: 'DELETE' }
+	);
 	if (!res.ok) {
 		const text = await res.text().catch(() => '');
 		return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
