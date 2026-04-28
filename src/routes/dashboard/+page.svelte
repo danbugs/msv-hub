@@ -57,8 +57,8 @@
 				<!-- ② Discord Setup -->
 				<a href="/dashboard/pre-tournament/discord"
 					class="mt-2 block rounded-lg border border-gray-800 bg-gray-900 p-4 transition-colors hover:border-violet-600 hover:bg-gray-800/50">
-					<div class="font-medium text-white">② Discord Setup</div>
-					<div class="mt-0.5 text-sm text-gray-400">Configure the announcement, waitlist monitoring, and pre-tournament forum posts</div>
+					<div class="font-medium text-white">② Discord Setup <span class="ml-1.5 text-xs font-normal text-green-400">automated</span></div>
+					<div class="mt-0.5 text-sm text-gray-400">Auto-triggered after event creation — configure announcement, waitlist monitoring, and forum posts</div>
 				</a>
 
 				<!-- ③ Priority Registration -->
