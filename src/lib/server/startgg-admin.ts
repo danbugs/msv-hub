@@ -562,27 +562,64 @@ export async function addEntrantsToPhase(
 }
 
 /**
- * Open (or close) tournament registration by toggling the publish state.
- * featureId 3 = registration visibility.
+ * Open (or close) tournament registration by publishing each event's registration.
+ * Must be done per-event (profileType 'event', featureId 3).
  */
 export async function setRegistrationPublished(
 	tournamentId: number,
 	published: boolean
 ): Promise<{ ok: boolean; error?: string }> {
-	const data = await adminGql<{ updateProfilePublishing: { publishState: string } }>(
-		`mutation UpdatePublishing($profileType: String!, $profileId: ID!, $featureId: ID!, $publishState: PublishState!) {
-			updateProfilePublishing(profileType: $profileType, profileId: $profileId, featureId: $featureId, publishState: $publishState) {
-				id publishState
-			}
-		}`,
-		{
-			profileType: 'tournament',
-			profileId: tournamentId,
-			featureId: 3,
-			publishState: published ? 'PUBLISHED' : 'ADMIN_ONLY'
+	const state = published ? 'PUBLISHED' : 'UNPUBLISHED';
+	const mutation = `mutation($profileType: String!, $profileId: ID!, $featureId: ID!, $publishState: PublishState!) {
+		updateProfilePublishing(profileType: $profileType, profileId: $profileId, featureId: $featureId, publishState: $publishState) {
+			id publishState
 		}
+	}`;
+
+	type EventsData = { tournament: { events: { id: number }[] } };
+	const eventsData = await adminGql<EventsData>(
+		`query($id: ID!) { tournament(id: $id) { events { id } } }`,
+		{ id: tournamentId }
 	);
-	if (!data) return { ok: false, error: 'UpdatePublishing mutation failed' };
+	const events = eventsData?.tournament?.events ?? [];
+	if (events.length === 0) return { ok: false, error: 'No events found' };
+
+	for (const event of events) {
+		const data = await adminGql(mutation, {
+			profileType: 'event', profileId: event.id, featureId: 3, publishState: state
+		});
+		if (!data) return { ok: false, error: `Failed to publish registration for event ${event.id}` };
+	}
+	return { ok: true };
+}
+
+/**
+ * Publish all events in a tournament (makes them visible on the tournament page).
+ * Must be done per-event (profileType 'event', featureId 1).
+ */
+export async function publishEvents(
+	tournamentId: number
+): Promise<{ ok: boolean; error?: string }> {
+	const mutation = `mutation($profileType: String!, $profileId: ID!, $featureId: ID!, $publishState: PublishState!) {
+		updateProfilePublishing(profileType: $profileType, profileId: $profileId, featureId: $featureId, publishState: $publishState) {
+			id publishState
+		}
+	}`;
+
+	type EventsData = { tournament: { events: { id: number }[] } };
+	const eventsData = await adminGql<EventsData>(
+		`query($id: ID!) { tournament(id: $id) { events { id } } }`,
+		{ id: tournamentId }
+	);
+	const events = eventsData?.tournament?.events ?? [];
+	if (events.length === 0) return { ok: false, error: 'No events found' };
+
+	for (const event of events) {
+		const data = await adminGql(mutation, {
+			profileType: 'event', profileId: event.id, featureId: 1, publishState: 'PUBLISHED'
+		});
+		if (!data) return { ok: false, error: `Failed to publish event ${event.id}` };
+	}
 	return { ok: true };
 }
 
@@ -1073,16 +1110,13 @@ export async function registerTOForTournament(
  * Remove (unregister) a participant from a tournament.
  */
 export async function unregisterParticipant(
-	tournamentId: number,
+	_tournamentId: number,
 	participantId: number
 ): Promise<{ ok: boolean; error?: string }> {
-	const res = await adminFetch(
-		`https://www.start.gg/api/-/rest/tournament/${tournamentId}/attendee/${participantId}`,
-		{ method: 'DELETE' }
+	const data = await adminGql<{ deleteParticipant: unknown[] }>(
+		`mutation($participantId: ID!) { deleteParticipant(participantId: $participantId) }`,
+		{ participantId }
 	);
-	if (!res.ok) {
-		const text = await res.text().catch(() => '');
-		return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
-	}
+	if (data === null) return { ok: false, error: 'deleteParticipant mutation failed' };
 	return { ok: true };
 }

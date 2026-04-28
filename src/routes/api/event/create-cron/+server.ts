@@ -23,6 +23,7 @@ import {
 	cloneTournament,
 	publishHomepage,
 	publishBracketSeeding,
+	publishEvents,
 	setRegistrationPublished,
 	updateTournamentBasicDetails,
 	getTournamentRegistrationInfo,
@@ -158,14 +159,21 @@ async function handleCreateEvent(request: Request) {
 		return 'Homepage set to public';
 	});
 
-	// Step 4: Publish bracket/seeding
+	// Step 4: Publish events (makes events visible on tournament page)
+	await step('Publish events', async () => {
+		const result = await publishEvents(tournamentId);
+		if (!result.ok) throw new Error(result.error ?? 'Failed');
+		return 'Events set to public';
+	});
+
+	// Step 5: Publish bracket/seeding
 	await step('Publish bracket/seeding', async () => {
 		const result = await publishBracketSeeding(tournamentId);
 		if (!result.ok) throw new Error(result.error ?? 'Failed');
 		return 'Bracket and seeding set to public';
 	});
 
-	// Step 5: Open registration
+	// Step 6: Open registration
 	await step('Open registration', async () => {
 		const result = await setRegistrationPublished(tournamentId, true);
 		if (!result.ok) throw new Error(result.error ?? 'Failed');
