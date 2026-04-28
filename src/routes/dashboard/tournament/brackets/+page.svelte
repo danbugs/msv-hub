@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import type { TournamentState, BracketMatch, BracketState, Entrant } from '$lib/types/tournament';
 	import BracketView from '$lib/components/BracketView.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { Badge } from '$lib/components/ui/badge';
 
 	let tournament = $state<TournamentState | null>(null);
 	let activeBracket = $state<'main' | 'redemption'>('main');
@@ -370,22 +372,22 @@
 </script>
 
 <main class="px-4 py-8">
-	<a href="/dashboard" class="text-sm text-violet-400 hover:text-violet-300">&larr; Dashboard</a>
+	<a href="/dashboard" class="text-sm text-primary hover:text-primary/80">&larr; Dashboard</a>
 	<div class="mt-4 flex flex-wrap items-center gap-4">
-		<h1 class="text-2xl font-bold text-white">Brackets</h1>
+		<h1 class="text-2xl font-bold text-foreground">Brackets</h1>
 		{#if tournament}
-			<a href="/live/{tournament.slug}" target="_blank" class="text-xs text-gray-500 hover:text-violet-400">
+			<a href="/live/{tournament.slug}" target="_blank" class="text-xs text-muted-foreground hover:text-primary">
 				Live: /live/{tournament.slug} ↗
 			</a>
 			<a href="/api/tournament/export?slug={tournament.slug}" target="_blank"
-				class="ml-auto text-xs text-gray-500 hover:text-violet-400">
+				class="ml-auto text-xs text-muted-foreground hover:text-primary">
 				Export JSON ↗
 			</a>
 		{/if}
 	</div>
 
 	{#if error}
-		<div class="mt-4 rounded-lg border border-red-800 bg-red-900/30 p-4 text-sm text-red-400">{error}</div>
+		<div class="mt-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">{error}</div>
 	{/if}
 
 	<!-- StartGG split confirmation -->
@@ -396,15 +398,11 @@
 				to Main and Redemption bracket events on StartGG, push seeding, and start reporting.
 			</p>
 			<div class="mt-2 flex items-center gap-3">
-				<button
-					onclick={confirmSplit}
-					disabled={splitConfirming}
-					class="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50 transition-colors"
-				>
+				<Button onclick={confirmSplit} disabled={splitConfirming} size="sm">
 					{splitConfirming ? 'Assigning players & seeding...' : 'Run Bracket Split'}
-				</button>
+				</Button>
 				{#if splitResult}
-					<span class="text-xs text-gray-400">
+					<span class="text-xs text-muted-foreground">
 						Flushed {splitResult.reported} match(es)
 						{#if splitResult.failed > 0}<span class="text-red-400">, {splitResult.failed} failed (see errors below)</span>{/if}
 					</span>
@@ -425,19 +423,19 @@
 	{#if tournament?.startggSync?.errors?.length}
 		<div class="mt-3 space-y-1">
 			{#each tournament.startggSync.errors as err}
-				<div class="flex items-start gap-2 rounded-lg border border-red-800 bg-red-900/20 px-3 py-2 text-xs text-red-400">
+				<div class="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
 					<span class="shrink-0 font-semibold">StartGG error</span>
 					<span class="min-w-0 break-words">{err.message}</span>
 				</div>
 			{/each}
-			<button onclick={clearStartggErrors} class="text-xs text-gray-600 hover:text-gray-400 transition-colors">Clear errors</button>
+			<button onclick={clearStartggErrors} class="text-xs text-muted-foreground hover:text-foreground transition-colors">Clear errors</button>
 		</div>
 	{/if}
 
 	{#if !tournament?.brackets}
-		<div class="mt-6 rounded-xl border border-dashed border-gray-700 p-8 text-center text-gray-500">
+		<div class="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
 			No brackets yet. Complete Swiss rounds first.
-			<a href="/dashboard/tournament/swiss" class="block mt-2 text-violet-400 hover:text-violet-300">Go to Swiss &rarr;</a>
+			<a href="/dashboard/tournament/swiss" class="block mt-2 text-primary hover:text-primary/80">Go to Swiss &rarr;</a>
 		</div>
 	{:else}
 		<!-- Both brackets side by side -->
@@ -450,28 +448,27 @@
 					{@const readyMatches = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId && !m.winnerId)}
 					{@const calledMatches = readyMatches.filter((m) => m.calledAt)}
 
-					<section class="min-w-0 rounded-xl border {bracketName === 'main' ? 'border-sky-700/30' : 'border-red-700/30'} bg-gray-900/40 p-4">
+					<section class="min-w-0 rounded-xl border {bracketName === 'main' ? 'border-sky-700/30' : 'border-red-700/30'} bg-card/40 p-4">
 						<div class="flex items-center justify-between mb-2">
 							<h2 class="text-sm font-bold {bracketName === 'main' ? 'text-sky-400' : 'text-red-400'}">
 								{bracketName === 'main' ? 'Main Bracket' : 'Redemption Bracket'}
 							</h2>
-							<button onclick={() => { activeBracket = bracketName as 'main' | 'redemption'; syncFromStartGG(); }} disabled={syncingFromStartGG}
-								class="rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-500 hover:border-sky-700 hover:text-sky-400 transition-colors disabled:opacity-50">
+							<Button variant="outline" size="sm" onclick={() => { activeBracket = bracketName as 'main' | 'redemption'; syncFromStartGG(); }} disabled={syncingFromStartGG}>
 								{syncingFromStartGG && activeBracket === bracketName ? 'Syncing...' : 'Sync'}
-							</button>
+							</Button>
 						</div>
 
-						<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+						<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
 							<span>{bracket.players.length} players · {doneMatches}/{totalMatches} matches</span>
 							{#if readyMatches.length > 0}
-								<span class="{calledMatches.length === readyMatches.length ? 'text-green-400' : 'text-gray-400'}">
+								<span class="{calledMatches.length === readyMatches.length ? 'text-green-400' : 'text-muted-foreground'}">
 									{calledMatches.length}/{readyMatches.length} called
 									{#if calledMatches.length === readyMatches.length}&nbsp;✓{/if}
 								</span>
 							{/if}
 							{#if bracket.matches.some((m) => m.isStream && !m.winnerId)}
 								{@const streamM = bracket.matches.find((m) => m.isStream && !m.winnerId)!}
-								<span class="text-violet-400">Stream: {getEntrant(streamM.topPlayerId)?.gamerTag} vs {getEntrant(streamM.bottomPlayerId)?.gamerTag}</span>
+								<span class="text-primary">Stream: {getEntrant(streamM.topPlayerId)?.gamerTag} vs {getEntrant(streamM.bottomPlayerId)?.gamerTag}</span>
 							{/if}
 						</div>
 
@@ -503,25 +500,25 @@
 				{@const showChars = isTop8 || isBo5}
 
 				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-					<div class="w-full max-w-sm rounded-xl bg-gray-900 border border-gray-700 p-5">
+					<div class="w-full max-w-sm rounded-xl bg-card border border-border p-5">
 						<div class="flex items-start justify-between">
 							<div>
-								<h3 class="text-base font-semibold text-white">Report Match</h3>
-								<p class="text-sm text-gray-400 mt-0.5">{top?.gamerTag ?? '?'} vs {bot?.gamerTag ?? '?'}</p>
+								<h3 class="text-base font-semibold text-foreground">Report Match</h3>
+								<p class="text-sm text-muted-foreground mt-0.5">{top?.gamerTag ?? '?'} vs {bot?.gamerTag ?? '?'}</p>
 							</div>
-							<span class="text-xs rounded-full px-2 py-0.5 {isBo5 ? 'bg-violet-900/60 text-violet-300' : 'bg-gray-800 text-gray-400'}">
+							<Badge variant={isBo5 ? 'default' : 'secondary'}>
 								{isBo5 ? 'BO5' : 'BO3'}
-							</span>
+							</Badge>
 						</div>
 
 						<!-- Step 1: Pick winner -->
 						<div class="mt-4 flex gap-2">
 							<button onclick={() => { reportWinnerId = reportingMatch!.topPlayerId!; reportScore = ''; }}
-								class="flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors {reportWinnerId === reportingMatch.topPlayerId ? 'bg-emerald-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
+								class="flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors {reportWinnerId === reportingMatch.topPlayerId ? 'bg-emerald-600 text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 								{top?.gamerTag ?? '?'}
 							</button>
 							<button onclick={() => { reportWinnerId = reportingMatch!.bottomPlayerId!; reportScore = ''; }}
-								class="flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors {reportWinnerId === reportingMatch.bottomPlayerId ? 'bg-emerald-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
+								class="flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors {reportWinnerId === reportingMatch.bottomPlayerId ? 'bg-emerald-600 text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 								{bot?.gamerTag ?? '?'}
 							</button>
 						</div>
@@ -532,12 +529,12 @@
 								<div class="mt-3 grid grid-cols-4 gap-2">
 									{#each ['3-0', '3-1', '3-2'] as s}
 										<button onclick={() => setScore(s)}
-											class="rounded-lg py-2 text-sm font-medium transition-colors {reportScore === s ? 'bg-violet-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
+											class="rounded-lg py-2 text-sm font-medium transition-colors {reportScore === s ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 											{s.replace('-', ' – ')}
 										</button>
 									{/each}
 									<button onclick={() => setScore('DQ')}
-										class="rounded-lg py-2 text-sm font-medium transition-colors {reportScore === 'DQ' ? 'bg-orange-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
+										class="rounded-lg py-2 text-sm font-medium transition-colors {reportScore === 'DQ' ? 'bg-orange-700 text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}"
 										title="Opponent did not show up">
 										DQ Win
 									</button>
@@ -546,12 +543,12 @@
 								<div class="mt-3 flex gap-2">
 									{#each ['2-0', '2-1'] as s}
 										<button onclick={() => setScore(s)}
-											class="flex-1 rounded-lg py-2 text-sm font-medium transition-colors {reportScore === s ? 'bg-violet-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}">
+											class="flex-1 rounded-lg py-2 text-sm font-medium transition-colors {reportScore === s ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 											{s.replace('-', ' – ')}
 										</button>
 									{/each}
 									<button onclick={() => setScore('DQ')}
-										class="flex-1 rounded-lg py-2 text-sm font-medium transition-colors {reportScore === 'DQ' ? 'bg-orange-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
+										class="flex-1 rounded-lg py-2 text-sm font-medium transition-colors {reportScore === 'DQ' ? 'bg-orange-700 text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}"
 										title="Opponent did not show up">
 										DQ Win
 									</button>
@@ -562,66 +559,66 @@
 						<!-- Step 3: Per-game details (winner + characters) -->
 						{#if reportWinnerId && reportScore && showChars && reportScore !== 'DQ'}
 							<div class="mt-3">
-								<p class="text-xs font-medium text-gray-400 mb-2">Per-game details</p>
+								<p class="text-xs font-medium text-muted-foreground mb-2">Per-game details</p>
 								<div class="space-y-2 max-h-64 overflow-y-auto">
 								{#each Array.from({length: numGames(reportScore)}, (_, i) => i) as gameIdx}
-									<div class="rounded-lg border border-gray-800 bg-gray-800/50 p-2">
+									<div class="rounded-lg border border-border bg-secondary/50 p-2">
 										<div class="flex items-center gap-2 mb-1.5">
-											<span class="text-xs text-gray-500">G{gameIdx + 1}</span>
+											<span class="text-xs text-muted-foreground">G{gameIdx + 1}</span>
 											<button type="button" onclick={() => toggleGameWinner(gameIdx)}
 												class="rounded px-1.5 py-0.5 text-xs font-medium transition-colors
-													{gameWinners[gameIdx] === 'top' ? 'bg-emerald-600/40 text-emerald-200' : 'bg-gray-700 text-gray-400 hover:text-white'}">
+													{gameWinners[gameIdx] === 'top' ? 'bg-emerald-600/40 text-emerald-200' : 'bg-muted text-muted-foreground hover:text-foreground'}">
 												{gameWinners[gameIdx] === 'top' ? 'W' : 'L'} {top?.gamerTag ?? '?'}
 											</button>
 											<button type="button" onclick={() => toggleGameWinner(gameIdx)}
 												class="rounded px-1.5 py-0.5 text-xs font-medium transition-colors
-													{gameWinners[gameIdx] === 'bottom' ? 'bg-emerald-600/40 text-emerald-200' : 'bg-gray-700 text-gray-400 hover:text-white'}">
+													{gameWinners[gameIdx] === 'bottom' ? 'bg-emerald-600/40 text-emerald-200' : 'bg-muted text-muted-foreground hover:text-foreground'}">
 												{gameWinners[gameIdx] === 'bottom' ? 'W' : 'L'} {bot?.gamerTag ?? '?'}
 											</button>
 										</div>
 										<div class="grid grid-cols-2 gap-2">
 											<div class="relative">
 												{#if gameTopChars[gameIdx]}
-													<div class="flex items-center gap-1 rounded bg-violet-700/30 px-2 py-1 text-xs text-white">
+													<div class="flex items-center gap-1 rounded bg-primary/20 px-2 py-1 text-xs text-foreground">
 														<span class="w-2 h-2 rounded-full shrink-0" style="background:{charColor(gameTopChars[gameIdx])}"></span>
 														<span class="flex-1 truncate">{gameTopChars[gameIdx]}</span>
-														<button type="button" onclick={() => clearGameChar('top', gameIdx)} class="text-gray-400 hover:text-white leading-none">×</button>
+														<button type="button" onclick={() => clearGameChar('top', gameIdx)} class="text-muted-foreground hover:text-foreground leading-none">×</button>
 													</div>
 												{:else}
 													<input bind:value={gameTopSearch[gameIdx]} placeholder="{top?.gamerTag ?? 'Top'}…"
-														class="w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
+														class="w-full rounded border border-input bg-secondary px-2 py-1 text-xs text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none" />
 													{#if gameTopSearch[gameIdx]}
-														<div class="absolute z-20 top-full left-0 mt-0.5 w-full rounded-lg border border-gray-700 bg-gray-900 shadow-xl max-h-36 overflow-y-auto">
+														<div class="absolute z-20 top-full left-0 mt-0.5 w-full rounded-lg border border-border bg-popover shadow-xl max-h-36 overflow-y-auto">
 															{#each filteredChars(gameTopSearch[gameIdx], []) as char}
 																<button type="button" onclick={() => setGameChar('top', gameIdx, char)}
-																	class="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white hover:bg-gray-700 text-left">
+																	class="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-popover-foreground hover:bg-accent text-left">
 																	<span class="w-2 h-2 rounded-full shrink-0" style="background:{charColor(char)}"></span>
 																	{char}
 																</button>
-															{:else}<div class="px-2 py-1.5 text-xs text-gray-500">No match</div>{/each}
+															{:else}<div class="px-2 py-1.5 text-xs text-muted-foreground">No match</div>{/each}
 														</div>
 													{/if}
 												{/if}
 											</div>
 											<div class="relative">
 												{#if gameBotChars[gameIdx]}
-													<div class="flex items-center gap-1 rounded bg-violet-700/30 px-2 py-1 text-xs text-white">
+													<div class="flex items-center gap-1 rounded bg-primary/20 px-2 py-1 text-xs text-foreground">
 														<span class="w-2 h-2 rounded-full shrink-0" style="background:{charColor(gameBotChars[gameIdx])}"></span>
 														<span class="flex-1 truncate">{gameBotChars[gameIdx]}</span>
-														<button type="button" onclick={() => clearGameChar('bot', gameIdx)} class="text-gray-400 hover:text-white leading-none">×</button>
+														<button type="button" onclick={() => clearGameChar('bot', gameIdx)} class="text-muted-foreground hover:text-foreground leading-none">×</button>
 													</div>
 												{:else}
 													<input bind:value={gameBotSearch[gameIdx]} placeholder="{bot?.gamerTag ?? 'Bot'}…"
-														class="w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
+														class="w-full rounded border border-input bg-secondary px-2 py-1 text-xs text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none" />
 													{#if gameBotSearch[gameIdx]}
-														<div class="absolute z-20 top-full left-0 mt-0.5 w-full rounded-lg border border-gray-700 bg-gray-900 shadow-xl max-h-36 overflow-y-auto">
+														<div class="absolute z-20 top-full left-0 mt-0.5 w-full rounded-lg border border-border bg-popover shadow-xl max-h-36 overflow-y-auto">
 															{#each filteredChars(gameBotSearch[gameIdx], []) as char}
 																<button type="button" onclick={() => setGameChar('bot', gameIdx, char)}
-																	class="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white hover:bg-gray-700 text-left">
+																	class="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-popover-foreground hover:bg-accent text-left">
 																	<span class="w-2 h-2 rounded-full shrink-0" style="background:{charColor(char)}"></span>
 																	{char}
 																</button>
-															{:else}<div class="px-2 py-1.5 text-xs text-gray-500">No match</div>{/each}
+															{:else}<div class="px-2 py-1.5 text-xs text-muted-foreground">No match</div>{/each}
 														</div>
 													{/if}
 												{/if}
@@ -633,8 +630,7 @@
 							</div>
 						{/if}
 												<div class="mt-5 flex gap-2">
-							<button onclick={submitReport} disabled={!reportWinnerId || !reportScore || submittingReport}
-								class="flex-1 rounded-lg bg-violet-600 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50 inline-flex items-center justify-center gap-2">
+							<Button class="flex-1" onclick={submitReport} disabled={!reportWinnerId || !reportScore || submittingReport}>
 								{#if submittingReport}
 									<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
 										<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"/>
@@ -644,11 +640,10 @@
 								{:else}
 									Submit
 								{/if}
-							</button>
-							<button onclick={() => reportingMatch = null} disabled={submittingReport}
-								class="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50">
+							</Button>
+							<Button variant="outline" onclick={() => reportingMatch = null} disabled={submittingReport}>
 								Cancel
-							</button>
+							</Button>
 						</div>
 					</div>
 				</div>
@@ -657,28 +652,28 @@
 
 	<!-- Swiss summary (expandable) -->
 	{#if tournament?.rounds?.length}
-		<details class="mt-8 rounded-lg border border-gray-800 bg-gray-900">
-			<summary class="cursor-pointer px-4 py-3 text-sm font-medium text-gray-300">Swiss Rounds & Final Standings</summary>
+		<details class="mt-8 rounded-lg border border-border bg-card">
+			<summary class="cursor-pointer px-4 py-3 text-sm font-medium text-foreground">Swiss Rounds & Final Standings</summary>
 			<div class="px-4 pb-4 space-y-4">
 				<!-- Swiss rounds -->
 				<div>
-					<h3 class="text-sm font-semibold text-white mb-2">Swiss Rounds</h3>
+					<h3 class="text-sm font-semibold text-foreground mb-2">Swiss Rounds</h3>
 					{#each [...tournament.rounds].reverse() as round}
 						<details class="mb-2">
-							<summary class="cursor-pointer text-xs font-medium text-gray-400 hover:text-white">
-								Round {round.number} <span class="text-gray-600">({round.status})</span>
+							<summary class="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
+								Round {round.number} <span class="text-muted-foreground/60">({round.status})</span>
 							</summary>
 							<div class="mt-1 space-y-0.5 pl-2">
 								{#each round.matches as match}
 									<div class="flex items-center gap-2 text-xs py-0.5">
-										<span class="text-gray-600 w-12 shrink-0 text-right">{match.isStream ? 'STREAM' : `Stn ${match.station}`}</span>
-										<span class="{match.winnerId === match.topPlayerId ? 'text-green-300 font-medium' : match.winnerId ? 'text-gray-500' : 'text-white'} flex-1 truncate">
+										<span class="text-muted-foreground w-12 shrink-0 text-right">{match.isStream ? 'STREAM' : `Stn ${match.station}`}</span>
+										<span class="{match.winnerId === match.topPlayerId ? 'text-green-300 font-medium' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} flex-1 truncate">
 											{getEntrant(match.topPlayerId)?.gamerTag ?? '?'}
 										</span>
-										<span class="text-gray-600 shrink-0">
+										<span class="text-muted-foreground shrink-0">
 											{#if match.topScore !== undefined}{match.topScore}–{match.bottomScore}{:else}vs{/if}
 										</span>
-										<span class="{match.winnerId === match.bottomPlayerId ? 'text-green-300 font-medium' : match.winnerId ? 'text-gray-500' : 'text-white'} flex-1 truncate text-right">
+										<span class="{match.winnerId === match.bottomPlayerId ? 'text-green-300 font-medium' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} flex-1 truncate text-right">
 											{getEntrant(match.bottomPlayerId)?.gamerTag ?? '?'}
 										</span>
 									</div>
@@ -690,14 +685,14 @@
 
 				<!-- Final standings -->
 				{#if tournament.finalStandings}
-				<div class="grid gap-6 sm:grid-cols-2 border-t border-gray-800 pt-4">
+				<div class="grid gap-6 sm:grid-cols-2 border-t border-border pt-4">
 					<div>
-						<h4 class="text-sm font-medium text-violet-400 mb-2">Main Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'main').length})</h4>
+						<h4 class="text-sm font-medium text-primary mb-2">Main Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'main').length})</h4>
 						{#each tournament.finalStandings.filter((s) => s.bracket === 'main') as s}
 							<div class="flex items-center gap-2 text-xs py-0.5">
-								<span class="w-5 text-right font-mono text-gray-500">{s.rank}.</span>
-								<span class="text-white">{s.gamerTag}</span>
-								<span class="text-gray-500">{s.wins}-{s.losses}</span>
+								<span class="w-5 text-right font-mono text-muted-foreground">{s.rank}.</span>
+								<span class="text-foreground">{s.gamerTag}</span>
+								<span class="text-muted-foreground">{s.wins}-{s.losses}</span>
 								{#if s.cinderellaBonus > 0}<span class="text-yellow-400">+{s.cinderellaBonus.toFixed(0)}C</span>{/if}
 							</div>
 						{/each}
@@ -706,9 +701,9 @@
 						<h4 class="text-sm font-medium text-red-400 mb-2">Redemption Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'redemption').length})</h4>
 						{#each tournament.finalStandings.filter((s) => s.bracket === 'redemption') as s}
 							<div class="flex items-center gap-2 text-xs py-0.5">
-								<span class="w-5 text-right font-mono text-gray-500">{s.rank}.</span>
-								<span class="text-white">{s.gamerTag}</span>
-								<span class="text-gray-500">{s.wins}-{s.losses}</span>
+								<span class="w-5 text-right font-mono text-muted-foreground">{s.rank}.</span>
+								<span class="text-foreground">{s.gamerTag}</span>
+								<span class="text-muted-foreground">{s.wins}-{s.losses}</span>
 								{#if s.cinderellaBonus > 0}<span class="text-yellow-400">+{s.cinderellaBonus.toFixed(0)}C</span>{/if}
 							</div>
 						{/each}

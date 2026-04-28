@@ -1,80 +1,160 @@
 @import "tailwindcss";
 
-/*
- * Dark theme (default) — tuned gray palette for better contrast.
- * Tailwind v4 generates `color: var(--color-gray-N)` so overriding is enough.
- */
-:root, [data-theme="dark"] {
-  --color-gray-950: oklch(15% 0.012 264);       /* page bg: slightly cooler, deeper */
-  --color-gray-900: oklch(20% 0.012 264);       /* card/nav bg: clear separation from 950 */
-  --color-gray-800: oklch(28% 0.014 264);       /* borders: visible but subtle */
-  --color-gray-700: oklch(38% 0.016 264);       /* stronger borders / disabled */
-  --color-gray-600: oklch(52% 0.015 264);       /* muted labels */
-  --color-gray-500: oklch(62% 0.014 264);       /* secondary hints */
-  --color-gray-400: oklch(72% 0.012 264);       /* secondary text: much more readable */
-  --color-gray-300: oklch(82% 0.010 264);       /* primary-secondary text */
-  --color-gray-200: oklch(90% 0.008 264);       /* near-white */
-  --color-gray-100: oklch(96% 0.005 264);       /* primary text: soft white */
+@custom-variant dark (&:is(.dark *));
+
+/* ── Light mode ─────────────────────────────────────────── */
+:root {
+  --background: oklch(0.985 0.003 264);
+  --foreground: oklch(0.12 0.012 264);
+  --card: oklch(1 0.002 264);
+  --card-foreground: oklch(0.12 0.012 264);
+  --popover: oklch(1 0.002 264);
+  --popover-foreground: oklch(0.12 0.012 264);
+  --primary: oklch(0.49 0.24 277);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.955 0.005 264);
+  --secondary-foreground: oklch(0.28 0.02 264);
+  --muted: oklch(0.955 0.005 264);
+  --muted-foreground: oklch(0.45 0.015 264);
+  --accent: oklch(0.94 0.01 277);
+  --accent-foreground: oklch(0.28 0.04 277);
+  --destructive: oklch(0.55 0.22 27);
+  --border: oklch(0.88 0.006 264);
+  --input: oklch(0.88 0.006 264);
+  --ring: oklch(0.49 0.24 277);
+  --radius: 0.5rem;
+
+  --bracket-winner: oklch(0.40 0.14 163);
+  --bracket-winner-bg: oklch(0.88 0.06 163 / 35%);
+  --bracket-projected: oklch(0.50 0.16 75);
+  --bracket-connector: oklch(0.82 0.005 264);
+  --accent-ready: oklch(0.52 0.19 230);
+  --accent-called: oklch(0.58 0.17 75);
+  --accent-completed: oklch(0.48 0.15 163);
+  --accent-stream: oklch(0.49 0.24 277);
+  --accent-waiting: oklch(0.65 0.01 264);
 }
 
-/*
- * Light theme — inverts the gray scale so all Tailwind gray-* utilities
- * respond without changing any component files.
- */
-[data-theme="light"] {
-  --color-gray-950: oklch(98.5% .002 247.84);  /* was near-black → now near-white */
+/* ── Dark mode ──────────────────────────────────────────── */
+.dark {
+  --background: oklch(0.145 0.012 264);
+  --foreground: oklch(0.96 0.005 264);
+  --card: oklch(0.195 0.012 264);
+  --card-foreground: oklch(0.96 0.005 264);
+  --popover: oklch(0.195 0.012 264);
+  --popover-foreground: oklch(0.96 0.005 264);
+  --primary: oklch(0.64 0.24 277);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.27 0.014 264);
+  --secondary-foreground: oklch(0.96 0.005 264);
+  --muted: oklch(0.27 0.014 264);
+  --muted-foreground: oklch(0.65 0.012 264);
+  --accent: oklch(0.27 0.014 264);
+  --accent-foreground: oklch(0.96 0.005 264);
+  --destructive: oklch(0.70 0.19 22);
+  --border: oklch(0.32 0.015 264);
+  --input: oklch(0.32 0.015 264);
+  --ring: oklch(0.64 0.24 277);
+
+  --bracket-winner: oklch(0.72 0.17 163);
+  --bracket-winner-bg: oklch(0.25 0.08 163 / 15%);
+  --bracket-projected: oklch(0.75 0.17 75);
+  --bracket-connector: oklch(0.38 0.015 264);
+  --accent-ready: oklch(0.68 0.22 230);
+  --accent-called: oklch(0.75 0.18 75);
+  --accent-completed: oklch(0.65 0.18 163);
+  --accent-stream: oklch(0.64 0.24 277);
+  --accent-waiting: oklch(0.42 0.01 264);
+}
+
+/* ── Register as Tailwind utilities ─────────────────────── */
+@theme inline {
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-bracket-winner: var(--bracket-winner);
+  --color-bracket-winner-bg: var(--bracket-winner-bg);
+  --color-bracket-projected: var(--bracket-projected);
+}
+
+/* ── Base ───────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ── Backward-compat gray scale (unmigrated pages) ──────── */
+.dark {
+  --color-gray-950: oklch(15% 0.012 264);
+  --color-gray-900: oklch(20% 0.012 264);
+  --color-gray-800: oklch(28% 0.014 264);
+  --color-gray-700: oklch(38% 0.016 264);
+  --color-gray-600: oklch(52% 0.015 264);
+  --color-gray-500: oklch(62% 0.014 264);
+  --color-gray-400: oklch(72% 0.012 264);
+  --color-gray-300: oklch(82% 0.010 264);
+  --color-gray-200: oklch(90% 0.008 264);
+  --color-gray-100: oklch(96% 0.005 264);
+}
+
+:root:not(.dark) {
+  --color-gray-950: oklch(98.5% .002 247.84);
   --color-gray-900: oklch(93% .004 264.54);
   --color-gray-800: oklch(87% .006 264.5);
   --color-gray-700: oklch(60% .012 258.34);
-  --color-gray-600: oklch(42% .022 261.33);     /* secondary text: clearly readable */
+  --color-gray-600: oklch(42% .022 261.33);
   --color-gray-500: oklch(35% .022 264.36);
-  --color-gray-400: oklch(28% .025 256.8);      /* muted text: dark enough on light bg */
+  --color-gray-400: oklch(28% .025 256.8);
   --color-gray-300: oklch(22% .03 257.29);
   --color-gray-200: oklch(18% .03 256.85);
-  --color-gray-100: oklch(12% .006 285.89);     /* was near-white text → now near-black */
+  --color-gray-100: oklch(12% .006 285.89);
+
+  --color-violet-300: oklch(44% 0.22 277);
+  --color-violet-400: oklch(48% 0.22 277);
+  --color-amber-300: oklch(46% 0.13 78);
+  --color-amber-400: oklch(41% 0.13 78);
+  --color-yellow-300: oklch(46% 0.12 92);
+  --color-yellow-400: oklch(41% 0.12 92);
+  --color-green-300: oklch(38% 0.14 150);
+  --color-green-400: oklch(42% 0.15 150);
+  --color-red-400: oklch(42% 0.18 27);
+  --color-emerald-300: oklch(38% 0.14 163);
+  --color-emerald-400: oklch(42% 0.15 163);
+  --color-sky-300: oklch(44% 0.16 235);
+  --color-sky-400: oklch(48% 0.18 235);
 }
 
-/*
- * text-white is hardcoded white — override to near-black in light mode,
- * but ONLY when the element doesn't also carry a colored bg-* class
- * (e.g. bg-violet-600, bg-red-600 buttons must keep their white text).
- */
-[data-theme="light"] .text-white:not([class*="bg-violet"]):not([class*="bg-red-"]):not([class*="bg-blue-"]) {
+:root:not(.dark) .text-white:not([class*="bg-violet"]):not([class*="bg-red-"]):not([class*="bg-blue-"]):not([class*="bg-emerald"]):not([class*="bg-primary"]) {
   color: oklch(10% 0 0);
 }
 
-/*
- * Colored "light" text shades (300/400) are designed to contrast against dark
- * backgrounds. In light mode they become unreadable on the now-light surface.
- * Map them to their dark equivalents so contrast is maintained everywhere.
- */
-[data-theme="light"] {
-  --color-violet-300: oklch(44% 0.22 277);
-  --color-violet-400: oklch(48% 0.22 277);
-  --color-amber-300:  oklch(46% 0.13 78);
-  --color-amber-400:  oklch(41% 0.13 78);
-  --color-yellow-300: oklch(46% 0.12 92);
-  --color-yellow-400: oklch(41% 0.12 92);
-  --color-green-300:  oklch(38% 0.14 150);
-  --color-green-400:  oklch(42% 0.15 150);
-  --color-red-400:    oklch(42% 0.18 27);
-  --color-emerald-300: oklch(38% 0.14 163);
-  --color-emerald-400: oklch(42% 0.15 163);
-  --color-sky-300:     oklch(44% 0.16 235);
-  --color-sky-400:     oklch(48% 0.18 235);
-}
-
-/* Bracket connector lines */
-:root, [data-theme="dark"] {
-  --bracket-connector: #4b5563;
-}
-[data-theme="light"] {
-  --bracket-connector: #d1d5db;
-}
-
-/* Called match pulse */
+/* ── Called match pulse ─────────────────────────────────── */
 @keyframes msv-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
   50% { box-shadow: 0 0 12px 2px rgba(245, 158, 11, 0.08); }
 }
 .msv-pulse {

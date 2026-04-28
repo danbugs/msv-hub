@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" class="dark">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,7 +7,7 @@
 		<script>
 			try {
 				const t = localStorage.getItem('msv-theme');
-				if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+				if (t === 'light') document.documentElement.classList.remove('dark');
 			} catch (_) {}
 		</script>
 		%sveltekit.head%

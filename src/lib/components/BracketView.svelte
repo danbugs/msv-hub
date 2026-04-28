@@ -291,13 +291,13 @@
 </script>
 
 <div class="mb-2">
-	<label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
+	<label class="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
 		<input type="checkbox" bind:checked={showProjected}
-			class="rounded border-gray-600 bg-gray-800 text-sky-500 focus:ring-sky-500" />
+			class="rounded border-input bg-background text-primary focus:ring-ring" />
 		Show Projected
 	</label>
 </div>
-<div class="overflow-x-auto rounded-xl border border-gray-800/60 bg-gray-950/80 p-5 cursor-grab active:cursor-grabbing"
+<div class="overflow-x-auto rounded-xl border border-border bg-background/80 p-5 cursor-grab active:cursor-grabbing"
 	role="region" aria-label="Bracket"
 	onmousedown={(e) => {
 		const el = e.currentTarget;
@@ -314,7 +314,7 @@
 	<!-- Winners round labels -->
 	<div class="relative" style="width: {layout.width}px; height: 20px; margin-bottom: 4px">
 		{#each winnersRoundLabels as [x, match]}
-			<div class="absolute text-[11px] font-semibold text-gray-500 uppercase tracking-wider truncate" style="left: {x}px; width: {CARD_W}px">
+			<div class="absolute text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate" style="left: {x}px; width: {CARD_W}px">
 				{getRoundName(match.round, match.id.includes('-GFR-'))}
 			</div>
 		{/each}
@@ -323,7 +323,7 @@
 		<!-- Losers round labels (inside bracket at losers section y) -->
 		{#if losersRoundLabels.length > 0 && losersSectionY < Infinity}
 			{#each losersRoundLabels as [x, match]}
-				<div class="absolute text-[11px] font-semibold text-gray-500 uppercase tracking-wider truncate pointer-events-none"
+				<div class="absolute text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate pointer-events-none"
 					style="left: {x}px; top: {losersSectionY - 20}px; width: {CARD_W}px">
 					{getRoundName(match.round, false)}
 				</div>
@@ -332,11 +332,11 @@
 		<svg class="absolute inset-0 pointer-events-none overflow-visible"
 			width={layout.width} height={layout.height}>
 			{#each layout.connectors as c}
-				<line x1={c.x1} y1={c.y1} x2={c.mx} y2={c.y1} stroke="var(--bracket-connector, #4b5563)" stroke-width="1.5" />
+				<line x1={c.x1} y1={c.y1} x2={c.mx} y2={c.y1} stroke="var(--bracket-connector)" stroke-width="1.5" />
 				{#if c.y1 !== c.y2}
-					<line x1={c.mx} y1={c.y1} x2={c.mx} y2={c.y2} stroke="var(--bracket-connector, #4b5563)" stroke-width="1.5" />
+					<line x1={c.mx} y1={c.y1} x2={c.mx} y2={c.y2} stroke="var(--bracket-connector)" stroke-width="1.5" />
 				{/if}
-				<line x1={c.mx} y1={c.y2} x2={c.x2} y2={c.y2} stroke="var(--bracket-connector, #4b5563)" stroke-width="1.5" />
+				<line x1={c.mx} y1={c.y2} x2={c.x2} y2={c.y2} stroke="var(--bracket-connector)" stroke-width="1.5" />
 			{/each}
 		</svg>
 
@@ -350,23 +350,23 @@
 			{@const botIsProjected = !match.bottomPlayerId && !!proj?.bottom}
 			{@const ready = !match.winnerId && !!match.topPlayerId && !!match.bottomPlayerId}
 			{@const called = ready && !!match.calledAt}
-			{@const accent = called ? '#f59e0b' : match.isStream && ready ? '#8b5cf6' : ready ? '#0ea5e9' : match.winnerId ? '#10b981' : '#6b7280'}
+			{@const accent = called ? 'var(--accent-called)' : match.isStream && ready ? 'var(--accent-stream)' : ready ? 'var(--accent-ready)' : match.winnerId ? 'var(--accent-completed)' : 'var(--accent-waiting)'}
 
-			<div class="absolute rounded-lg border border-gray-700/40 overflow-hidden bg-gray-900 {called ? 'msv-pulse' : ''}"
+			<div class="absolute rounded-lg border border-border overflow-hidden bg-card {called ? 'msv-pulse' : ''}"
 				style="left: {x}px; top: {y}px; width: {CARD_W}px; border-left: 4px solid {accent}">
 
 				<!-- Top player -->
-				<div class="flex items-center gap-1.5 px-2 py-1.5 border-b border-gray-800/50
-					{match.winnerId === match.topPlayerId ? 'bg-emerald-900/15' :
+				<div class="flex items-center gap-1.5 px-2 py-1.5 border-b border-border/50
+					{match.winnerId === match.topPlayerId ? 'bg-bracket-winner-bg' :
 					 match.winnerId && match.topPlayerId ? 'opacity-40' : ''}">
-					<span class="text-[10px] font-mono text-gray-500 w-5 text-right shrink-0 tabular-nums">
+					<span class="text-[10px] font-mono text-muted-foreground w-5 text-right shrink-0 tabular-nums">
 						{top ? top.initialSeed : ''}
 					</span>
-					<span class="flex-1 truncate text-sm {topIsProjected ? 'text-amber-500 italic' : match.winnerId === match.topPlayerId ? 'text-emerald-300 font-semibold' : 'text-gray-100 font-medium'}">
+					<span class="flex-1 truncate text-sm {topIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.topPlayerId ? 'text-bracket-winner font-semibold' : 'text-foreground font-medium'}">
 						{top?.gamerTag ?? (match.topPlayerId ? '?' : '—')}
 					</span>
 					{#if match.topScore !== undefined}
-						<span class="text-xs font-mono tabular-nums {match.winnerId === match.topPlayerId ? 'text-emerald-400 font-bold' : 'text-gray-500'} shrink-0">
+						<span class="text-xs font-mono tabular-nums {match.winnerId === match.topPlayerId ? 'text-bracket-winner font-bold' : 'text-muted-foreground'} shrink-0">
 							{match.topScore}
 						</span>
 					{/if}
@@ -374,16 +374,16 @@
 
 				<!-- Bottom player -->
 				<div class="flex items-center gap-1.5 px-2 py-1.5
-					{match.winnerId === match.bottomPlayerId ? 'bg-emerald-900/15' :
+					{match.winnerId === match.bottomPlayerId ? 'bg-bracket-winner-bg' :
 					 match.winnerId && match.bottomPlayerId ? 'opacity-40' : ''}">
-					<span class="text-[10px] font-mono text-gray-500 w-5 text-right shrink-0 tabular-nums">
+					<span class="text-[10px] font-mono text-muted-foreground w-5 text-right shrink-0 tabular-nums">
 						{bot ? bot.initialSeed : ''}
 					</span>
-					<span class="flex-1 truncate text-sm {botIsProjected ? 'text-amber-500 italic' : match.winnerId === match.bottomPlayerId ? 'text-emerald-300 font-semibold' : 'text-gray-100 font-medium'}">
+					<span class="flex-1 truncate text-sm {botIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.bottomPlayerId ? 'text-bracket-winner font-semibold' : 'text-foreground font-medium'}">
 						{bot?.gamerTag ?? (match.bottomPlayerId ? '?' : '—')}
 					</span>
 					{#if match.bottomScore !== undefined}
-						<span class="text-xs font-mono tabular-nums {match.winnerId === match.bottomPlayerId ? 'text-emerald-400 font-bold' : 'text-gray-500'} shrink-0">
+						<span class="text-xs font-mono tabular-nums {match.winnerId === match.bottomPlayerId ? 'text-bracket-winner font-bold' : 'text-muted-foreground'} shrink-0">
 							{match.bottomScore}
 						</span>
 					{/if}
@@ -391,21 +391,21 @@
 
 				<!-- Characters (if reported) -->
 				{#if match.winnerId && (match.topCharacters?.length || match.bottomCharacters?.length)}
-					<div class="px-2 py-1 text-xs text-gray-500 border-t border-gray-800/50 leading-relaxed">
-						{#if match.topCharacters?.length}<span class="text-gray-400">{top?.gamerTag}:</span> {match.topCharacters.join(', ')}{/if}{#if match.topCharacters?.length && match.bottomCharacters?.length} · {/if}{#if match.bottomCharacters?.length}<span class="text-gray-400">{bot?.gamerTag}:</span> {match.bottomCharacters.join(', ')}{/if}
+					<div class="px-2 py-1 text-xs text-muted-foreground border-t border-border/50 leading-relaxed">
+						{#if match.topCharacters?.length}<span class="text-muted-foreground">{top?.gamerTag}:</span> {match.topCharacters.join(', ')}{/if}{#if match.topCharacters?.length && match.bottomCharacters?.length} · {/if}{#if match.bottomCharacters?.length}<span class="text-muted-foreground">{bot?.gamerTag}:</span> {match.bottomCharacters.join(', ')}{/if}
 					</div>
 				{/if}
 
 				<!-- Footer: station + action buttons -->
 				{#if ready || match.winnerId}
-					<div class="flex items-center justify-between px-2 py-1 border-t border-gray-800/50 bg-gray-800/20">
+					<div class="flex items-center justify-between px-2 py-1 border-t border-border/50 bg-muted/20">
 						<div class="flex items-center gap-1.5 min-w-0 overflow-hidden">
 							{#if match.station !== undefined}
 								{#if match.isStream}
 									<a href="https://twitch.tv/microspacing" target="_blank"
-										class="text-xs text-violet-400 hover:text-violet-300 shrink-0">STREAM ↗</a>
+										class="text-xs text-primary hover:text-primary/80 shrink-0">STREAM ↗</a>
 								{:else}
-									<span class="text-xs text-gray-500 shrink-0">Stn {match.station}</span>
+									<span class="text-xs text-muted-foreground shrink-0">Stn {match.station}</span>
 								{/if}
 							{/if}
 						</div>
@@ -413,14 +413,14 @@
 							{#if onCall && ready}
 								<button onclick={() => onCall!(match)}
 									class="rounded px-2 py-0.5 text-xs font-medium transition-colors
-										{called ? 'bg-amber-900/30 text-amber-400 hover:bg-amber-900/50' : 'border border-gray-600 text-gray-400 hover:text-amber-400 hover:border-amber-600'}">
+										{called ? 'bg-amber-900/30 text-amber-400 hover:bg-amber-900/50' : 'border border-border text-muted-foreground hover:text-amber-400 hover:border-amber-600'}">
 									{#if called && match.calledAt}{elapsed(match.calledAt)}{:else}{called ? 'Called' : 'Call'}{/if}
 								</button>
 							{/if}
 							{#if onStream && ready}
 								<button onclick={() => onStream!(match)}
 									class="rounded px-2 py-0.5 text-xs transition-colors
-										{match.isStream ? 'text-violet-400 bg-violet-900/30 hover:bg-red-900/20 hover:text-red-400' : 'text-gray-500 hover:text-violet-400 hover:bg-violet-900/20'}"
+										{match.isStream ? 'text-primary bg-primary/10 hover:bg-red-900/20 hover:text-red-400' : 'text-muted-foreground hover:text-primary hover:bg-primary/10'}"
 									title={match.isStream ? 'Remove from stream' : 'Set as stream match'}>
 									📺
 								</button>
@@ -428,7 +428,7 @@
 							{#if onReport}
 								{#if ready}
 									<button onclick={() => onReport!(match)}
-										class="rounded bg-violet-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-violet-500">
+										class="rounded bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:bg-primary/90">
 										Report
 									</button>
 								{:else if match.winnerId && match.topPlayerId && match.bottomPlayerId && canFix(match)}
