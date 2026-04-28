@@ -717,6 +717,37 @@ export async function finalizePlacements(
 // ---------------------------------------------------------------------------
 
 const CLONE_URL = 'https://www.start.gg/api/-/rest/tournament/cloneTournamentPublic';
+const RECAPTCHA_SITE_KEY = '6Lfatx8rAAAAALaeXwBklgUKHTOjap_RCoueh7kd';
+const RECAPTCHA_PAGE_URL = 'https://www.start.gg/tournament/create';
+
+async function solveCaptcha(): Promise<string> {
+	const apiKey = env.CAPTCHA_API_KEY;
+	if (!apiKey) throw new Error('CAPTCHA_API_KEY not configured');
+
+	for (let attempt = 0; attempt < 3; attempt++) {
+		const submitRes = await fetch(
+			`https://2captcha.com/in.php?key=${apiKey}&method=userrecaptcha&googlekey=${RECAPTCHA_SITE_KEY}&pageurl=${encodeURIComponent(RECAPTCHA_PAGE_URL)}&json=1`
+		);
+		const submitData = await submitRes.json() as { status: number; request: string };
+		if (submitData.status !== 1) throw new Error(`2captcha submit failed: ${submitData.request}`);
+
+		const taskId = submitData.request;
+
+		for (let i = 0; i < 24; i++) {
+			await new Promise<void>((r) => setTimeout(r, 5000));
+			const pollRes = await fetch(
+				`https://2captcha.com/res.php?key=${apiKey}&action=get&id=${taskId}&json=1`
+			);
+			const pollData = await pollRes.json() as { status: number; request: string };
+			if (pollData.status === 1) return pollData.request;
+			if (pollData.request === 'ERROR_CAPTCHA_UNSOLVABLE') break;
+			if (pollData.request !== 'CAPCHA_NOT_READY') {
+				throw new Error(`2captcha solve failed: ${pollData.request}`);
+			}
+		}
+	}
+	throw new Error('2captcha failed after 3 attempts');
+}
 
 export interface CloneResult {
 	ok: boolean;
@@ -725,12 +756,6 @@ export interface CloneResult {
 	error?: string;
 }
 
-/**
- * Clone a tournament from a template. Uses admin session cookies.
- * The captcha field is set to empty — if start.gg requires a valid captcha
- * for this endpoint even with an admin session, this call will fail and
- * we'll need an alternative approach.
- */
 export async function cloneTournament(opts: {
 	name: string;
 	startAt: number;
@@ -739,6 +764,8 @@ export async function cloneTournament(opts: {
 	hubIds: string[];
 	discordLink: string;
 }): Promise<CloneResult> {
+	const captchaToken = await solveCaptcha();
+
 	const payload = {
 		name: opts.name,
 		primaryContactType: 'discord',
@@ -759,7 +786,7 @@ export async function cloneTournament(opts: {
 			stationsAndStreams: true,
 			blockList: true
 		},
-		captcha: '',
+		captcha: captchaToken,
 		validationKey: 'create-new-tournament'
 	};
 
@@ -776,11 +803,15 @@ export async function cloneTournament(opts: {
 	const data = await res.json().catch(() => null);
 	if (!data) return { ok: false, error: 'Clone returned unparseable response' };
 
-	const id = data.id ?? data.entities?.tournament?.id;
-	const slug = data.slug ?? data.entities?.tournament?.slug;
+	const tournament = Array.isArray(data.entities?.tournament)
+		? data.entities.tournament[0]
+		: data.entities?.tournament ?? data;
+	const id = tournament?.id;
+	let slug = tournament?.slug ?? '';
+	if (slug.startsWith('tournament/')) slug = slug.slice('tournament/'.length);
 	if (!id) return { ok: false, error: 'Clone response missing tournament ID' };
 
-	return { ok: true, tournamentId: Number(id), tournamentSlug: slug ? String(slug) : undefined };
+	return { ok: true, tournamentId: Number(id), tournamentSlug: slug || undefined };
 }
 
 /**
@@ -1022,7 +1053,7 @@ export async function registerTOForTournament(
 		}
 	};
 
-	const data = await adminGql<{ registerPlayer: { id: number } }>(
+	const data = await adminGql<{ registerPlayer: { id: number } | null }>(
 		`mutation RegisterPlayer($tournamentId: ID!, $fields: RegisterPlayerData!) {
 			registerPlayer(tournamentId: $tournamentId, fields: $fields) {
 				id __typename
@@ -1031,8 +1062,8 @@ export async function registerTOForTournament(
 		variables
 	);
 
-	if (!data?.registerPlayer) {
-		return { ok: false, error: 'RegisterPlayer mutation returned null' };
+	if (data === null) {
+		return { ok: false, error: 'RegisterPlayer mutation failed (GQL error)' };
 	}
 
 	return { ok: true, playerId };
