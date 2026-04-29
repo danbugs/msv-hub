@@ -9,7 +9,7 @@ on:
 jobs:
   compat:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,12 +27,17 @@ jobs:
           EOF
 
       - name: Run StartGG compatibility tests
-        id: tests
+        id: compat-tests
         continue-on-error: true
         run: npx vitest run src/lib/server/startgg-compat.test.ts --reporter=verbose 2>&1 | tee test-output.txt
 
+      - name: Run StartGG E2E operational tests
+        id: e2e-tests
+        continue-on-error: true
+        run: npx vitest run src/lib/server/startgg-e2e.test.ts --reporter=verbose 2>&1 | tee -a test-output.txt
+
       - name: Create issue on failure
-        if: steps.tests.outcome == 'failure'
+        if: steps.compat-tests.outcome == 'failure' || steps.e2e-tests.outcome == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
@@ -95,5 +100,5 @@ jobs:
             }
 
       - name: Fail workflow if tests failed
-        if: steps.tests.outcome == 'failure'
+        if: steps.compat-tests.outcome == 'failure' || steps.e2e-tests.outcome == 'failure'
         run: exit 1
