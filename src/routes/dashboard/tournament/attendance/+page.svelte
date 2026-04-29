@@ -79,7 +79,7 @@
 	<p class="mt-1 text-muted-foreground">Track who's here and who brought a setup.</p>
 
 	{#if error}
-		<div class="mt-4 rounded-lg border border-red-800 bg-red-900/30 px-4 py-3 text-sm text-red-400">
+		<div class="mt-4 rounded-lg border border-destructive-border bg-destructive-muted px-4 py-3 text-sm text-destructive">
 			{error}
 		</div>
 	{/if}
@@ -91,15 +91,15 @@
 			<div class="text-xs text-muted-foreground">Registered</div>
 		</div>
 		<div class="rounded-lg border border-border bg-card p-3 text-center">
-			<div class="text-2xl font-bold text-green-400">{presentCount}</div>
+			<div class="text-2xl font-bold text-success">{presentCount}</div>
 			<div class="text-xs text-muted-foreground">Present</div>
 		</div>
 		<div class="rounded-lg border border-border bg-card p-3 text-center">
-			<div class="text-2xl font-bold text-sky-400">{lateCount}</div>
+			<div class="text-2xl font-bold text-info">{lateCount}</div>
 			<div class="text-xs text-muted-foreground">Late ({accountedCount} accounted)</div>
 		</div>
 		<div class="rounded-lg border border-border bg-card p-3 text-center">
-			<div class="text-2xl font-bold {setupCount >= 16 ? 'text-green-400' : 'text-amber-400'}">{setupCount + 1}</div>
+			<div class="text-2xl font-bold {setupCount >= 16 ? 'text-success' : 'text-warning'}">{setupCount + 1}</div>
 			<div class="text-xs text-muted-foreground">Setups pledged (+1 venue)</div>
 		</div>
 		<div class="rounded-lg border border-border bg-card p-3 text-center">
@@ -109,7 +109,7 @@
 	</div>
 
 	{#if setupsNeeded > 0}
-		<div class="mt-3 rounded-lg border border-amber-700 bg-amber-900/20 p-3 text-sm text-amber-300">
+		<div class="mt-3 rounded-lg border border-warning-border bg-warning-muted p-3 text-sm text-warning">
 			Need <strong>{setupsNeeded} more setup{setupsNeeded > 1 ? 's' : ''}</strong> to reach 16 for Swiss.
 		</div>
 	{/if}
@@ -144,16 +144,16 @@
 						if (a.pledgedSetup !== b.pledgedSetup) return a.pledgedSetup ? -1 : 1;
 						return a.gamerTag.localeCompare(b.gamerTag);
 					}) as attendee}
-						<tr class="border-b border-border {attendee.present ? 'bg-green-950/20' : attendee.late ? 'bg-sky-950/20' : ''}">
+						<tr class="border-b border-border {attendee.present ? 'bg-success-muted' : attendee.late ? 'bg-info-muted' : ''}">
 							<td class="px-2 py-1.5">
 								<span class="text-foreground">{attendee.gamerTag}</span>
 								{#if attendee.pledgedSetup}
-									<span class="ml-1 text-xs text-amber-400">setup</span>
+									<span class="ml-1 text-xs text-warning">setup</span>
 								{/if}
 							</td>
 							<td class="px-2 py-1.5 text-center">
 								{#if attendee.pledgedSetup}
-									<span class="text-green-400">✓</span>
+									<span class="text-success">✓</span>
 								{:else}
 									<span class="text-muted-foreground">—</span>
 								{/if}
@@ -161,14 +161,14 @@
 							<td class="px-2 py-1.5 text-center">
 								<button onclick={() => toggleFlag(attendee.gamerTag, 'present')}
 									class="rounded px-2 py-0.5 text-xs transition-colors
-										{attendee.present ? 'bg-green-700/40 text-green-300' : 'bg-secondary text-muted-foreground hover:text-foreground'}">
+										{attendee.present ? 'bg-green-700/40 text-success' : 'bg-secondary text-muted-foreground hover:text-foreground'}">
 									{attendee.present ? '✓ Here' : 'Mark'}
 								</button>
 							</td>
 							<td class="px-2 py-1.5 text-center">
 								<button onclick={() => toggleFlag(attendee.gamerTag, 'late')}
 									class="rounded px-2 py-0.5 text-xs transition-colors
-										{attendee.late ? 'bg-sky-700/40 text-sky-300' : 'bg-secondary text-muted-foreground hover:text-foreground'}">
+										{attendee.late ? 'bg-sky-700/40 text-info' : 'bg-secondary text-muted-foreground hover:text-foreground'}">
 									{attendee.late ? '⏰ Late' : 'Mark'}
 								</button>
 							</td>

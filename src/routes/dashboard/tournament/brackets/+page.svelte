@@ -392,8 +392,8 @@
 
 	<!-- StartGG split confirmation -->
 	{#if tournament && !tournament.startggSync?.splitConfirmed}
-		<div class="mt-4 rounded-lg border border-amber-800 bg-amber-900/20 px-4 py-3">
-			<p class="text-sm text-amber-300">
+		<div class="mt-4 rounded-lg border border-warning-border bg-warning-muted px-4 py-3">
+			<p class="text-sm text-warning">
 				<span class="font-semibold">StartGG:</span> Click <strong>Run Bracket Split</strong> to automatically assign players
 				to Main and Redemption bracket events on StartGG, push seeding, and start reporting.
 			</p>
@@ -404,14 +404,14 @@
 				{#if splitResult}
 					<span class="text-xs text-muted-foreground">
 						Flushed {splitResult.reported} match(es)
-						{#if splitResult.failed > 0}<span class="text-red-400">, {splitResult.failed} failed (see errors below)</span>{/if}
+						{#if splitResult.failed > 0}<span class="text-destructive">, {splitResult.failed} failed (see errors below)</span>{/if}
 					</span>
 				{/if}
 				{#if tournament.startggMainBracketEventId}
-					<span class="text-xs text-green-400">Main: linked</span>
+					<span class="text-xs text-success">Main: linked</span>
 				{/if}
 				{#if tournament.startggRedemptionBracketEventId}
-					<span class="text-xs text-green-400">Redemption: linked</span>
+					<span class="text-xs text-success">Redemption: linked</span>
 				{/if}
 			</div>
 		</div>
@@ -461,7 +461,7 @@
 						<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
 							<span>{bracket.players.length} players · {doneMatches}/{totalMatches} matches</span>
 							{#if readyMatches.length > 0}
-								<span class="{calledMatches.length === readyMatches.length ? 'text-green-400' : 'text-muted-foreground'}">
+								<span class="{calledMatches.length === readyMatches.length ? 'text-success' : 'text-muted-foreground'}">
 									{calledMatches.length}/{readyMatches.length} called
 									{#if calledMatches.length === readyMatches.length}&nbsp;✓{/if}
 								</span>
@@ -473,7 +473,7 @@
 						</div>
 
 						{#if syncResult && activeBracket === bracketName}
-							<pre class="mt-1 text-xs text-green-400 whitespace-pre-wrap">{syncResult}</pre>
+							<pre class="mt-1 text-xs text-success whitespace-pre-wrap">{syncResult}</pre>
 						{/if}
 
 						<div class="mt-3 overflow-x-auto">
@@ -667,13 +667,13 @@
 								{#each round.matches as match}
 									<div class="flex items-center gap-2 text-xs py-0.5">
 										<span class="text-muted-foreground w-12 shrink-0 text-right">{match.isStream ? 'STREAM' : `Stn ${match.station}`}</span>
-										<span class="{match.winnerId === match.topPlayerId ? 'text-green-300 font-medium' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} flex-1 truncate">
+										<span class="{match.winnerId === match.topPlayerId ? 'text-success font-medium' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} flex-1 truncate">
 											{getEntrant(match.topPlayerId)?.gamerTag ?? '?'}
 										</span>
 										<span class="text-muted-foreground shrink-0">
 											{#if match.topScore !== undefined}{match.topScore}–{match.bottomScore}{:else}vs{/if}
 										</span>
-										<span class="{match.winnerId === match.bottomPlayerId ? 'text-green-300 font-medium' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} flex-1 truncate text-right">
+										<span class="{match.winnerId === match.bottomPlayerId ? 'text-success font-medium' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} flex-1 truncate text-right">
 											{getEntrant(match.bottomPlayerId)?.gamerTag ?? '?'}
 										</span>
 									</div>
@@ -693,18 +693,18 @@
 								<span class="w-5 text-right font-mono text-muted-foreground">{s.rank}.</span>
 								<span class="text-foreground">{s.gamerTag}</span>
 								<span class="text-muted-foreground">{s.wins}-{s.losses}</span>
-								{#if s.cinderellaBonus > 0}<span class="text-yellow-400">+{s.cinderellaBonus.toFixed(0)}C</span>{/if}
+								{#if s.cinderellaBonus > 0}<span class="text-warning">+{s.cinderellaBonus.toFixed(0)}C</span>{/if}
 							</div>
 						{/each}
 					</div>
 					<div>
-						<h4 class="text-sm font-medium text-red-400 mb-2">Redemption Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'redemption').length})</h4>
+						<h4 class="text-sm font-medium text-destructive mb-2">Redemption Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'redemption').length})</h4>
 						{#each tournament.finalStandings.filter((s) => s.bracket === 'redemption') as s}
 							<div class="flex items-center gap-2 text-xs py-0.5">
 								<span class="w-5 text-right font-mono text-muted-foreground">{s.rank}.</span>
 								<span class="text-foreground">{s.gamerTag}</span>
 								<span class="text-muted-foreground">{s.wins}-{s.losses}</span>
-								{#if s.cinderellaBonus > 0}<span class="text-yellow-400">+{s.cinderellaBonus.toFixed(0)}C</span>{/if}
+								{#if s.cinderellaBonus > 0}<span class="text-warning">+{s.cinderellaBonus.toFixed(0)}C</span>{/if}
 							</div>
 						{/each}
 					</div>

@@ -186,9 +186,9 @@
 	{:else if config}
 
 		<!-- Pause Toggle -->
-		<section class="rounded-xl border {config.paused ? 'border-amber-700/40 bg-amber-900/10' : 'border-green-700/40 bg-green-900/10'} p-4 mb-6 flex items-center justify-between" style="box-shadow: var(--shadow-card)">
+		<section class="rounded-xl border {config.paused ? 'border-warning-border bg-warning-muted' : 'border-success-border bg-success-muted'} p-4 mb-6 flex items-center justify-between" style="box-shadow: var(--shadow-card)">
 			<div>
-				<p class="font-medium {config.paused ? 'text-amber-400' : 'text-green-400'}">
+				<p class="font-medium {config.paused ? 'text-warning' : 'text-success'}">
 					{config.paused ? 'Event creation paused' : 'Event creation active'}
 				</p>
 				<p class="text-sm text-muted-foreground mt-0.5">
@@ -243,7 +243,7 @@
 					{saving ? 'Saving...' : 'Save Config'}
 				</button>
 				{#if message}
-					<span class="text-sm {message === 'Saved' ? 'text-green-400' : 'text-red-400'}">{message}</span>
+					<span class="text-sm {message === 'Saved' ? 'text-success' : 'text-destructive'}">{message}</span>
 				{/if}
 			</div>
 		</section>
@@ -268,12 +268,12 @@
 						<button onclick={() => toggleAutoRegister(to)}
 							class="rounded-full px-3 py-1 text-xs font-medium transition-colors
 								{to.autoRegister
-									? 'bg-green-900/50 text-green-400 border border-green-800 hover:bg-green-900'
+									? 'bg-green-900/50 text-success border border-success-border hover:bg-green-900'
 									: 'bg-secondary text-muted-foreground border border-border hover:border-primary'}">
 							{to.autoRegister ? 'Auto-register' : 'Manual'}
 						</button>
 						<button onclick={() => removeTO(to.discriminator)}
-							class="text-muted-foreground hover:text-red-400 text-sm" title="Remove TO">
+							class="text-muted-foreground hover:text-destructive text-sm" title="Remove TO">
 							&times;
 						</button>
 					</div>
@@ -352,12 +352,12 @@
 				<div class="mt-4 space-y-1">
 					{#each triggerResult.steps as s}
 						<div class="flex items-start gap-2 text-sm">
-							<span class={s.ok ? 'text-green-400' : 'text-red-400'}>{s.ok ? '✓' : '✗'}</span>
+							<span class={s.ok ? 'text-success' : 'text-destructive'}>{s.ok ? '✓' : '✗'}</span>
 							<span class="text-muted-foreground">{s.step}:</span>
 							<span class="text-foreground break-all">{s.detail}</span>
 						</div>
 					{/each}
-					<p class="mt-2 text-sm font-medium {triggerResult.ok ? 'text-green-400' : 'text-red-400'}">
+					<p class="mt-2 text-sm font-medium {triggerResult.ok ? 'text-success' : 'text-destructive'}">
 						{triggerResult.ok ? 'Event created successfully' : 'Event creation had failures'}
 					</p>
 				</div>

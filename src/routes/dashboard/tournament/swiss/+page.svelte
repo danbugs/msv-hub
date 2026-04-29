@@ -255,9 +255,9 @@
 	<h1 class="mt-4 text-2xl font-bold text-foreground">Run Swiss</h1>
 
 	{#if error}
-		<div class="mt-4 flex items-start gap-2 rounded-lg border border-red-800 bg-red-900/30 px-4 py-3 text-sm text-red-400">
+		<div class="mt-4 flex items-start gap-2 rounded-lg border border-destructive-border bg-destructive-muted px-4 py-3 text-sm text-destructive">
 			<span class="min-w-0 flex-1">{error}</span>
-			<button onclick={() => error = ''} class="shrink-0 text-red-400 hover:text-foreground leading-none" title="Dismiss">✕</button>
+			<button onclick={() => error = ''} class="shrink-0 text-destructive hover:text-foreground leading-none" title="Dismiss">✕</button>
 		</div>
 	{/if}
 
@@ -303,7 +303,7 @@
 						title="Sync from StartGG — pulls results and overwrites MSV Hub's Swiss state">
 						{syncingFromStartGG ? 'Syncing...' : 'Sync from StartGG'}
 					</button>
-					{#if syncResult}<pre class="text-xs text-green-400 whitespace-pre-wrap">{syncResult}</pre>{/if}
+					{#if syncResult}<pre class="text-xs text-success whitespace-pre-wrap">{syncResult}</pre>{/if}
 				{/if}
 			</div>
 
@@ -312,8 +312,8 @@
 			<!-- Pending phase reset after misreport fix -->
 			{#if tournament.startggSync?.pendingPhaseReset}
 				{@const pr = tournament.startggSync.pendingPhaseReset}
-				<div class="mt-4 rounded-lg border border-amber-700 bg-amber-950/60 px-4 py-3">
-					<p class="text-sm text-amber-200">
+				<div class="mt-4 rounded-lg border border-warning-border bg-warning-muted px-4 py-3">
+					<p class="text-sm text-warning">
 						<span class="font-semibold">StartGG:</span> Pairings for round {pr.roundNumber} were updated due to a misreport fix.
 						Click below to restart the phase on StartGG and re-sync pairings.
 					</p>
@@ -328,24 +328,24 @@
 
 			<!-- StartGG sync banners -->
 			{#if isFinalRoundComplete() && !dismissedBanners.has('final-done')}
-				<div class="mt-4 flex items-start gap-2 rounded-lg border border-amber-700 bg-amber-950/60 px-4 py-3 text-sm text-amber-200">
+				<div class="mt-4 flex items-start gap-2 rounded-lg border border-warning-border bg-warning-muted px-4 py-3 text-sm text-warning">
 					<span class="flex-1">
 						<span class="font-semibold">StartGG:</span> Swiss is complete. Click <strong>Generate Bracket Split</strong> to finalize standings
 						and sync them to the "Final Standings" phase on StartGG. Then go to StartGG to finalize placements.
 					</span>
 					<button onclick={() => dismissedBanners = new Set([...dismissedBanners, 'final-done'])}
-						class="shrink-0 text-amber-400 hover:text-amber-200 text-base leading-none" title="Dismiss">✕</button>
+						class="shrink-0 text-warning hover:text-warning text-base leading-none" title="Dismiss">✕</button>
 				</div>
 			{/if}
 
 			{#if tournament.startggSync?.errors?.filter(e => !dismissedErrorTs.has(e.ts)).length}
 				<div class="mt-4 space-y-1">
 					{#each tournament.startggSync.errors.filter(e => !dismissedErrorTs.has(e.ts)) as err}
-						<div class="flex items-start gap-2 rounded-lg border border-red-800 bg-red-950/60 px-3 py-2 text-xs text-red-300">
+						<div class="flex items-start gap-2 rounded-lg border border-destructive-border bg-destructive-muted px-3 py-2 text-xs text-destructive">
 							<span class="shrink-0 font-semibold">StartGG error</span>
 							<span class="min-w-0 flex-1 break-words">{err.message}</span>
 							<button onclick={() => dismissedErrorTs = new Set([...dismissedErrorTs, err.ts])}
-								class="shrink-0 text-red-300 hover:text-foreground leading-none" title="Dismiss">✕</button>
+								class="shrink-0 text-destructive hover:text-foreground leading-none" title="Dismiss">✕</button>
 						</div>
 					{/each}
 					<button onclick={clearStartggErrors}
@@ -363,7 +363,7 @@
 							{round.status}
 						</span>
 						{#if round.byePlayerId}
-							<span class="text-xs text-yellow-400">BYE: {getEntrant(round.byePlayerId)?.gamerTag}</span>
+							<span class="text-xs text-warning">BYE: {getEntrant(round.byePlayerId)?.gamerTag}</span>
 						{/if}
 					</div>
 
@@ -396,7 +396,7 @@
 											class="flex-1 min-w-0 truncate text-left rounded px-2 py-1 text-sm transition-colors
 												{isPending && pendingWinner?.winnerId === match.topPlayerId ? 'bg-primary/10 text-primary' :
 												 isPending ? 'text-muted-foreground' :
-												 match.winnerId === match.topPlayerId ? 'bg-green-900/30 text-green-300 font-medium' :
+												 match.winnerId === match.topPlayerId ? 'bg-success-muted text-success font-medium' :
 												 match.winnerId ? 'text-muted-foreground' :
 												 'text-foreground'}
 												{canInteract ? 'hover:bg-accent cursor-pointer' : 'pointer-events-none'}"
@@ -418,7 +418,7 @@
 											class="flex-1 min-w-0 truncate text-left rounded px-2 py-1 text-sm transition-colors
 												{isPending && pendingWinner?.winnerId === match.bottomPlayerId ? 'bg-primary/10 text-primary' :
 												 isPending ? 'text-muted-foreground' :
-												 match.winnerId === match.bottomPlayerId ? 'bg-green-900/30 text-green-300 font-medium' :
+												 match.winnerId === match.bottomPlayerId ? 'bg-success-muted text-success font-medium' :
 												 match.winnerId ? 'text-muted-foreground' :
 												 'text-foreground'}
 												{canInteract ? 'hover:bg-accent cursor-pointer' : 'pointer-events-none'}"
@@ -447,7 +447,7 @@
 											{/if}
 											{#if round.status === 'completed' && match.winnerId}
 												<button onclick={() => { fixingMatchId = isFixing ? null : match.id; pendingWinner = null; }}
-													class="text-xs px-2 py-1 rounded {isFixing ? 'bg-yellow-900/30 text-yellow-300' : 'text-muted-foreground hover:text-yellow-400'}">
+													class="text-xs px-2 py-1 rounded {isFixing ? 'bg-warning-muted text-warning' : 'text-muted-foreground hover:text-warning'}">
 													{isFixing ? 'Cancel' : 'Fix'}
 												</button>
 											{/if}
@@ -526,8 +526,8 @@
 										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">{idx + 1}</td>
 										<td class="px-2 py-1.5 text-foreground">{entrant.gamerTag}</td>
 										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">#{entrant.initialSeed}</td>
-										<td class="px-2 py-1.5 text-right font-mono text-green-400">{entrant.wins}</td>
-										<td class="px-2 py-1.5 text-right font-mono text-red-400">{entrant.losses}</td>
+										<td class="px-2 py-1.5 text-right font-mono text-success">{entrant.wins}</td>
+										<td class="px-2 py-1.5 text-right font-mono text-destructive">{entrant.losses}</td>
 									</tr>
 								{/each}
 							</tbody>
@@ -549,20 +549,20 @@
 								<span class="text-foreground">{s.gamerTag}</span>
 								<span class="text-muted-foreground">{s.wins}-{s.losses}</span>
 								{#if s.cinderellaBonus > 0}
-									<span class="text-yellow-400 text-xs">+{s.cinderellaBonus.toFixed(0)} Cinderella</span>
+									<span class="text-warning text-xs">+{s.cinderellaBonus.toFixed(0)} Cinderella</span>
 								{/if}
 							</div>
 						{/each}
 					</div>
 					<div>
-						<h4 class="text-sm font-medium text-red-400 mb-2">Redemption Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'redemption').length} players)</h4>
+						<h4 class="text-sm font-medium text-destructive mb-2">Redemption Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'redemption').length} players)</h4>
 						{#each tournament.finalStandings.filter((s) => s.bracket === 'redemption') as s}
 							<div class="flex items-center gap-2 text-sm py-0.5">
 								<span class="w-6 text-right font-mono text-muted-foreground">{s.rank}.</span>
 								<span class="text-foreground">{s.gamerTag}</span>
 								<span class="text-muted-foreground">{s.wins}-{s.losses}</span>
 								{#if s.cinderellaBonus > 0}
-									<span class="text-yellow-400 text-xs">+{s.cinderellaBonus.toFixed(0)} Cinderella</span>
+									<span class="text-warning text-xs">+{s.cinderellaBonus.toFixed(0)} Cinderella</span>
 								{/if}
 							</div>
 						{/each}
@@ -588,10 +588,10 @@
 									return 'tiebreaker';
 								})()}
 								{@const diffLabel = Math.abs(rawDiff) >= 0.5 ? `${rawDiff.toFixed(1)} more points` : 'tied on points'}
-								<div class="mt-4 rounded-lg border border-amber-700 bg-amber-900/20 p-3 text-sm text-amber-300 space-y-2">
+								<div class="mt-4 rounded-lg border border-warning-border bg-warning-muted p-3 text-sm text-warning space-y-2">
 									<p><strong>{firstRed.gamerTag}</strong> ({firstRed.wins}-{firstRed.losses}, seed #{firstRed.initialSeed}) was placed in Redemption
 									over <strong>{lastMain.gamerTag}</strong> ({lastMain.wins}-{lastMain.losses}, seed #{lastMain.initialSeed}) who made Main.</p>
-									<p class="text-xs text-amber-400">
+									<p class="text-xs text-warning">
 										Both went {lastMain.wins}-{lastMain.losses}. <strong>{lastMain.gamerTag}</strong> {diffLabel} — {reason}.
 									</p>
 									<p class="text-xs text-muted-foreground">
@@ -622,7 +622,7 @@
 					</select>
 				</div>
 				{#if pushError}
-					<p class="mt-2 text-sm text-red-400">{pushError}</p>
+					<p class="mt-2 text-sm text-destructive">{pushError}</p>
 				{/if}
 			</div>
 		{/if}

@@ -221,9 +221,9 @@
 	<p class="mt-1 text-muted-foreground">Generate Elo-based seedings for Swiss pairings.</p>
 
 	{#if error}
-		<div class="mt-4 flex items-start gap-2 rounded-lg border border-red-800 bg-red-900/30 px-4 py-3 text-sm text-red-400">
+		<div class="mt-4 flex items-start gap-2 rounded-lg border border-destructive-border bg-destructive-muted px-4 py-3 text-sm text-destructive">
 			<span class="flex-1">{error}</span>
-			<button onclick={() => error = ''} class="shrink-0 text-red-400 hover:text-foreground">✕</button>
+			<button onclick={() => error = ''} class="shrink-0 text-destructive hover:text-foreground">✕</button>
 		</div>
 	{/if}
 
@@ -367,7 +367,7 @@
 										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.seedNum}</td>
 										<td class="px-2 py-1.5 text-foreground">
 											{e.gamerTag}
-											{#if e.isNewcomer}<span class="ml-1 text-xs text-yellow-400">*</span>{/if}
+											{#if e.isNewcomer}<span class="ml-1 text-xs text-warning">*</span>{/if}
 										</td>
 										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.elo.toFixed(0)}</td>
 									</tr>
@@ -384,14 +384,14 @@
 					<div class="space-y-1 max-h-[28rem] overflow-y-auto">
 						{#each result.pairings as { top, bottom }}
 							<div class="flex items-center gap-2 rounded px-3 py-1.5 text-sm
-								{isCollision(top.playerId, bottom.playerId) ? 'bg-red-900/30 border border-red-800' : 'bg-card'}">
+								{isCollision(top.playerId, bottom.playerId) ? 'bg-destructive-muted border border-destructive-border' : 'bg-card'}">
 								<span class="w-6 text-right font-mono text-xs text-muted-foreground">{top.seedNum}</span>
 								<span class="flex-1 text-foreground truncate">{top.gamerTag}</span>
 								<span class="text-muted-foreground text-xs">vs</span>
 								<span class="flex-1 text-right text-foreground truncate">{bottom.gamerTag}</span>
 								<span class="w-6 font-mono text-xs text-muted-foreground">{bottom.seedNum}</span>
 								{#if isCollision(top.playerId, bottom.playerId)}
-									<span class="text-xs text-red-400" title="Rematch from last week">⚠</span>
+									<span class="text-xs text-destructive" title="Rematch from last week">⚠</span>
 								{/if}
 							</div>
 						{/each}
@@ -400,12 +400,12 @@
 							<div class="flex items-center gap-2 rounded bg-card px-3 py-1.5 text-sm">
 								<span class="w-6 text-right font-mono text-xs text-muted-foreground">{bye.seedNum}</span>
 								<span class="text-foreground">{bye.gamerTag}</span>
-								<span class="text-yellow-500 text-xs ml-auto">BYE</span>
+								<span class="text-warning text-xs ml-auto">BYE</span>
 							</div>
 						{/if}
 					</div>
 					{#if collisionCount > 0}
-						<div class="mt-3 rounded-lg border border-yellow-700 bg-yellow-900/20 p-3 text-xs text-yellow-400">
+						<div class="mt-3 rounded-lg border border-warning-border bg-warning-muted p-3 text-xs text-warning">
 							⚠ {collisionCount} rematch{collisionCount > 1 ? 'es' : ''} from last week — drag seeds to resolve
 						</div>
 					{/if}

@@ -226,9 +226,9 @@
 				<div class="flex items-center gap-3 flex-wrap">
 					<h2 class="text-xl font-bold text-foreground">{entrant?.gamerTag}</h2>
 					<span class="rounded-full bg-secondary px-3 py-0.5 text-xs text-foreground">Seed #{entrant?.initialSeed}</span>
-					<span class="rounded-full bg-secondary px-3 py-0.5 text-xs text-green-400">{swissW}W – {swissL}L Swiss</span>
+					<span class="rounded-full bg-secondary px-3 py-0.5 text-xs text-success">{swissW}W – {swissL}L Swiss</span>
 					{#if standing}
-						<span class="rounded-full px-3 py-0.5 text-xs {standing.bracket === 'main' ? 'bg-primary/10 text-primary' : 'bg-red-900/60 text-red-300'}">
+						<span class="rounded-full px-3 py-0.5 text-xs {standing.bracket === 'main' ? 'bg-primary/10 text-primary' : 'bg-destructive-muted text-destructive'}">
 							{standing.bracket === 'main' ? 'Main' : 'Redemption'} Bracket — Rank #{standing.rank}
 						</span>
 					{/if}
@@ -244,7 +244,7 @@
 								<div class="flex items-center gap-2 rounded-lg bg-card px-3 py-2 text-sm">
 									<span class="text-xs text-muted-foreground w-12 shrink-0">R{m.round}</span>
 									<span class="w-2 h-2 rounded-full shrink-0 {m.won ? 'bg-green-500' : 'bg-red-500'}"></span>
-									<span class="{m.won ? 'text-green-300' : 'text-red-300'} font-medium w-8 shrink-0">{m.won ? 'W' : 'L'}</span>
+									<span class="{m.won ? 'text-success' : 'text-destructive'} font-medium w-8 shrink-0">{m.won ? 'W' : 'L'}</span>
 									<span class="flex-1 text-foreground truncate">
 										{m.opponentId === 'BYE' ? 'BYE' : (opp?.gamerTag ?? '?')}
 									</span>
@@ -278,7 +278,7 @@
 											<span class="text-xs text-muted-foreground w-24 shrink-0 truncate">{label}</span>
 											{#if match.winnerId}
 												<span class="w-2 h-2 rounded-full shrink-0 {won ? 'bg-green-500' : 'bg-red-500'}"></span>
-												<span class="{won ? 'text-green-300' : 'text-red-300'} font-medium w-8 shrink-0">{won ? 'W' : 'L'}</span>
+												<span class="{won ? 'text-success' : 'text-destructive'} font-medium w-8 shrink-0">{won ? 'W' : 'L'}</span>
 											{:else}
 												<span class="w-2 h-2 rounded-full shrink-0 bg-gray-600"></span>
 												<span class="text-muted-foreground w-8 shrink-0">—</span>
@@ -343,9 +343,9 @@
 										{match.isStream ? 'STREAM' : `Stn ${match.station}`}
 									</div>
 									<div class="flex items-center gap-1 text-sm">
-										<span class="{match.winnerId === match.topPlayerId ? 'text-green-300 font-semibold' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} truncate flex-1">{top?.gamerTag ?? '?'}</span>
+										<span class="{match.winnerId === match.topPlayerId ? 'text-success font-semibold' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} truncate flex-1">{top?.gamerTag ?? '?'}</span>
 										<span class="text-muted-foreground shrink-0 text-xs">vs</span>
-										<span class="{match.winnerId === match.bottomPlayerId ? 'text-green-300 font-semibold' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} truncate flex-1 text-right">{bot?.gamerTag ?? '?'}</span>
+										<span class="{match.winnerId === match.bottomPlayerId ? 'text-success font-semibold' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} truncate flex-1 text-right">{bot?.gamerTag ?? '?'}</span>
 									</div>
 									{#if match.winnerId && match.topScore !== undefined}
 										<div class="text-xs text-center text-muted-foreground mt-0.5">{match.topScore} – {match.bottomScore}</div>
@@ -354,7 +354,7 @@
 							{/each}
 						</div>
 						{#if round.byePlayerId}
-							<div class="mt-2 text-xs text-yellow-400">BYE: {getEntrant(round.byePlayerId)?.gamerTag}</div>
+							<div class="mt-2 text-xs text-warning">BYE: {getEntrant(round.byePlayerId)?.gamerTag}</div>
 						{/if}
 					</div>
 				{/if}
@@ -402,7 +402,7 @@
 									<span>Round {round.number}</span>
 									<span class="rounded-full px-2 py-0.5 text-xs {round.status === 'active' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}">{round.status}</span>
 									{#if round.byePlayerId}
-										<span class="text-xs text-yellow-400">BYE: {getEntrant(round.byePlayerId)?.gamerTag}</span>
+										<span class="text-xs text-warning">BYE: {getEntrant(round.byePlayerId)?.gamerTag}</span>
 									{/if}
 								</button>
 								{#if isOpen}
@@ -414,7 +414,7 @@
 											<span class="text-xs {match.isStream ? 'text-primary' : 'text-muted-foreground'} w-14 shrink-0">
 												{match.isStream ? 'STREAM' : `Stn ${match.station}`}
 											</span>
-											<span class="{match.winnerId === match.topPlayerId ? 'text-green-300 font-medium' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} flex-1 truncate">
+											<span class="{match.winnerId === match.topPlayerId ? 'text-success font-medium' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} flex-1 truncate">
 												{top?.gamerTag ?? '?'}
 											</span>
 											{#if match.topScore !== undefined && match.bottomScore !== undefined}
@@ -422,7 +422,7 @@
 											{:else}
 												<span class="text-xs text-muted-foreground shrink-0">vs</span>
 											{/if}
-											<span class="{match.winnerId === match.bottomPlayerId ? 'text-green-300 font-medium' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} flex-1 truncate text-right">
+											<span class="{match.winnerId === match.bottomPlayerId ? 'text-success font-medium' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} flex-1 truncate text-right">
 												{bot?.gamerTag ?? '?'}
 											</span>
 										</div>
@@ -454,8 +454,8 @@
 									<tr class="border-b border-border hover:bg-card/50">
 										<td class="px-2 py-1.5 text-foreground">{e.gamerTag}</td>
 										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground text-xs">#{e.initialSeed}</td>
-										<td class="px-2 py-1.5 text-right font-mono text-green-400">{e.wins}</td>
-										<td class="px-2 py-1.5 text-right font-mono text-red-400">{e.losses}</td>
+										<td class="px-2 py-1.5 text-right font-mono text-success">{e.wins}</td>
+										<td class="px-2 py-1.5 text-right font-mono text-destructive">{e.losses}</td>
 									</tr>
 								{/each}
 							</tbody>

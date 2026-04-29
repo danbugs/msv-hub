@@ -399,16 +399,16 @@
 	{:else}
 
 	<!-- ── Status Card ── -->
-	<div class="mt-6 rounded-xl border {config.paused ? 'border-amber-800 bg-amber-900/10' : config.eventSlug ? 'border-primary bg-primary/10' : 'border-dashed border-border bg-card/50'} p-4">
+	<div class="mt-6 rounded-xl border {config.paused ? 'border-warning-border bg-warning-muted' : config.eventSlug ? 'border-primary bg-primary/10' : 'border-dashed border-border bg-card/50'} p-4">
 		<div class="flex items-start justify-between gap-4">
 			<div class="min-w-0 flex-1">
 				<div class="flex items-center gap-2">
 					<p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current Event</p>
 					{#if config.paused}
-						<span class="rounded-full bg-amber-900/40 px-2 py-0.5 text-xs font-semibold text-amber-400 border border-amber-700">PAUSED</span>
+						<span class="rounded-full bg-warning-muted px-2 py-0.5 text-xs font-semibold text-warning border border-warning-border">PAUSED</span>
 					{:else if config.eventSlug}
-						<span class="flex items-center gap-1 text-xs text-green-400">
-							<span class="inline-block h-1.5 w-1.5 rounded-full bg-green-400"></span>Active
+						<span class="flex items-center gap-1 text-xs text-success">
+							<span class="inline-block h-1.5 w-1.5 rounded-full bg-success"></span>Active
 						</span>
 					{/if}
 				</div>
@@ -431,13 +431,13 @@
 				<button onclick={togglePause} disabled={pauseRunning}
 					class="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50
 						{config.paused
-							? 'border-green-700 bg-green-900/20 text-green-300 hover:border-green-600'
-							: 'border-amber-700 bg-amber-900/20 text-amber-300 hover:border-amber-600'}">
+							? 'border-green-700 bg-green-900/20 text-success hover:border-green-600'
+							: 'border-amber-700 bg-amber-900/20 text-warning hover:border-amber-600'}">
 					{pauseRunning ? '…' : config.paused ? 'Resume Bot' : 'Pause Bot'}
 				</button>
 			</div>
 		</div>
-		{#if pauseError}<p class="mt-2 text-xs text-red-400">{pauseError}</p>{/if}
+		{#if pauseError}<p class="mt-2 text-xs text-destructive">{pauseError}</p>{/if}
 	</div>
 
 	<!-- ── Timeline ── -->
@@ -455,7 +455,7 @@
 		<div class="mt-4 space-y-4">
 			<div>
 				<label for="event-slug" class="block text-sm font-medium text-foreground">
-					StartGG event URL or slug <span class="text-red-400">*</span>
+					StartGG event URL or slug <span class="text-destructive">*</span>
 				</label>
 				<p class="mt-0.5 text-xs text-muted-foreground">
 					Paste the full start.gg URL or just the slug like
@@ -540,7 +540,7 @@
 				></textarea>
 				<div class="mt-1 flex items-center justify-between gap-3">
 					{#if announcementTemplateInput.trim() && announcementTemplateInput.trim() !== DEFAULT_TEMPLATE.trim()}
-						<p class="text-xs text-amber-500">Custom template active — default message will not be used.</p>
+						<p class="text-xs text-warning">Custom template active — default message will not be used.</p>
 					{:else}
 						<p class="text-xs text-muted-foreground">Using default message.</p>
 					{/if}
@@ -557,7 +557,7 @@
 			</div>
 
 			{#if configError}
-				<div class="rounded-lg border border-red-800 bg-red-900/30 p-3 text-sm text-red-400">
+				<div class="rounded-lg border border-destructive-border bg-destructive-muted p-3 text-sm text-destructive">
 					{configError}
 				</div>
 			{/if}
@@ -573,7 +573,7 @@
 				</button>
 
 				{#if configSaved}
-					<span class="text-sm text-green-400">Saved.</span>
+					<span class="text-sm text-success">Saved.</span>
 				{/if}
 
 				{#if config.updatedAt}
@@ -597,7 +597,7 @@
 		<p class="mb-3 text-xs text-muted-foreground">Lock old threads, create forum posts for top-8 graphic, drop-outs, and priority registration.</p>
 
 		{#if !config.eventSlug}
-			<div class="mt-4 rounded-lg border border-yellow-800 bg-yellow-900/20 p-3 text-sm text-yellow-400">
+			<div class="mt-4 rounded-lg border border-warning-border bg-warning-muted p-3 text-sm text-warning">
 				Set and save an event slug above before running setup.
 			</div>
 		{:else}
@@ -632,7 +632,7 @@
 		{/if}
 
 		{#if setupError}
-			<div class="mt-4 rounded-lg border border-red-800 bg-red-900/30 p-3 text-sm text-red-400">
+			<div class="mt-4 rounded-lg border border-destructive-border bg-destructive-muted p-3 text-sm text-destructive">
 				{setupError}
 			</div>
 		{/if}
@@ -643,14 +643,14 @@
 					<div
 						class="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm
 							{step.ok
-								? 'border-green-800 bg-green-900/10'
-								: 'border-red-800 bg-red-900/10'}"
+								? 'border-success-border bg-success-muted'
+								: 'border-destructive-border bg-destructive-muted'}"
 					>
-						<span class="mt-0.5 shrink-0 {step.ok ? 'text-green-400' : 'text-red-400'}">
+						<span class="mt-0.5 shrink-0 {step.ok ? 'text-success' : 'text-destructive'}">
 							{step.ok ? '✓' : '✗'}
 						</span>
 						<div class="min-w-0">
-							<div class="font-medium {step.ok ? 'text-green-300' : 'text-red-300'}">{step.step}</div>
+							<div class="font-medium {step.ok ? 'text-success' : 'text-destructive'}">{step.step}</div>
 							<div class="text-xs text-muted-foreground">{step.detail}</div>
 						</div>
 					</div>
@@ -661,8 +661,8 @@
 					<div
 						class="mt-2 rounded-lg border px-4 py-3 text-sm font-medium
 							{allOk
-								? 'border-green-700 bg-green-900/20 text-green-300'
-								: 'border-yellow-700 bg-yellow-900/20 text-yellow-300'}"
+								? 'border-success-border bg-success-muted text-success'
+								: 'border-warning-border bg-warning-muted text-warning'}"
 					>
 						{#if setupDry}
 							Dry run complete — actions ran against test channels.
@@ -699,14 +699,14 @@
 
 		{#if config.eventSlug}
 					<button onclick={sendAnnouncementNow} disabled={announceRunning}
-						class="rounded-lg border border-amber-700 bg-amber-900/20 px-3 py-1.5 text-xs font-medium text-amber-300 hover:border-amber-600 disabled:opacity-50 transition-colors">
+						class="rounded-lg border border-amber-700 bg-amber-900/20 px-3 py-1.5 text-xs font-medium text-warning hover:border-amber-600 disabled:opacity-50 transition-colors">
 						{announceRunning ? 'Sending…' : 'Send Now'}
 					</button>
 				{/if}
 				</div>
 			</div>
-			{#if announceError}<p class="mt-2 text-xs text-red-400">{announceError}</p>{/if}
-			{#if announceDone}<p class="mt-2 text-xs text-green-400">Sent to #announcements.</p>{/if}
+			{#if announceError}<p class="mt-2 text-xs text-destructive">{announceError}</p>{/if}
+			{#if announceDone}<p class="mt-2 text-xs text-success">Sent to #announcements.</p>{/if}
 		</div>
 
 		<!-- Waitlist Monitoring -->
@@ -721,16 +721,16 @@
 								<span class="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground"></span>No event set
 							</span>
 						{:else if config.paused}
-							<span class="inline-flex items-center gap-1.5 text-xs text-amber-400">
-								<span class="inline-block h-1.5 w-1.5 rounded-full bg-amber-500"></span>Paused
+							<span class="inline-flex items-center gap-1.5 text-xs text-warning">
+								<span class="inline-block h-1.5 w-1.5 rounded-full bg-warning"></span>Paused
 							</span>
 						{:else if config.waitlistCreated}
-							<span class="inline-flex items-center gap-1.5 text-xs text-blue-400">
-								<span class="inline-block h-1.5 w-1.5 rounded-full bg-blue-500"></span>Waitlist created
+							<span class="inline-flex items-center gap-1.5 text-xs text-info">
+								<span class="inline-block h-1.5 w-1.5 rounded-full bg-info"></span>Waitlist created
 							</span>
 						{:else}
-							<span class="inline-flex items-center gap-1.5 text-xs text-green-400">
-								<span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-500"></span>Active
+							<span class="inline-flex items-center gap-1.5 text-xs text-success">
+								<span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-success"></span>Active
 							</span>
 						{/if}
 					</div>
@@ -743,7 +743,7 @@
 				{/if}
 			</div>
 			{#if resetWaitlistResult}
-				<p class="mt-2 text-xs {resetWaitlistResult.ok ? 'text-green-400' : 'text-red-400'}">{resetWaitlistResult.msg}</p>
+				<p class="mt-2 text-xs {resetWaitlistResult.ok ? 'text-success' : 'text-destructive'}">{resetWaitlistResult.msg}</p>
 			{/if}
 		</div>
 	</div>
@@ -787,7 +787,7 @@
 			</button>
 		</div>
 		{#if testRunning}<p class="mt-2 text-xs text-muted-foreground animate-pulse">Running {testRunning}...</p>{/if}
-		{#if testResult}<pre class="mt-2 text-xs whitespace-pre-wrap {testResult.ok ? 'text-green-400' : 'text-red-400'}">{testResult.msg}</pre>{/if}
+		{#if testResult}<pre class="mt-2 text-xs whitespace-pre-wrap {testResult.ok ? 'text-success' : 'text-destructive'}">{testResult.msg}</pre>{/if}
 	</div>
 	</div>
 
@@ -813,7 +813,7 @@
 				{pingRunning ? '…' : 'Send'}
 			</button>
 		</div>
-		{#if pingResult}<p class="mt-1.5 text-xs {pingResult.ok ? 'text-green-400' : 'text-red-400'}">{pingResult.msg}</p>{/if}
+		{#if pingResult}<p class="mt-1.5 text-xs {pingResult.ok ? 'text-success' : 'text-destructive'}">{pingResult.msg}</p>{/if}
 
 		<!-- Manual Fastest Reg -->
 		<div class="mt-4">
@@ -830,7 +830,7 @@
 					{fastestRegRunning ? '…' : 'Send'}
 				</button>
 			</div>
-			{#if fastestRegResult}<pre class="mt-1.5 text-xs whitespace-pre-wrap {fastestRegResult.ok ? 'text-green-400' : 'text-red-400'}">{fastestRegResult.msg}</pre>{/if}
+			{#if fastestRegResult}<pre class="mt-1.5 text-xs whitespace-pre-wrap {fastestRegResult.ok ? 'text-success' : 'text-destructive'}">{fastestRegResult.msg}</pre>{/if}
 		</div>
 
 		<!-- Other tools -->
@@ -844,8 +844,8 @@
 				{newSeasonRunning ? 'Creating…' : 'New Fastest Reg Season'}
 			</button>
 		</div>
-		{#if registerResult}<p class="mt-1.5 text-xs {registerResult.ok ? 'text-green-400' : 'text-red-400'}">{registerResult.msg}</p>{/if}
-		{#if newSeasonResult}<p class="mt-1.5 text-xs {newSeasonResult.ok ? 'text-green-400' : 'text-red-400'}">{newSeasonResult.msg}</p>{/if}
+		{#if registerResult}<p class="mt-1.5 text-xs {registerResult.ok ? 'text-success' : 'text-destructive'}">{registerResult.msg}</p>{/if}
+		{#if newSeasonResult}<p class="mt-1.5 text-xs {newSeasonResult.ok ? 'text-success' : 'text-destructive'}">{newSeasonResult.msg}</p>{/if}
 	</div>
 	</div>
 

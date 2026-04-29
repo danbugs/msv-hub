@@ -106,7 +106,7 @@
 			{/if}
 
 			{#if error}
-				<p class="mt-3 text-sm text-red-400">{error}</p>
+				<p class="mt-3 text-sm text-destructive">{error}</p>
 			{/if}
 		</div>
 	</div>

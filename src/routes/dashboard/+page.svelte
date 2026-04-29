@@ -50,14 +50,14 @@
 				<!-- ① Create Event on StartGG (automated) -->
 				<a href="/dashboard/event-setup"
 					class="block rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary hover:bg-accent">
-					<div class="font-medium text-foreground">① Create Event on StartGG <span class="ml-1.5 text-xs font-normal text-green-400">automated</span></div>
+					<div class="font-medium text-foreground">① Create Event on StartGG <span class="ml-1.5 text-xs font-normal text-success">automated</span></div>
 					<div class="mt-0.5 text-sm text-muted-foreground">Auto-created every Tuesday at 9 AM — manage TOs, config, and manual trigger</div>
 				</a>
 
 				<!-- ② Discord Setup -->
 				<a href="/dashboard/pre-tournament/discord"
 					class="mt-2 block rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary hover:bg-accent">
-					<div class="font-medium text-foreground">② Discord Setup <span class="ml-1.5 text-xs font-normal text-green-400">automated</span></div>
+					<div class="font-medium text-foreground">② Discord Setup <span class="ml-1.5 text-xs font-normal text-success">automated</span></div>
 					<div class="mt-0.5 text-sm text-muted-foreground">Auto-triggered after event creation — configure announcement, waitlist monitoring, and forum posts</div>
 				</a>
 
@@ -94,18 +94,18 @@
 				<!-- ④ Open Registration (fully automated) -->
 				<button onclick={() => toggle('open-reg')}
 					class="w-full text-left rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary hover:bg-accent">
-					<div class="font-medium text-foreground">④ Open Registration <span class="ml-1.5 text-xs font-normal text-green-400">automated</span></div>
+					<div class="font-medium text-foreground">④ Open Registration <span class="ml-1.5 text-xs font-normal text-success">automated</span></div>
 					<div class="mt-0.5 text-sm text-muted-foreground">Balrog handles registration, announcement, fastest registrant, and waitlist</div>
 				</button>
 				{#if expandedStep === 'open-reg'}
 					<div class="mt-2 rounded-lg border border-border bg-card/50 p-4 text-sm text-foreground space-y-3">
-						<p class="font-medium text-green-300">All automated at 8:30 AM:</p>
+						<p class="font-medium text-success">All automated at 8:30 AM:</p>
 						<ol class="list-decimal list-inside space-y-1.5 text-muted-foreground">
 							<li>Balrog opens registration on StartGG and posts the announcement to Discord.</li>
 							<li>Once 4+ public registrants appear, Balrog detects the fastest registrant and posts to the forum with an updated leaderboard.</li>
 							<li>When the event caps, Balrog creates a waitlist thread and announces it.</li>
 						</ol>
-						<p class="font-medium text-amber-300">If something goes wrong:</p>
+						<p class="font-medium text-warning">If something goes wrong:</p>
 						<ol class="list-decimal list-inside space-y-1.5 text-muted-foreground">
 							<li>Go to <a href="/dashboard/pre-tournament/discord" class="text-primary hover:text-primary/80">Discord Setup</a> → Testing → <strong class="text-foreground">Send Now</strong> for the announcement.</li>
 							<li>Use <a href="/dashboard/pre-tournament/discord" class="text-primary hover:text-primary/80">Discord Setup</a> → Tools → <strong class="text-foreground">Manual Fastest Reg</strong> to post a specific event's fastest registrant.</li>
@@ -229,7 +229,7 @@
 									Delete
 								</button>
 							</div>
-							{#if resetResult}<p class="mt-2 text-xs {resetResult.includes('complete') ? 'text-green-400' : 'text-red-400'}">{resetResult}</p>{/if}
+							{#if resetResult}<p class="mt-2 text-xs {resetResult.includes('complete') ? 'text-success' : 'text-destructive'}">{resetResult}</p>{/if}
 						</div>
 					</div>
 				{:else}
