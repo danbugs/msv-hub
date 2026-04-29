@@ -1,0 +1,30 @@
+name: StartGG API Compatibility
+
+on:
+  schedule:
+    # Daily at 10:00 UTC (2:00 AM PST / 3:00 AM PDT)
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+
+jobs:
+  compat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Write .env for integration tests
+        run: |
+          cat <<EOF > .env
+          STARTGG_TOKEN=${{ secrets.STARTGG_TOKEN }}
+          STARTGG_EMAIL=${{ secrets.STARTGG_EMAIL }}
+          STARTGG_PASSWORD=${{ secrets.STARTGG_PASSWORD }}
+          EOF
+
+      - name: Run StartGG compatibility tests
+        run: npx vitest run src/lib/server/startgg-compat.test.ts --reporter=verbose
