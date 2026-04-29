@@ -371,7 +371,7 @@
 		`https://start.gg/{{slug}}`;
 
 	const inputClass =
-		'mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500';
+		'mt-1 block w-full rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring';
 
 	const days = [
 		{ value: 'mon', label: 'Monday' },
@@ -387,23 +387,23 @@
 </script>
 
 <main class="mx-auto max-w-3xl px-4 py-8">
-	<a href="/dashboard" class="text-sm text-violet-400 hover:text-violet-300">&larr; Dashboard</a>
-	<h1 class="mt-4 text-2xl font-bold text-white">Discord Setup</h1>
-	<p class="mt-1 text-gray-400">Configure event, automation, and pre-tournament tasks.</p>
+	<a href="/dashboard" class="text-sm text-primary hover:text-primary/80">&larr; Dashboard</a>
+	<h1 class="mt-4 text-2xl font-bold text-foreground">Discord Setup</h1>
+	<p class="mt-1 text-muted-foreground">Configure event, automation, and pre-tournament tasks.</p>
 
 	{#if configLoading}
-		<div class="mt-8 flex items-center gap-2 text-gray-400">
-			<div class="h-2 w-2 rounded-full bg-violet-500 animate-pulse"></div>
+		<div class="mt-8 flex items-center gap-2 text-muted-foreground">
+			<div class="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
 			Loading config…
 		</div>
 	{:else}
 
 	<!-- ── Status Card ── -->
-	<div class="mt-6 rounded-xl border {config.paused ? 'border-amber-800 bg-amber-900/10' : config.eventSlug ? 'border-violet-800 bg-violet-900/10' : 'border-dashed border-gray-700 bg-gray-900/50'} p-4">
+	<div class="mt-6 rounded-xl border {config.paused ? 'border-amber-800 bg-amber-900/10' : config.eventSlug ? 'border-primary bg-primary/10' : 'border-dashed border-border bg-card/50'} p-4">
 		<div class="flex items-start justify-between gap-4">
 			<div class="min-w-0 flex-1">
 				<div class="flex items-center gap-2">
-					<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Current Event</p>
+					<p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current Event</p>
 					{#if config.paused}
 						<span class="rounded-full bg-amber-900/40 px-2 py-0.5 text-xs font-semibold text-amber-400 border border-amber-700">PAUSED</span>
 					{:else if config.eventSlug}
@@ -413,19 +413,19 @@
 					{/if}
 				</div>
 				{#if config.eventSlug}
-					<p class="mt-1 font-mono text-sm text-white break-all">{config.eventSlug}</p>
-					<div class="mt-1.5 flex flex-wrap gap-3 text-xs text-gray-400">
-						<span>Cap: <span class="text-gray-200">{config.attendeeCap}</span></span>
-						<span>Announcement: <span class="text-gray-200">{nextAnnouncement}</span></span>
-						<span>Waitlist: <span class="text-gray-200">{config.waitlistCreated ? 'Created' : 'Monitoring (Wed)'}</span></span>
+					<p class="mt-1 font-mono text-sm text-foreground break-all">{config.eventSlug}</p>
+					<div class="mt-1.5 flex flex-wrap gap-3 text-xs text-muted-foreground">
+						<span>Cap: <span class="text-foreground">{config.attendeeCap}</span></span>
+						<span>Announcement: <span class="text-foreground">{nextAnnouncement}</span></span>
+						<span>Waitlist: <span class="text-foreground">{config.waitlistCreated ? 'Created' : 'Monitoring (Wed)'}</span></span>
 					</div>
 				{:else}
-					<p class="mt-1 text-sm text-gray-500">No event configured — set one below.</p>
+					<p class="mt-1 text-sm text-muted-foreground">No event configured — set one below.</p>
 				{/if}
 			</div>
 			<div class="flex shrink-0 flex-col items-end gap-2">
 				<button onclick={loadConfig}
-					class="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-violet-600 hover:text-violet-400 transition-colors">
+					class="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
 					Refresh
 				</button>
 				<button onclick={togglePause} disabled={pauseRunning}
@@ -446,20 +446,20 @@
 	<!-- ── Step 1: Event Configuration ── -->
 	<div class="flex gap-4">
 		<div class="flex flex-col items-center">
-			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-700 bg-violet-900/40 text-xs font-bold text-violet-300">1</div>
-			<div class="mt-1 w-px flex-1 bg-gray-800"></div>
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary bg-primary/10 text-xs font-bold text-primary">1</div>
+			<div class="mt-1 w-px flex-1 bg-secondary"></div>
 		</div>
 		<div class="pb-6 pt-1 min-w-0 flex-1">
-		<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Event Configuration</p>
+		<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Event Configuration</p>
 
 		<div class="mt-4 space-y-4">
 			<div>
-				<label for="event-slug" class="block text-sm font-medium text-gray-300">
+				<label for="event-slug" class="block text-sm font-medium text-foreground">
 					StartGG event URL or slug <span class="text-red-400">*</span>
 				</label>
-				<p class="mt-0.5 text-xs text-gray-500">
+				<p class="mt-0.5 text-xs text-muted-foreground">
 					Paste the full start.gg URL or just the slug like
-					<code class="text-gray-400">tournament/micro-132/event/ultimate-singles</code>.
+					<code class="text-muted-foreground">tournament/micro-132/event/ultimate-singles</code>.
 				</p>
 				<input
 					id="event-slug"
@@ -470,15 +470,15 @@
 					class={inputClass}
 				/>
 				{#if eventSlugInput}
-					<p class="mt-1 text-xs text-gray-500">
-						Short slug: <span class="text-gray-300">{shortSlug}</span>
+					<p class="mt-1 text-xs text-muted-foreground">
+						Short slug: <span class="text-foreground">{shortSlug}</span>
 					</p>
 				{/if}
 			</div>
 
 			<div class="grid gap-4 sm:grid-cols-2">
 				<div>
-					<label for="attendee-cap" class="block text-sm font-medium text-gray-300">Attendee cap</label>
+					<label for="attendee-cap" class="block text-sm font-medium text-foreground">Attendee cap</label>
 					<select id="attendee-cap" bind:value={attendeeCapInput} class={inputClass}>
 						<option value={32}>32 (micro)</option>
 						<option value={64}>64 (macro)</option>
@@ -486,8 +486,8 @@
 				</div>
 
 				<div>
-					<label for="reg-day" class="block text-sm font-medium text-gray-300">
-						Announcement day <span class="text-xs text-gray-500">(PST)</span>
+					<label for="reg-day" class="block text-sm font-medium text-foreground">
+						Announcement day <span class="text-xs text-muted-foreground">(PST)</span>
 					</label>
 					<select id="reg-day" bind:value={regDayInput} class={inputClass}>
 						{#each days as d}
@@ -497,7 +497,7 @@
 				</div>
 
 				<div>
-					<label for="reg-hour" class="block text-sm font-medium text-gray-300">Hour (0–23 PST)</label>
+					<label for="reg-hour" class="block text-sm font-medium text-foreground">Hour (0–23 PST)</label>
 					<input
 						id="reg-hour"
 						type="number"
@@ -509,7 +509,7 @@
 				</div>
 
 				<div>
-					<label for="reg-minute" class="block text-sm font-medium text-gray-300">Minute (0–59)</label>
+					<label for="reg-minute" class="block text-sm font-medium text-foreground">Minute (0–59)</label>
 					<input
 						id="reg-minute"
 						type="number"
@@ -523,32 +523,32 @@
 
 			<!-- Announcement template -->
 			<div>
-				<label for="announce-template" class="block text-sm font-medium text-gray-300">
+				<label for="announce-template" class="block text-sm font-medium text-foreground">
 					Announcement message template
 				</label>
-				<p class="mt-0.5 text-xs text-gray-500">
+				<p class="mt-0.5 text-xs text-muted-foreground">
 					Leave blank to use the default message.
-					<code class="text-gray-400">&#123;&#123;slug&#125;&#125;</code> and
-					<code class="text-gray-400">&#123;&#123;cap&#125;&#125;</code> will be replaced.
+					<code class="text-muted-foreground">&#123;&#123;slug&#125;&#125;</code> and
+					<code class="text-muted-foreground">&#123;&#123;cap&#125;&#125;</code> will be replaced.
 				</p>
 				<textarea
 					id="announce-template"
 					bind:value={announcementTemplateInput}
 					rows={8}
 					placeholder={"Leave blank to use the default message. Supports {{slug}} and {{cap}}."}
-					class="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 font-mono text-sm text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+					class="mt-1 block w-full rounded-lg border border-input bg-secondary px-3 py-2 font-mono text-sm text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
 				></textarea>
 				<div class="mt-1 flex items-center justify-between gap-3">
 					{#if announcementTemplateInput.trim() && announcementTemplateInput.trim() !== DEFAULT_TEMPLATE.trim()}
 						<p class="text-xs text-amber-500">Custom template active — default message will not be used.</p>
 					{:else}
-						<p class="text-xs text-gray-600">Using default message.</p>
+						<p class="text-xs text-muted-foreground">Using default message.</p>
 					{/if}
 					{#if announcementTemplateInput.trim() !== DEFAULT_TEMPLATE.trim()}
 						<button
 							type="button"
 							onclick={() => (announcementTemplateInput = DEFAULT_TEMPLATE)}
-							class="shrink-0 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+							class="shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors"
 						>
 							Revert to default
 						</button>
@@ -567,7 +567,7 @@
 					type="button"
 					onclick={saveConfig}
 					disabled={configSaving}
-					class="rounded-lg bg-violet-600 px-5 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50 transition-colors"
+					class="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
 				>
 					{configSaving ? 'Saving…' : 'Save Config'}
 				</button>
@@ -577,7 +577,7 @@
 				{/if}
 
 				{#if config.updatedAt}
-					<span class="ml-auto text-xs text-gray-600">
+					<span class="ml-auto text-xs text-muted-foreground">
 						Last saved {new Date(config.updatedAt).toLocaleString()}
 					</span>
 				{/if}
@@ -589,24 +589,24 @@
 	<!-- ── Step 2: Pre-Tournament Setup ── -->
 	<div class="flex gap-4">
 		<div class="flex flex-col items-center">
-			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-700 bg-violet-900/40 text-xs font-bold text-violet-300">2</div>
-			<div class="mt-1 w-px flex-1 bg-gray-800"></div>
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary bg-primary/10 text-xs font-bold text-primary">2</div>
+			<div class="mt-1 w-px flex-1 bg-secondary"></div>
 		</div>
 		<div class="pb-6 pt-1 min-w-0 flex-1">
-		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Pre-Tournament Setup</p>
-		<p class="mb-3 text-xs text-gray-500">Lock old threads, create forum posts for top-8 graphic, drop-outs, and priority registration.</p>
+		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pre-Tournament Setup</p>
+		<p class="mb-3 text-xs text-muted-foreground">Lock old threads, create forum posts for top-8 graphic, drop-outs, and priority registration.</p>
 
 		{#if !config.eventSlug}
 			<div class="mt-4 rounded-lg border border-yellow-800 bg-yellow-900/20 p-3 text-sm text-yellow-400">
 				Set and save an event slug above before running setup.
 			</div>
 		{:else}
-			<div class="mt-4 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
-				<p class="text-sm text-gray-400">
-					Event: <span class="font-mono text-gray-200">{config.eventSlug}</span>
+			<div class="mt-4 rounded-lg border border-border bg-card/50 p-4">
+				<p class="text-sm text-muted-foreground">
+					Event: <span class="font-mono text-foreground">{config.eventSlug}</span>
 				</p>
-				<p class="mt-0.5 text-sm text-gray-400">
-					Cap: <span class="text-gray-200">{config.attendeeCap} players</span>
+				<p class="mt-0.5 text-sm text-muted-foreground">
+					Cap: <span class="text-foreground">{config.attendeeCap} players</span>
 				</p>
 			</div>
 
@@ -615,16 +615,16 @@
 					type="button"
 					onclick={runPreTournamentSetup}
 					disabled={setupRunning}
-					class="rounded-lg {setupDry ? 'bg-gray-700 hover:bg-gray-600' : 'bg-violet-600 hover:bg-violet-500'} px-5 py-2 text-sm font-medium text-white disabled:opacity-50 transition-colors"
+					class="rounded-lg {setupDry ? 'bg-secondary hover:bg-accent' : 'bg-primary hover:bg-primary/90'} px-5 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50 transition-colors"
 				>
 					{setupRunning ? 'Running…' : setupDry ? 'Dry Run' : 'Run Pre-Tournament Setup'}
 				</button>
 
-				<label class="flex cursor-pointer items-center gap-2 text-sm text-gray-400 select-none">
+				<label class="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground select-none">
 					<input
 						type="checkbox"
 						bind:checked={setupDry}
-						class="h-4 w-4 rounded border-gray-600 bg-gray-800 accent-violet-500"
+						class="h-4 w-4 rounded border-border bg-secondary accent-primary"
 					/>
 					Dry run (uses test channels)
 				</label>
@@ -651,7 +651,7 @@
 						</span>
 						<div class="min-w-0">
 							<div class="font-medium {step.ok ? 'text-green-300' : 'text-red-300'}">{step.step}</div>
-							<div class="text-xs text-gray-400">{step.detail}</div>
+							<div class="text-xs text-muted-foreground">{step.detail}</div>
 						</div>
 					</div>
 				{/each}
@@ -679,20 +679,20 @@
 	<!-- ── Step 3: Automation (Announcement + Waitlist) ── -->
 	<div class="flex gap-4">
 		<div class="flex flex-col items-center">
-			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-700 bg-violet-900/40 text-xs font-bold text-violet-300">3</div>
-			<div class="mt-1 w-px flex-1 bg-gray-800"></div>
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary bg-primary/10 text-xs font-bold text-primary">3</div>
+			<div class="mt-1 w-px flex-1 bg-secondary"></div>
 		</div>
 		<div class="pb-6 pt-1 min-w-0 flex-1">
-		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Automation</p>
+		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Automation</p>
 
 		<!-- Announcement -->
-		<div class="rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+		<div class="rounded-lg border border-border bg-card/50 p-4">
 			<div class="flex items-center justify-between">
 				<div>
-					<p class="text-sm font-medium text-white">Registration Announcement</p>
-					<div class="mt-1 flex items-center gap-2 text-xs text-gray-500">
-						<span class="inline-block h-1.5 w-1.5 rounded-full bg-violet-500"></span>
-						{nextAnnouncement} <span class="text-gray-600">(automatic via QStash)</span>
+					<p class="text-sm font-medium text-foreground">Registration Announcement</p>
+					<div class="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+						<span class="inline-block h-1.5 w-1.5 rounded-full bg-primary"></span>
+						{nextAnnouncement} <span class="text-muted-foreground">(automatic via QStash)</span>
 					</div>
 				</div>
 				<div>
@@ -710,15 +710,15 @@
 		</div>
 
 		<!-- Waitlist Monitoring -->
-		<div class="mt-3 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+		<div class="mt-3 rounded-lg border border-border bg-card/50 p-4">
 			<div class="flex items-center justify-between">
 				<div>
-					<p class="text-sm font-medium text-white">Waitlist Monitoring</p>
-					<p class="mt-1 text-xs text-gray-500">Checks every 5 min on Wednesdays via QStash. Auto-creates waitlist forum when cap is hit.</p>
+					<p class="text-sm font-medium text-foreground">Waitlist Monitoring</p>
+					<p class="mt-1 text-xs text-muted-foreground">Checks every 5 min on Wednesdays via QStash. Auto-creates waitlist forum when cap is hit.</p>
 					<div class="mt-1.5">
 						{#if !config.eventSlug}
-							<span class="inline-flex items-center gap-1.5 text-xs text-gray-500">
-								<span class="inline-block h-1.5 w-1.5 rounded-full bg-gray-600"></span>No event set
+							<span class="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+								<span class="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground"></span>No event set
 							</span>
 						{:else if config.paused}
 							<span class="inline-flex items-center gap-1.5 text-xs text-amber-400">
@@ -737,7 +737,7 @@
 				</div>
 				{#if config.eventSlug && config.waitlistCreated}
 					<button onclick={resetWaitlistFlag} disabled={resetWaitlistRunning}
-						class="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-violet-600 hover:text-violet-400 disabled:opacity-40 transition-colors">
+						class="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-40 transition-colors">
 						{resetWaitlistRunning ? 'Resetting…' : 'Reset Flag'}
 					</button>
 				{/if}
@@ -752,41 +752,41 @@
 	<!-- ── Step 4: Testing ── -->
 	<div class="flex gap-4">
 		<div class="flex flex-col items-center">
-			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-700 bg-gray-900 text-xs font-bold text-gray-500">T</div>
-			<div class="mt-1 w-px flex-1 bg-gray-800"></div>
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-card text-xs font-bold text-muted-foreground">T</div>
+			<div class="mt-1 w-px flex-1 bg-secondary"></div>
 		</div>
 		<div class="pb-6 pt-1 min-w-0 flex-1">
-		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Testing</p>
-		<p class="mb-3 text-xs text-gray-500">All tests post to #talk-to-balrog or the test waitlist channel — never real channels.</p>
+		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Testing</p>
+		<p class="mb-3 text-xs text-muted-foreground">All tests post to #talk-to-balrog or the test waitlist channel — never real channels.</p>
 
 		<div class="grid gap-2 sm:grid-cols-2">
 			<button onclick={() => runTest('announcement')} disabled={!!testRunning}
-				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
-				<div class="text-sm font-medium text-white">Test Announcement</div>
-				<div class="mt-0.5 text-xs text-gray-500">Posts to #talk-to-balrog</div>
+				class="rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:border-primary disabled:opacity-50">
+				<div class="text-sm font-medium text-foreground">Test Announcement</div>
+				<div class="mt-0.5 text-xs text-muted-foreground">Posts to #talk-to-balrog</div>
 			</button>
 			<button onclick={() => runTest('attendee-check')} disabled={!!testRunning}
-				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
-				<div class="text-sm font-medium text-white">Test Attendee Check</div>
-				<div class="mt-0.5 text-xs text-gray-500">Checks count, no posting</div>
+				class="rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:border-primary disabled:opacity-50">
+				<div class="text-sm font-medium text-foreground">Test Attendee Check</div>
+				<div class="mt-0.5 text-xs text-muted-foreground">Checks count, no posting</div>
 			</button>
 			<button onclick={() => runTest('waitlist-test')} disabled={!!testRunning}
-				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
-				<div class="text-sm font-medium text-white">Test Waitlist</div>
-				<div class="mt-0.5 text-xs text-gray-500">Forum post in test channel</div>
+				class="rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:border-primary disabled:opacity-50">
+				<div class="text-sm font-medium text-foreground">Test Waitlist</div>
+				<div class="mt-0.5 text-xs text-muted-foreground">Forum post in test channel</div>
 			</button>
 			<button onclick={() => runTest('motivational-ai')} disabled={!!testRunning}
-				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
-				<div class="text-sm font-medium text-white">Test Motivational</div>
-				<div class="mt-0.5 text-xs text-gray-500">AI-generated, #talk-to-balrog</div>
+				class="rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:border-primary disabled:opacity-50">
+				<div class="text-sm font-medium text-foreground">Test Motivational</div>
+				<div class="mt-0.5 text-xs text-muted-foreground">AI-generated, #talk-to-balrog</div>
 			</button>
 			<button onclick={() => runTest('fastest-reg')} disabled={!!testRunning}
-				class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-left transition-colors hover:border-violet-600 disabled:opacity-50">
-				<div class="text-sm font-medium text-white">Test Fastest Reg</div>
-				<div class="mt-0.5 text-xs text-gray-500">Current event, #talk-to-balrog</div>
+				class="rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:border-primary disabled:opacity-50">
+				<div class="text-sm font-medium text-foreground">Test Fastest Reg</div>
+				<div class="mt-0.5 text-xs text-muted-foreground">Current event, #talk-to-balrog</div>
 			</button>
 		</div>
-		{#if testRunning}<p class="mt-2 text-xs text-gray-400 animate-pulse">Running {testRunning}...</p>{/if}
+		{#if testRunning}<p class="mt-2 text-xs text-muted-foreground animate-pulse">Running {testRunning}...</p>{/if}
 		{#if testResult}<pre class="mt-2 text-xs whitespace-pre-wrap {testResult.ok ? 'text-green-400' : 'text-red-400'}">{testResult.msg}</pre>{/if}
 	</div>
 	</div>
@@ -794,22 +794,22 @@
 	<!-- ── Tools ── -->
 	<div class="flex gap-4">
 		<div class="flex flex-col items-center">
-			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-700 bg-gray-900 text-xs font-bold text-gray-500">∞</div>
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-card text-xs font-bold text-muted-foreground">∞</div>
 		</div>
 		<div class="pb-2 pt-1 min-w-0 flex-1">
-		<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Tools</p>
+		<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tools</p>
 		<div class="flex gap-2">
 			<select bind:value={pingChannel}
-				class="rounded-lg border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-300 focus:border-violet-500 focus:outline-none">
+				class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none">
 				{#each SEND_CHANNELS as ch}
 					<option value={ch.value}>{ch.label}</option>
 				{/each}
 			</select>
 			<input type="text" bind:value={pingMessage} placeholder="Send a message…"
 				onkeydown={(e) => e.key === 'Enter' && sendPing()}
-				class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none" />
+				class="flex-1 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 			<button onclick={sendPing} disabled={pingRunning || !pingMessage.trim()}
-				class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors">
+				class="rounded-lg border border-border px-4 py-1.5 text-sm text-muted-foreground hover:border-primary hover:text-primary/80 disabled:opacity-50 transition-colors">
 				{pingRunning ? '…' : 'Send'}
 			</button>
 		</div>
@@ -817,16 +817,16 @@
 
 		<!-- Manual Fastest Reg -->
 		<div class="mt-4">
-			<p class="mb-1.5 text-xs font-medium text-gray-400">Manual Fastest Reg</p>
+			<p class="mb-1.5 text-xs font-medium text-muted-foreground">Manual Fastest Reg</p>
 			<div class="flex gap-2">
 				<input type="text" bind:value={fastestRegSlug} placeholder="tournament/microspacing-vancouver-135/event/ultimate-singles"
-					class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none" />
-				<label class="flex items-center gap-1.5 text-xs text-gray-400">
+					class="flex-1 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
+				<label class="flex items-center gap-1.5 text-xs text-muted-foreground">
 					<input type="checkbox" bind:checked={fastestRegPostToReal} class="rounded" />
 					Post to real forum
 				</label>
 				<button onclick={sendFastestReg} disabled={fastestRegRunning || !fastestRegSlug.trim()}
-					class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors">
+					class="rounded-lg border border-border px-4 py-1.5 text-sm text-muted-foreground hover:border-primary hover:text-primary/80 disabled:opacity-50 transition-colors">
 					{fastestRegRunning ? '…' : 'Send'}
 				</button>
 			</div>
@@ -836,11 +836,11 @@
 		<!-- Other tools -->
 		<div class="mt-4 flex flex-wrap gap-2">
 			<button onclick={registerSlashCommands} disabled={registerRunning}
-				class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors">
+				class="rounded-lg border border-border px-4 py-1.5 text-sm text-muted-foreground hover:border-primary hover:text-primary/80 disabled:opacity-50 transition-colors">
 				{registerRunning ? 'Registering…' : 'Register Slash Commands'}
 			</button>
 			<button onclick={createNewSeason} disabled={newSeasonRunning}
-				class="rounded-lg border border-gray-700 px-4 py-1.5 text-sm text-gray-400 hover:border-violet-600 hover:text-violet-300 disabled:opacity-50 transition-colors">
+				class="rounded-lg border border-border px-4 py-1.5 text-sm text-muted-foreground hover:border-primary hover:text-primary/80 disabled:opacity-50 transition-colors">
 				{newSeasonRunning ? 'Creating…' : 'New Fastest Reg Season'}
 			</button>
 		</div>

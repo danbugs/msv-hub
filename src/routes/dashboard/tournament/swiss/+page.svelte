@@ -251,20 +251,20 @@
 </script>
 
 <main class="mx-auto max-w-5xl px-4 py-8">
-	<a href="/dashboard" class="text-sm text-violet-400 hover:text-violet-300">&larr; Dashboard</a>
-	<h1 class="mt-4 text-2xl font-bold text-white">Run Swiss</h1>
+	<a href="/dashboard" class="text-sm text-primary hover:text-primary/80">&larr; Dashboard</a>
+	<h1 class="mt-4 text-2xl font-bold text-foreground">Run Swiss</h1>
 
 	{#if error}
 		<div class="mt-4 flex items-start gap-2 rounded-lg border border-red-800 bg-red-900/30 px-4 py-3 text-sm text-red-400">
 			<span class="min-w-0 flex-1">{error}</span>
-			<button onclick={() => error = ''} class="shrink-0 text-red-400 hover:text-white leading-none" title="Dismiss">✕</button>
+			<button onclick={() => error = ''} class="shrink-0 text-red-400 hover:text-foreground leading-none" title="Dismiss">✕</button>
 		</div>
 	{/if}
 
 	{#if showSetup && !tournament}
-		<div class="mt-6 rounded-xl border border-dashed border-gray-700 p-8 text-center text-gray-500">
+		<div class="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
 			No active tournament.
-			<a href="/dashboard/pre-tournament/seed" class="block mt-2 text-violet-400 hover:text-violet-300">
+			<a href="/dashboard/pre-tournament/seed" class="block mt-2 text-primary hover:text-primary/80">
 				Run the seeder first, then click "Start Swiss →" &larr;
 			</a>
 		</div>
@@ -272,12 +272,12 @@
 	{:else if tournament}
 		<!-- Header -->
 		<div class="mt-2 flex flex-wrap items-center gap-3">
-			<h2 class="text-lg text-gray-300">{tournament.name}</h2>
-			<span class="rounded-full bg-gray-800 px-3 py-0.5 text-xs font-medium text-violet-400">
+			<h2 class="text-lg text-foreground">{tournament.name}</h2>
+			<span class="rounded-full bg-secondary px-3 py-0.5 text-xs font-medium text-primary">
 				{tournament.phase === 'swiss' ? `Swiss — Round ${tournament.currentRound}/${tournament.settings.numRounds}` : tournament.phase}
 			</span>
-			<span class="text-xs text-gray-500">{tournament.entrants.length} players · {tournament.settings.numStations} stations</span>
-			<a href="/live/{tournament.slug}" target="_blank" class="ml-auto text-xs text-gray-500 hover:text-violet-400">
+			<span class="text-xs text-muted-foreground">{tournament.entrants.length} players · {tournament.settings.numStations} stations</span>
+			<a href="/live/{tournament.slug}" target="_blank" class="ml-auto text-xs text-muted-foreground hover:text-primary">
 				Live: /live/{tournament.slug} ↗
 			</a>
 		</div>
@@ -287,11 +287,11 @@
 			<div class="mt-6 flex flex-wrap items-center gap-3">
 				{#if tournament.currentRound === 0 || isRoundComplete()}
 					<button onclick={() => startNextRound()} disabled={loading}
-						class="rounded-lg bg-violet-600 px-5 py-2 font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50">
+						class="rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
 						{loading ? 'Generating...' : tournament.currentRound === 0 ? 'Start Round 1' : (isSwissComplete() || isFinalRoundComplete()) ? 'Generate Bracket Split →' : `Start Round ${tournament.currentRound + 1}`}
 					</button>
 					<select bind:value={roundAnnounceChannel}
-						class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 focus:border-violet-500 focus:outline-none">
+						class="rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none">
 						{#each ANNOUNCE_CHANNELS as ch}
 							<option value={ch.value}>{ch.label}</option>
 						{/each}
@@ -299,7 +299,7 @@
 				{/if}
 				{#if tournament.currentRound > 0}
 					<button onclick={syncFromStartGG} disabled={syncingFromStartGG}
-						class="ml-auto rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-500 hover:border-violet-700 hover:text-violet-400 transition-colors disabled:opacity-50"
+						class="ml-auto rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
 						title="Sync from StartGG — pulls results and overwrites MSV Hub's Swiss state">
 						{syncingFromStartGG ? 'Syncing...' : 'Sync from StartGG'}
 					</button>
@@ -345,11 +345,11 @@
 							<span class="shrink-0 font-semibold">StartGG error</span>
 							<span class="min-w-0 flex-1 break-words">{err.message}</span>
 							<button onclick={() => dismissedErrorTs = new Set([...dismissedErrorTs, err.ts])}
-								class="shrink-0 text-red-300 hover:text-white leading-none" title="Dismiss">✕</button>
+								class="shrink-0 text-red-300 hover:text-foreground leading-none" title="Dismiss">✕</button>
 						</div>
 					{/each}
 					<button onclick={clearStartggErrors}
-						class="text-xs text-gray-500 hover:text-gray-300 px-1">Clear all</button>
+						class="text-xs text-muted-foreground hover:text-foreground px-1">Clear all</button>
 				</div>
 			{/if}
 
@@ -358,8 +358,8 @@
 				{@const isCurrent = round.status === 'active'}
 				<div class="mt-6">
 					<div class="flex items-center gap-3 mb-3">
-						<h3 class="text-lg font-semibold text-white">Round {round.number}</h3>
-						<span class="rounded-full px-2 py-0.5 text-xs font-medium {isCurrent ? 'bg-violet-900/50 text-violet-300' : 'bg-gray-800 text-gray-400'}">
+						<h3 class="text-lg font-semibold text-foreground">Round {round.number}</h3>
+						<span class="rounded-full px-2 py-0.5 text-xs font-medium {isCurrent ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}">
 							{round.status}
 						</span>
 						{#if round.byePlayerId}
@@ -371,8 +371,8 @@
 					{#each groupMatchesByRecord(round) as group}
 						<div>
 							<div class="flex items-center gap-2 mb-1">
-								<span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{group.label}</span>
-								<div class="flex-1 border-t border-gray-800"></div>
+								<span class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{group.label}</span>
+								<div class="flex-1 border-t border-border"></div>
 							</div>
 							<div class="space-y-1">
 								{#each group.matches as match}
@@ -383,53 +383,53 @@
 								{@const isReporting = reportingMatches.has(match.id)}
 								{@const canInteract = (isCurrent || isFixing) && !isReporting}
 
-								<div class="rounded-lg bg-gray-900 {match.isStream ? 'border border-violet-700' : 'border border-transparent'}">
+								<div class="rounded-lg bg-card {match.isStream ? 'border border-primary' : 'border border-transparent'}">
 									<!-- Match row -->
 									<div class="flex items-center gap-2 px-3 py-2">
 										<!-- Station label -->
-										<span class="w-16 shrink-0 text-right text-xs font-mono {match.isStream ? 'text-violet-400' : 'text-gray-500'}">
+										<span class="w-16 shrink-0 text-right text-xs font-mono {match.isStream ? 'text-primary' : 'text-muted-foreground'}">
 											{match.isStream ? 'STREAM' : `Stn ${match.station}`}
 										</span>
 
 										<!-- Top player -->
 										<button
 											class="flex-1 min-w-0 truncate text-left rounded px-2 py-1 text-sm transition-colors
-												{isPending && pendingWinner?.winnerId === match.topPlayerId ? 'bg-violet-900/40 text-violet-200' :
-												 isPending ? 'text-gray-500' :
+												{isPending && pendingWinner?.winnerId === match.topPlayerId ? 'bg-primary/10 text-primary' :
+												 isPending ? 'text-muted-foreground' :
 												 match.winnerId === match.topPlayerId ? 'bg-green-900/30 text-green-300 font-medium' :
-												 match.winnerId ? 'text-gray-500' :
-												 'text-white'}
-												{canInteract ? 'hover:bg-gray-800 cursor-pointer' : 'pointer-events-none'}"
+												 match.winnerId ? 'text-muted-foreground' :
+												 'text-foreground'}
+												{canInteract ? 'hover:bg-accent cursor-pointer' : 'pointer-events-none'}"
 											disabled={!canInteract}
 											onclick={() => selectWinner(match.id, match.topPlayerId, isCurrent, isFixing)}>
-											<span class="text-xs text-gray-500 mr-1">#{top?.initialSeed}</span>
+											<span class="text-xs text-muted-foreground mr-1">#{top?.initialSeed}</span>
 											{top?.gamerTag ?? '?'}
 											{#if match.winnerId === match.topPlayerId && match.isDQ}
 												<span class="ml-1 text-xs text-orange-400">DQ win</span>
 											{:else if match.winnerId === match.topPlayerId && match.topScore !== undefined}
-												<span class="ml-1 text-xs text-gray-400">{match.topScore}-{match.bottomScore}</span>
+												<span class="ml-1 text-xs text-muted-foreground">{match.topScore}-{match.bottomScore}</span>
 											{/if}
 										</button>
 
-										<span class="text-gray-600 text-xs shrink-0">vs</span>
+										<span class="text-muted-foreground text-xs shrink-0">vs</span>
 
 										<!-- Bottom player -->
 										<button
 											class="flex-1 min-w-0 truncate text-left rounded px-2 py-1 text-sm transition-colors
-												{isPending && pendingWinner?.winnerId === match.bottomPlayerId ? 'bg-violet-900/40 text-violet-200' :
-												 isPending ? 'text-gray-500' :
+												{isPending && pendingWinner?.winnerId === match.bottomPlayerId ? 'bg-primary/10 text-primary' :
+												 isPending ? 'text-muted-foreground' :
 												 match.winnerId === match.bottomPlayerId ? 'bg-green-900/30 text-green-300 font-medium' :
-												 match.winnerId ? 'text-gray-500' :
-												 'text-white'}
-												{canInteract ? 'hover:bg-gray-800 cursor-pointer' : 'pointer-events-none'}"
+												 match.winnerId ? 'text-muted-foreground' :
+												 'text-foreground'}
+												{canInteract ? 'hover:bg-accent cursor-pointer' : 'pointer-events-none'}"
 											disabled={!canInteract}
 											onclick={() => selectWinner(match.id, match.bottomPlayerId, isCurrent, isFixing)}>
-											<span class="text-xs text-gray-500 mr-1">#{bot?.initialSeed}</span>
+											<span class="text-xs text-muted-foreground mr-1">#{bot?.initialSeed}</span>
 											{bot?.gamerTag ?? '?'}
 											{#if match.winnerId === match.bottomPlayerId && match.isDQ}
 												<span class="ml-1 text-xs text-orange-400">DQ win</span>
 											{:else if match.winnerId === match.bottomPlayerId && match.bottomScore !== undefined}
-												<span class="ml-1 text-xs text-gray-400">{match.topScore}-{match.bottomScore}</span>
+												<span class="ml-1 text-xs text-muted-foreground">{match.topScore}-{match.bottomScore}</span>
 											{/if}
 										</button>
 
@@ -437,14 +437,14 @@
 										<div class="flex items-center gap-1 shrink-0">
 											{#if isCurrent && !match.isStream}
 												<button onclick={() => setStreamMatch(match.id)}
-													class="text-xs px-2 py-1 rounded text-gray-600 hover:text-violet-400 hover:bg-violet-900/20 transition-colors"
+													class="text-xs px-2 py-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
 													title="Set as stream match">
 													📺
 												</button>
 											{/if}
 											{#if round.status === 'completed' && match.winnerId}
 												<button onclick={() => { fixingMatchId = isFixing ? null : match.id; pendingWinner = null; }}
-													class="text-xs px-2 py-1 rounded {isFixing ? 'bg-yellow-900/30 text-yellow-300' : 'text-gray-500 hover:text-yellow-400'}">
+													class="text-xs px-2 py-1 rounded {isFixing ? 'bg-yellow-900/30 text-yellow-300' : 'text-muted-foreground hover:text-yellow-400'}">
 													{isFixing ? 'Cancel' : 'Fix'}
 												</button>
 											{/if}
@@ -454,11 +454,11 @@
 									<!-- Score picker (shown when a winner is selected but no score yet) -->
 									{#if isReporting}
 										<div class="flex items-center gap-2 px-3 pb-2">
-											<span class="text-xs text-gray-400 ml-16 animate-pulse">Reporting...</span>
+											<span class="text-xs text-muted-foreground ml-16 animate-pulse">Reporting...</span>
 										</div>
 									{:else if isPending}
 										<div class="flex items-center gap-2 px-3 pb-2">
-											<span class="text-xs text-gray-400 ml-16">Score:</span>
+											<span class="text-xs text-muted-foreground ml-16">Score:</span>
 											<button
 												onclick={() => reportMatch(match.id, pendingWinner!.winnerId, '2-0', round.number)}
 												class="rounded bg-green-700 px-3 py-1 text-xs font-medium text-white hover:bg-green-600">
@@ -476,7 +476,7 @@
 												DQ Win
 											</button>
 											<button onclick={() => pendingWinner = null}
-												class="text-xs text-gray-500 hover:text-gray-300 px-2">Cancel</button>
+												class="text-xs text-muted-foreground hover:text-foreground px-2">Cancel</button>
 										</div>
 									{/if}
 								</div>
@@ -490,12 +490,12 @@
 
 			<!-- Standings -->
 			{#if tournament.currentRound > 0}
-				<details class="mt-8 rounded-lg border border-gray-800 bg-gray-900">
-					<summary class="cursor-pointer px-4 py-3 text-sm font-medium text-gray-300">Current Standings</summary>
+				<details class="mt-8 rounded-lg border border-border bg-card">
+					<summary class="cursor-pointer px-4 py-3 text-sm font-medium text-foreground">Current Standings</summary>
 					<div class="px-4 pb-4">
 						<table class="w-full text-sm">
 							<thead>
-								<tr class="border-b border-gray-700 text-left text-gray-400">
+								<tr class="border-b border-border text-left text-muted-foreground">
 									<th class="px-2 py-2 text-right w-10">#</th>
 									<th class="px-2 py-2">Tag</th>
 									<th class="px-2 py-2 text-right">Seed</th>
@@ -519,10 +519,10 @@
 										return { ...e, wins, losses };
 									})
 									.sort((a, b) => b.wins - a.wins || a.losses - b.losses || a.initialSeed - b.initialSeed) as entrant, idx}
-									<tr class="border-b border-gray-800">
-										<td class="px-2 py-1.5 text-right font-mono text-gray-500">{idx + 1}</td>
-										<td class="px-2 py-1.5 text-white">{entrant.gamerTag}</td>
-										<td class="px-2 py-1.5 text-right font-mono text-gray-400">#{entrant.initialSeed}</td>
+									<tr class="border-b border-border">
+										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">{idx + 1}</td>
+										<td class="px-2 py-1.5 text-foreground">{entrant.gamerTag}</td>
+										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">#{entrant.initialSeed}</td>
 										<td class="px-2 py-1.5 text-right font-mono text-green-400">{entrant.wins}</td>
 										<td class="px-2 py-1.5 text-right font-mono text-red-400">{entrant.losses}</td>
 									</tr>
@@ -536,15 +536,15 @@
 
 		{#if tournament.phase === 'brackets' && tournament.finalStandings}
 			<div class="mt-6">
-				<h3 class="text-lg font-semibold text-white">Swiss Complete — Final Standings</h3>
+				<h3 class="text-lg font-semibold text-foreground">Swiss Complete — Final Standings</h3>
 				<div class="mt-3 grid gap-6 sm:grid-cols-2">
 					<div>
-						<h4 class="text-sm font-medium text-violet-400 mb-2">Main Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'main').length} players)</h4>
+						<h4 class="text-sm font-medium text-primary mb-2">Main Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'main').length} players)</h4>
 						{#each tournament.finalStandings.filter((s) => s.bracket === 'main') as s}
 							<div class="flex items-center gap-2 text-sm py-0.5">
-								<span class="w-6 text-right font-mono text-gray-500">{s.rank}.</span>
-								<span class="text-white">{s.gamerTag}</span>
-								<span class="text-gray-500">{s.wins}-{s.losses}</span>
+								<span class="w-6 text-right font-mono text-muted-foreground">{s.rank}.</span>
+								<span class="text-foreground">{s.gamerTag}</span>
+								<span class="text-muted-foreground">{s.wins}-{s.losses}</span>
 								{#if s.cinderellaBonus > 0}
 									<span class="text-yellow-400 text-xs">+{s.cinderellaBonus.toFixed(0)} Cinderella</span>
 								{/if}
@@ -555,9 +555,9 @@
 						<h4 class="text-sm font-medium text-red-400 mb-2">Redemption Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'redemption').length} players)</h4>
 						{#each tournament.finalStandings.filter((s) => s.bracket === 'redemption') as s}
 							<div class="flex items-center gap-2 text-sm py-0.5">
-								<span class="w-6 text-right font-mono text-gray-500">{s.rank}.</span>
-								<span class="text-white">{s.gamerTag}</span>
-								<span class="text-gray-500">{s.wins}-{s.losses}</span>
+								<span class="w-6 text-right font-mono text-muted-foreground">{s.rank}.</span>
+								<span class="text-foreground">{s.gamerTag}</span>
+								<span class="text-muted-foreground">{s.wins}-{s.losses}</span>
 								{#if s.cinderellaBonus > 0}
 									<span class="text-yellow-400 text-xs">+{s.cinderellaBonus.toFixed(0)} Cinderella</span>
 								{/if}
@@ -591,7 +591,7 @@
 									<p class="text-xs text-amber-400">
 										Both went {lastMain.wins}-{lastMain.losses}. <strong>{lastMain.gamerTag}</strong> {diffLabel} — {reason}.
 									</p>
-									<p class="text-xs text-gray-500">
+									<p class="text-xs text-muted-foreground">
 										Score: {lastMain.gamerTag} {lastMain.totalScore.toFixed(1)} pts vs {firstRed.gamerTag} {firstRed.totalScore.toFixed(1)} pts
 									</p>
 								</div>
@@ -600,18 +600,18 @@
 					{/each}
 
 					<!-- Split recommendation -->
-					<div class="mt-4 rounded-lg border border-violet-700 bg-violet-900/20 p-3 text-sm text-violet-300">
+					<div class="mt-4 rounded-lg border border-primary bg-primary/10 p-3 text-sm text-primary">
 						<strong>Next step:</strong> Click below to push the bracket split to StartGG
 						({mainPlayers.length} players to Main, {tournament.finalStandings.filter(s => s.bracket === 'redemption').length} to Redemption) and start bracket reporting.
 					</div>
 				{/each}
 				<div class="mt-4 flex flex-wrap items-center gap-3">
 					<button onclick={pushAndGoToBrackets} disabled={pushingToBrackets}
-						class="rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50">
+						class="rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
 						{pushingToBrackets ? 'Pushing to StartGG…' : 'Push to StartGG & Start Brackets →'}
 					</button>
 					<select bind:value={roundAnnounceChannel}
-						class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 focus:border-violet-500 focus:outline-none"
+						class="rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none"
 						title="Channel to announce bracket start">
 						{#each ANNOUNCE_CHANNELS as ch}
 							<option value={ch.value}>{ch.label}</option>

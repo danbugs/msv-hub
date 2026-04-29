@@ -212,18 +212,18 @@
 		else goto('/dashboard/tournament/swiss');
 	}
 
-	const inputClass = 'mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500';
+	const inputClass = 'mt-1 block w-full rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring';
 </script>
 
 <main class="mx-auto max-w-4xl px-4 py-8">
-	<a href="/dashboard" class="text-sm text-violet-400 hover:text-violet-300">&larr; Dashboard</a>
-	<h1 class="mt-4 text-2xl font-bold text-white">Seed Event</h1>
-	<p class="mt-1 text-gray-400">Generate Elo-based seedings for Swiss pairings.</p>
+	<a href="/dashboard" class="text-sm text-primary hover:text-primary/80">&larr; Dashboard</a>
+	<h1 class="mt-4 text-2xl font-bold text-foreground">Seed Event</h1>
+	<p class="mt-1 text-muted-foreground">Generate Elo-based seedings for Swiss pairings.</p>
 
 	{#if error}
 		<div class="mt-4 flex items-start gap-2 rounded-lg border border-red-800 bg-red-900/30 px-4 py-3 text-sm text-red-400">
 			<span class="flex-1">{error}</span>
-			<button onclick={() => error = ''} class="shrink-0 text-red-400 hover:text-white">✕</button>
+			<button onclick={() => error = ''} class="shrink-0 text-red-400 hover:text-foreground">✕</button>
 		</div>
 	{/if}
 
@@ -233,62 +233,62 @@
 	<div class="flex gap-4">
 		<div class="flex flex-col items-center">
 			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border
-				{currentStep >= 1 ? 'border-violet-700 bg-violet-900/40 text-violet-300' : 'border-gray-700 bg-gray-900 text-gray-500'}
+				{currentStep >= 1 ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground'}
 				text-xs font-bold">1</div>
-			<div class="mt-1 w-px flex-1 bg-gray-800"></div>
+			<div class="mt-1 w-px flex-1 bg-secondary"></div>
 		</div>
 		<div class="pb-6 pt-1 min-w-0 flex-1">
-			<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Generate Seeding</p>
+			<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Generate Seeding</p>
 
 			<form onsubmit={(e) => { e.preventDefault(); runSeeder(); }} class="space-y-4">
 				<div>
-					<label for="target" class="block text-sm font-medium text-gray-300">Event number</label>
+					<label for="target" class="block text-sm font-medium text-foreground">Event number</label>
 					<input id="target" type="number"
 						value={targetNumber}
 						oninput={(e) => onTargetChange((e.target as HTMLInputElement).value)}
-						required placeholder="e.g. 134" class="mt-1 w-48 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none" />
-					<p class="mt-1 text-xs text-gray-500">Uses the previous 10 events for Elo history.</p>
+						required placeholder="e.g. 134" class="mt-1 w-48 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
+					<p class="mt-1 text-xs text-muted-foreground">Uses the previous 10 events for Elo history.</p>
 				</div>
 
 				<button type="button" onclick={() => showAdvanced = !showAdvanced}
-					class="text-sm text-gray-400 hover:text-violet-400 transition-colors">
+					class="text-sm text-muted-foreground hover:text-primary transition-colors">
 					{showAdvanced ? '▾' : '▸'} Advanced
 				</button>
 
 				{#if showAdvanced}
-					<div class="grid gap-4 sm:grid-cols-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+					<div class="grid gap-4 sm:grid-cols-2 rounded-lg border border-border bg-card/50 p-4">
 						<div>
-							<label for="mode" class="block text-sm font-medium text-gray-300">Mode</label>
+							<label for="mode" class="block text-sm font-medium text-foreground">Mode</label>
 							<select id="mode" bind:value={mode} class={inputClass}>
 								<option value="micro">Micro</option>
 								<option value="macro">Macro</option>
 							</select>
 						</div>
 						<div>
-							<label for="season-start" class="block text-sm font-medium text-gray-300">Season Start</label>
-							<p class="text-xs text-gray-500 mb-1">First event # for Elo. Default: target - 10.</p>
+							<label for="season-start" class="block text-sm font-medium text-foreground">Season Start</label>
+							<p class="text-xs text-muted-foreground mb-1">First event # for Elo. Default: target - 10.</p>
 							<input id="season-start" type="number" bind:value={seasonStart} placeholder="auto" class={inputClass} />
 						</div>
 						<div>
-							<label for="jitter" class="block text-sm font-medium text-gray-300">Jitter (default 5)</label>
-							<p class="text-xs text-gray-500 mb-1">Max Elo noise. Lower = more stable seeds.</p>
+							<label for="jitter" class="block text-sm font-medium text-foreground">Jitter (default 5)</label>
+							<p class="text-xs text-muted-foreground mb-1">Max Elo noise. Lower = more stable seeds.</p>
 							<input id="jitter" type="number" step="0.1" bind:value={jitter} class={inputClass} />
 						</div>
 						<div>
-							<label for="micro-end" class="block text-sm font-medium text-gray-300">Micro End</label>
+							<label for="micro-end" class="block text-sm font-medium text-foreground">Micro End</label>
 							<input id="micro-end" type="number" bind:value={microEnd} placeholder="auto" class={inputClass} />
 						</div>
 						<div>
-							<label for="rng-seed" class="block text-sm font-medium text-gray-300">RNG Seed</label>
+							<label for="rng-seed" class="block text-sm font-medium text-foreground">RNG Seed</label>
 							<input id="rng-seed" type="number" bind:value={seed} placeholder="random" class={inputClass} />
 						</div>
 						<div>
-							<label for="macros" class="block text-sm font-medium text-gray-300">Macros to include</label>
+							<label for="macros" class="block text-sm font-medium text-foreground">Macros to include</label>
 							<input id="macros" type="text" bind:value={macros} placeholder="e.g. 6,7" class={inputClass} />
 						</div>
 						{#if mode === 'macro'}
 						<div>
-							<label for="avoid" class="block text-sm font-medium text-gray-300">Avoid Events</label>
+							<label for="avoid" class="block text-sm font-medium text-foreground">Avoid Events</label>
 							<input id="avoid" type="text" bind:value={avoidEvents} placeholder="tournament/slug" class={inputClass} />
 						</div>
 						{/if}
@@ -301,7 +301,7 @@
 							class="rounded-lg bg-red-600 px-6 py-2 font-medium text-white hover:bg-red-500">Cancel</button>
 					{:else}
 						<button type="submit" disabled={!targetNumber}
-							class="rounded-lg bg-violet-600 px-6 py-2 font-medium text-white hover:bg-violet-500 disabled:opacity-50">
+							class="rounded-lg bg-primary px-6 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
 							Generate Seeding
 						</button>
 					{/if}
@@ -309,19 +309,19 @@
 			</form>
 
 			{#if loading && liveLogs.length > 0}
-				<div class="mt-4 rounded-lg border border-gray-800 bg-gray-900 p-4">
+				<div class="mt-4 rounded-lg border border-border bg-card p-4">
 					<div class="flex items-center gap-2 mb-2">
 						<div class="h-2 w-2 rounded-full bg-violet-500 animate-pulse"></div>
-						<span class="text-sm font-medium text-gray-300">Progress</span>
+						<span class="text-sm font-medium text-foreground">Progress</span>
 					</div>
 					<div class="max-h-32 overflow-y-auto">
 						{#each liveLogs as msg}
-							<div class="text-xs text-gray-400 font-mono py-0.5">{msg}</div>
+							<div class="text-xs text-muted-foreground font-mono py-0.5">{msg}</div>
 						{/each}
 					</div>
 				</div>
 			{:else if loading}
-				<div class="mt-4 flex items-center gap-2 text-gray-400">
+				<div class="mt-4 flex items-center gap-2 text-muted-foreground">
 					<div class="h-2 w-2 rounded-full bg-violet-500 animate-pulse"></div>Starting...
 				</div>
 			{/if}
@@ -332,21 +332,21 @@
 	{#if result}
 	<div class="flex gap-4">
 		<div class="flex flex-col items-center">
-			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-700 bg-violet-900/40 text-xs font-bold text-violet-300">2</div>
-			<div class="mt-1 w-px flex-1 bg-gray-800"></div>
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary bg-primary/10 text-xs font-bold text-primary">2</div>
+			<div class="mt-1 w-px flex-1 bg-secondary"></div>
 		</div>
 		<div class="pb-6 pt-1 min-w-0 flex-1">
-			<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Review & Reorder</p>
-			<p class="mb-3 text-xs text-gray-500">Drag rows to reorder seeds. Rematches from last week are highlighted in red.</p>
+			<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Review & Reorder</p>
+			<p class="mb-3 text-xs text-muted-foreground">Drag rows to reorder seeds. Rematches from last week are highlighted in red.</p>
 
 			<div class="grid gap-6 lg:grid-cols-2">
 				<!-- Seeding table with drag -->
 				<div>
-					<h3 class="text-sm font-medium text-gray-300 mb-2">Seeding — {result.entrants.length} players</h3>
-					<div class="max-h-[28rem] overflow-y-auto rounded-lg border border-gray-800">
+					<h3 class="text-sm font-medium text-foreground mb-2">Seeding — {result.entrants.length} players</h3>
+					<div class="max-h-[28rem] overflow-y-auto rounded-lg border border-border">
 						<table class="w-full text-sm">
-							<thead class="sticky top-0 bg-gray-900 z-10">
-								<tr class="border-b border-gray-700 text-left text-gray-400">
+							<thead class="sticky top-0 bg-card z-10">
+								<tr class="border-b border-border text-left text-muted-foreground">
 									<th class="px-2 py-1.5 text-right w-12">Seed</th>
 									<th class="px-2 py-1.5">Tag</th>
 									<th class="px-2 py-1.5 text-right w-16">Elo</th>
@@ -361,35 +361,35 @@
 										ondragleave={onDragLeave}
 										ondrop={() => onDrop(i)}
 										ondragend={onDragEnd}
-										class="border-b border-gray-800 cursor-grab active:cursor-grabbing transition-colors
-											{dragOverIdx === i ? 'bg-violet-900/30 border-violet-600' : 'hover:bg-gray-800/50'}
+										class="border-b border-border cursor-grab active:cursor-grabbing transition-colors
+											{dragOverIdx === i ? 'bg-violet-900/30 border-violet-600' : 'hover:bg-secondary/50'}
 											{dragIdx === i ? 'opacity-40' : ''}">
-										<td class="px-2 py-1.5 text-right font-mono text-gray-400">{e.seedNum}</td>
-										<td class="px-2 py-1.5 text-white">
+										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.seedNum}</td>
+										<td class="px-2 py-1.5 text-foreground">
 											{e.gamerTag}
 											{#if e.isNewcomer}<span class="ml-1 text-xs text-yellow-400">*</span>{/if}
 										</td>
-										<td class="px-2 py-1.5 text-right font-mono text-gray-400">{e.elo.toFixed(0)}</td>
+										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.elo.toFixed(0)}</td>
 									</tr>
 								{/each}
 							</tbody>
 						</table>
 					</div>
-					<p class="mt-1 text-xs text-gray-600">* = newcomer (Elo estimated from external results)</p>
+					<p class="mt-1 text-xs text-muted-foreground">* = newcomer (Elo estimated from external results)</p>
 				</div>
 
 				<!-- R1 Pairings -->
 				<div>
-					<h3 class="text-sm font-medium text-gray-300 mb-2">R1 Pairings</h3>
+					<h3 class="text-sm font-medium text-foreground mb-2">R1 Pairings</h3>
 					<div class="space-y-1 max-h-[28rem] overflow-y-auto">
 						{#each result.pairings as { top, bottom }}
 							<div class="flex items-center gap-2 rounded px-3 py-1.5 text-sm
-								{isCollision(top.playerId, bottom.playerId) ? 'bg-red-900/30 border border-red-800' : 'bg-gray-900'}">
-								<span class="w-6 text-right font-mono text-xs text-gray-500">{top.seedNum}</span>
-								<span class="flex-1 text-white truncate">{top.gamerTag}</span>
-								<span class="text-gray-600 text-xs">vs</span>
-								<span class="flex-1 text-right text-white truncate">{bottom.gamerTag}</span>
-								<span class="w-6 font-mono text-xs text-gray-500">{bottom.seedNum}</span>
+								{isCollision(top.playerId, bottom.playerId) ? 'bg-red-900/30 border border-red-800' : 'bg-card'}">
+								<span class="w-6 text-right font-mono text-xs text-muted-foreground">{top.seedNum}</span>
+								<span class="flex-1 text-foreground truncate">{top.gamerTag}</span>
+								<span class="text-muted-foreground text-xs">vs</span>
+								<span class="flex-1 text-right text-foreground truncate">{bottom.gamerTag}</span>
+								<span class="w-6 font-mono text-xs text-muted-foreground">{bottom.seedNum}</span>
 								{#if isCollision(top.playerId, bottom.playerId)}
 									<span class="text-xs text-red-400" title="Rematch from last week">⚠</span>
 								{/if}
@@ -397,9 +397,9 @@
 						{/each}
 						{#if result.entrants.length % 2 === 1}
 							{@const bye = result.entrants[result.entrants.length - 1]}
-							<div class="flex items-center gap-2 rounded bg-gray-900 px-3 py-1.5 text-sm">
-								<span class="w-6 text-right font-mono text-xs text-gray-500">{bye.seedNum}</span>
-								<span class="text-white">{bye.gamerTag}</span>
+							<div class="flex items-center gap-2 rounded bg-card px-3 py-1.5 text-sm">
+								<span class="w-6 text-right font-mono text-xs text-muted-foreground">{bye.seedNum}</span>
+								<span class="text-foreground">{bye.gamerTag}</span>
 								<span class="text-yellow-500 text-xs ml-auto">BYE</span>
 							</div>
 						{/if}
@@ -412,9 +412,9 @@
 				</div>
 			</div>
 
-			<details class="mt-3 rounded-lg border border-gray-800 bg-gray-900">
-				<summary class="cursor-pointer px-4 py-2 text-xs text-gray-500">Full Log ({result.logs.length})</summary>
-				<pre class="max-h-48 overflow-y-auto px-4 py-2 text-xs text-gray-600">{result.logs.join('\n')}</pre>
+			<details class="mt-3 rounded-lg border border-border bg-card">
+				<summary class="cursor-pointer px-4 py-2 text-xs text-muted-foreground">Full Log ({result.logs.length})</summary>
+				<pre class="max-h-48 overflow-y-auto px-4 py-2 text-xs text-muted-foreground">{result.logs.join('\n')}</pre>
 			</details>
 		</div>
 	</div>
@@ -423,27 +423,27 @@
 	<div class="flex gap-4">
 		<div class="flex flex-col items-center">
 			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border
-				{currentStep >= 3 ? 'border-violet-700 bg-violet-900/40 text-violet-300' : 'border-gray-700 bg-gray-900 text-gray-500'}
+				{currentStep >= 3 ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground'}
 				text-xs font-bold">3</div>
 		</div>
 		<div class="pb-6 pt-1 min-w-0 flex-1">
-			<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Apply & Start Swiss</p>
-			<p class="mb-3 text-xs text-gray-500">Creates the tournament from the seeding above. Seeding will be applied to StartGG automatically.</p>
+			<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Apply & Start Swiss</p>
+			<p class="mb-3 text-xs text-muted-foreground">Creates the tournament from the seeding above. Seeding will be applied to StartGG automatically.</p>
 
 			<div class="flex items-end gap-3 flex-wrap">
 				<div>
-					<label for="num-stations" class="block text-xs text-gray-400">Stations</label>
+					<label for="num-stations" class="block text-xs text-muted-foreground">Stations</label>
 					<input id="num-stations" type="number" bind:value={numStations} min="1"
-						class="mt-1 w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-violet-500 focus:outline-none" />
+						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground focus:border-ring focus:outline-none" />
 				</div>
 				<div>
-					<label for="swiss-rounds" class="block text-xs text-gray-400">Swiss rounds</label>
+					<label for="swiss-rounds" class="block text-xs text-muted-foreground">Swiss rounds</label>
 					<input id="swiss-rounds" type="number" bind:value={swissRounds} min="1" max="5"
 						placeholder="auto"
-						class="mt-1 w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
+						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 				</div>
 				<button onclick={startSwiss} disabled={startingSwiss || !numStations}
-					class="rounded-lg bg-violet-600 px-5 py-2 font-medium text-white hover:bg-violet-500 disabled:opacity-50">
+					class="rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
 					{startingSwiss ? 'Creating...' : 'Apply & Start Swiss →'}
 				</button>
 			</div>
@@ -454,32 +454,32 @@
 	<!-- ═══ Tools: Quick Start ═══ -->
 	<div class="flex gap-4">
 		<div class="flex flex-col items-center">
-			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-700 bg-gray-900 text-xs font-bold text-gray-500">∞</div>
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-card text-xs font-bold text-muted-foreground">∞</div>
 		</div>
 		<div class="pb-2 pt-1 min-w-0 flex-1">
-			<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Quick Start</p>
-			<div class="rounded-lg border border-gray-800 bg-gray-900/50 p-4">
-				<p class="text-sm font-medium text-gray-300">Start from existing seeded event</p>
-				<p class="mt-0.5 text-xs text-gray-500">Skip Elo seeding — use the current StartGG seedings directly.</p>
+			<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick Start</p>
+			<div class="rounded-lg border border-border bg-card/50 p-4">
+				<p class="text-sm font-medium text-foreground">Start from existing seeded event</p>
+				<p class="mt-0.5 text-xs text-muted-foreground">Skip Elo seeding — use the current StartGG seedings directly.</p>
 				<div class="mt-3 flex flex-wrap items-end gap-3">
 					<div class="flex-1 min-w-48">
-						<label for="event-url" class="block text-xs text-gray-400">StartGG event URL</label>
+						<label for="event-url" class="block text-xs text-muted-foreground">StartGG event URL</label>
 						<input id="event-url" type="text" bind:value={eventUrl}
 							placeholder="tournament/micro-134/event/singles" class={inputClass} />
 					</div>
 					<div>
-						<label for="fe-stations" class="block text-xs text-gray-400">Stations</label>
+						<label for="fe-stations" class="block text-xs text-muted-foreground">Stations</label>
 						<input id="fe-stations" type="number" bind:value={numStations} min="1"
-							class="mt-1 w-20 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-violet-500 focus:outline-none" />
+							class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground focus:border-ring focus:outline-none" />
 					</div>
 					<div>
-						<label for="fe-rounds" class="block text-xs text-gray-400">Swiss rounds</label>
+						<label for="fe-rounds" class="block text-xs text-muted-foreground">Swiss rounds</label>
 						<input id="fe-rounds" type="number" bind:value={swissRounds} min="1" max="5"
 							placeholder="auto"
-							class="mt-1 w-20 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
+							class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 					</div>
 					<button onclick={startFromEvent} disabled={loadingEvent || !eventUrl.trim()}
-						class="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50">
+						class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
 						{loadingEvent ? 'Loading…' : 'Start Swiss →'}
 					</button>
 				</div>

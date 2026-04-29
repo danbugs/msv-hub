@@ -177,12 +177,12 @@
 
 <main class="mx-auto max-w-3xl px-4 py-8">
 	<div class="flex items-center gap-3 mb-6">
-		<a href="/dashboard" class="text-gray-500 hover:text-violet-400 text-sm">&larr; Dashboard</a>
-		<h1 class="text-2xl font-bold text-white">Event Setup</h1>
+		<a href="/dashboard" class="text-muted-foreground hover:text-primary text-sm">&larr; Dashboard</a>
+		<h1 class="text-2xl font-bold text-foreground">Event Setup</h1>
 	</div>
 
 	{#if loading}
-		<div class="animate-pulse text-gray-500">Loading...</div>
+		<div class="animate-pulse text-muted-foreground">Loading...</div>
 	{:else if config}
 
 		<!-- Pause Toggle -->
@@ -203,43 +203,43 @@
 		</section>
 
 		<!-- Event Config -->
-		<section class="rounded-xl border border-gray-800 bg-gray-900 p-5 mb-6">
-			<h2 class="text-lg font-semibold text-white mb-4">Event Configuration</h2>
+		<section class="rounded-xl border border-border bg-card p-5 mb-6">
+			<h2 class="text-lg font-semibold text-foreground mb-4">Event Configuration</h2>
 			<div class="grid gap-4 sm:grid-cols-2">
 				<div>
-					<label class="block text-xs font-medium text-gray-400 mb-1">Next Event Number</label>
+					<label class="block text-xs font-medium text-muted-foreground mb-1">Next Event Number</label>
 					<input type="number" bind:value={config.nextEventNumber}
-						class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white" />
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
 				</div>
 				<div>
-					<label class="block text-xs font-medium text-gray-400 mb-1">Template Tournament ID</label>
+					<label class="block text-xs font-medium text-muted-foreground mb-1">Template Tournament ID</label>
 					<input type="number" bind:value={config.srcTournamentId}
-						class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white" />
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
 				</div>
 				<div>
-					<label class="block text-xs font-medium text-gray-400 mb-1">Short Slug</label>
+					<label class="block text-xs font-medium text-muted-foreground mb-1">Short Slug</label>
 					<input type="text" bind:value={config.shortSlug}
-						class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white" />
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
 				</div>
 				<div>
-					<label class="block text-xs font-medium text-gray-400 mb-1">Discord Link</label>
+					<label class="block text-xs font-medium text-muted-foreground mb-1">Discord Link</label>
 					<input type="text" bind:value={config.discordLink}
-						class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white" />
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
 				</div>
 			</div>
 
 			{#if config.lastCreatedTournamentId}
-				<p class="mt-3 text-xs text-gray-500">
+				<p class="mt-3 text-xs text-muted-foreground">
 					Last created: tournament #{config.lastCreatedTournamentId}
 					{#if config.lastCreatedTournamentSlug}
-						(<a href="https://start.gg/tournament/{config.lastCreatedTournamentSlug}" target="_blank" class="text-violet-400 hover:text-violet-300">{config.lastCreatedTournamentSlug}</a>)
+						(<a href="https://start.gg/tournament/{config.lastCreatedTournamentSlug}" target="_blank" class="text-primary hover:text-primary/80">{config.lastCreatedTournamentSlug}</a>)
 					{/if}
 				</p>
 			{/if}
 
 			<div class="mt-4 flex items-center gap-3">
 				<button onclick={saveConfig} disabled={saving}
-					class="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50">
+					class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
 					{saving ? 'Saving...' : 'Save Config'}
 				</button>
 				{#if message}
@@ -249,31 +249,31 @@
 		</section>
 
 		<!-- TO Management -->
-		<section class="rounded-xl border border-gray-800 bg-gray-900 p-5 mb-6">
-			<h2 class="text-lg font-semibold text-white mb-4">Tournament Organizers</h2>
-			<p class="text-sm text-gray-400 mb-4">TOs with auto-register enabled will be automatically added when an event is created.</p>
+		<section class="rounded-xl border border-border bg-card p-5 mb-6">
+			<h2 class="text-lg font-semibold text-foreground mb-4">Tournament Organizers</h2>
+			<p class="text-sm text-muted-foreground mb-4">TOs with auto-register enabled will be automatically added when an event is created.</p>
 
 			<div class="space-y-2 mb-4">
 				{#each config.tos as to}
-					<div class="flex items-center gap-3 rounded-lg border border-gray-800 bg-gray-800/50 px-4 py-3">
+					<div class="flex items-center gap-3 rounded-lg border border-border bg-secondary/50 px-4 py-3">
 						<div class="flex-1 min-w-0">
 							<div class="flex items-center gap-2">
-								<span class="font-medium text-white">{to.name}</span>
-								{#if to.prefix}<span class="text-xs text-gray-500">[{to.prefix}]</span>{/if}
+								<span class="font-medium text-foreground">{to.name}</span>
+								{#if to.prefix}<span class="text-xs text-muted-foreground">[{to.prefix}]</span>{/if}
 							</div>
-							<div class="text-xs text-gray-500 font-mono">{to.discriminator}
-								{#if to.playerId}<span class="text-gray-600"> (player {to.playerId})</span>{/if}
+							<div class="text-xs text-muted-foreground font-mono">{to.discriminator}
+								{#if to.playerId}<span class="text-muted-foreground"> (player {to.playerId})</span>{/if}
 							</div>
 						</div>
 						<button onclick={() => toggleAutoRegister(to)}
 							class="rounded-full px-3 py-1 text-xs font-medium transition-colors
 								{to.autoRegister
 									? 'bg-green-900/50 text-green-400 border border-green-800 hover:bg-green-900'
-									: 'bg-gray-800 text-gray-500 border border-gray-700 hover:border-gray-600'}">
+									: 'bg-secondary text-muted-foreground border border-border hover:border-primary'}">
 							{to.autoRegister ? 'Auto-register' : 'Manual'}
 						</button>
 						<button onclick={() => removeTO(to.discriminator)}
-							class="text-gray-600 hover:text-red-400 text-sm" title="Remove TO">
+							class="text-muted-foreground hover:text-red-400 text-sm" title="Remove TO">
 							&times;
 						</button>
 					</div>
@@ -281,33 +281,33 @@
 			</div>
 
 			<!-- Add TO form -->
-			<div class="rounded-lg border border-dashed border-gray-700 p-4">
-				<p class="text-xs font-medium text-gray-400 mb-3">Add TO</p>
+			<div class="rounded-lg border border-dashed border-border p-4">
+				<p class="text-xs font-medium text-muted-foreground mb-3">Add TO</p>
 				<div class="grid gap-3 sm:grid-cols-3">
 					<input type="text" bind:value={newDiscriminator} placeholder="Discriminator (e.g. 566b1fb5)"
-						class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600" />
+						class="rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground" />
 					<input type="text" bind:value={newName} placeholder="Name (auto-resolved if blank)"
-						class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600" />
+						class="rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground" />
 					<input type="text" bind:value={newPrefix} placeholder="Prefix (optional)"
-						class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600" />
+						class="rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground" />
 				</div>
 				<button onclick={addTO} disabled={addingTO || !newDiscriminator.trim()}
-					class="mt-3 rounded-lg bg-gray-700 px-4 py-2 text-sm text-white hover:bg-gray-600 disabled:opacity-50">
+					class="mt-3 rounded-lg bg-accent px-4 py-2 text-sm text-foreground hover:bg-accent disabled:opacity-50">
 					{addingTO ? 'Adding...' : 'Add TO'}
 				</button>
 			</div>
 		</section>
 
 		<!-- Swap TO -->
-		<section class="rounded-xl border border-gray-800 bg-gray-900 p-5 mb-6">
-			<h2 class="text-lg font-semibold text-white mb-2">Swap Registered TO</h2>
-			<p class="text-sm text-gray-400 mb-4">Unregister one TO from the current event and register another in their place.</p>
+		<section class="rounded-xl border border-border bg-card p-5 mb-6">
+			<h2 class="text-lg font-semibold text-foreground mb-2">Swap Registered TO</h2>
+			<p class="text-sm text-muted-foreground mb-4">Unregister one TO from the current event and register another in their place.</p>
 
 			<div class="grid gap-3 sm:grid-cols-2">
 				<div>
-					<label class="block text-xs font-medium text-gray-400 mb-1">Remove TO</label>
+					<label class="block text-xs font-medium text-muted-foreground mb-1">Remove TO</label>
 					<select bind:value={swapRemove}
-						class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white">
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground">
 						<option value="">Select TO to remove...</option>
 						{#each config.tos as to}
 							<option value={to.discriminator}>{to.name}</option>
@@ -315,9 +315,9 @@
 					</select>
 				</div>
 				<div>
-					<label class="block text-xs font-medium text-gray-400 mb-1">Add TO</label>
+					<label class="block text-xs font-medium text-muted-foreground mb-1">Add TO</label>
 					<select bind:value={swapAdd}
-						class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white">
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground">
 						<option value="">Select TO to add...</option>
 						{#each config.tos.filter(t => t.discriminator !== swapRemove) as to}
 							<option value={to.discriminator}>{to.name}</option>
@@ -331,14 +331,14 @@
 				{swapping ? 'Swapping...' : 'Swap TO'}
 			</button>
 			{#if swapResult}
-				<p class="mt-2 text-sm text-gray-300">{swapResult}</p>
+				<p class="mt-2 text-sm text-foreground">{swapResult}</p>
 			{/if}
 		</section>
 
 		<!-- Manual Trigger -->
-		<section class="rounded-xl border border-gray-800 bg-gray-900 p-5">
-			<h2 class="text-lg font-semibold text-white mb-2">Manual Event Creation</h2>
-			<p class="text-sm text-gray-400 mb-4">
+		<section class="rounded-xl border border-border bg-card p-5">
+			<h2 class="text-lg font-semibold text-foreground mb-2">Manual Event Creation</h2>
+			<p class="text-sm text-muted-foreground mb-4">
 				Events are auto-created every Tuesday at 9 AM PST via QStash.
 				Use this to manually trigger the flow if the schedule missed.
 			</p>
@@ -353,8 +353,8 @@
 					{#each triggerResult.steps as s}
 						<div class="flex items-start gap-2 text-sm">
 							<span class={s.ok ? 'text-green-400' : 'text-red-400'}>{s.ok ? '✓' : '✗'}</span>
-							<span class="text-gray-400">{s.step}:</span>
-							<span class="text-gray-300 break-all">{s.detail}</span>
+							<span class="text-muted-foreground">{s.step}:</span>
+							<span class="text-foreground break-all">{s.detail}</span>
 						</div>
 					{/each}
 					<p class="mt-2 text-sm font-medium {triggerResult.ok ? 'text-green-400' : 'text-red-400'}">
