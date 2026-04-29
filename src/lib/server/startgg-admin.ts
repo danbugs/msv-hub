@@ -576,6 +576,12 @@ export async function setRegistrationPublished(
 		}
 	}`;
 
+	// Tournament-level registration toggle — controls isRegistrationOpen
+	const tournamentPub = await adminGql(mutation, {
+		profileType: 'tournament', profileId: tournamentId, featureId: 3, publishState: state
+	});
+	if (!tournamentPub) return { ok: false, error: 'Failed to publish registration at tournament level' };
+
 	type EventsData = { tournament: { events: { id: number }[] } };
 	const eventsData = await adminGql<EventsData>(
 		`query($id: ID!) { tournament(id: $id) { events { id } } }`,
