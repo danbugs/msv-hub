@@ -56,6 +56,8 @@ import {
 	fetchPhaseSeeds,
 	fetchPhaseSeedsWithTags,
 	fetchPhaseGroups,
+	fetchAllSets,
+	fetchAllEntrants,
 	pushPairingsToPhaseGroup,
 	pushBracketSeeding,
 	getUserByDiscriminator,
@@ -78,7 +80,9 @@ import {
 	getTournamentRegistrationInfo,
 	registerTOForTournament,
 	unregisterParticipant,
+	exportAttendees,
 } from '$lib/server/startgg-admin';
+import { runSeeder } from '$lib/server/seeder';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -765,6 +769,42 @@ suite('E2E Phase 4: Bracket reporting', () => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
+// PHASE 4b: DATA QUERIES + EXPORT (while tournament has data)
+// ═════════════════════════════════════════════════════════════════════════════
+
+suite('E2E Phase 4b: Data queries and export', () => {
+	it('fetches all sets from Swiss event via paginated GQL', async () => {
+		const sets = await fetchAllSets(SWISS_EVENT_ID);
+		log(`fetchAllSets: ${sets.length} sets from Swiss event`);
+		expect(sets.length).toBeGreaterThan(0);
+		// Verify set structure
+		const first = sets[0] as Record<string, unknown>;
+		expect(first).toHaveProperty('id');
+		expect(first).toHaveProperty('displayScore');
+	}, LONG_TIMEOUT);
+
+	it('fetches all entrants from Swiss event via paginated GQL', async () => {
+		const entrants = await fetchAllEntrants(SWISS_EVENT_ID);
+		log(`fetchAllEntrants: ${entrants.length} entrants from Swiss event`);
+		expect(entrants.length).toBe(32);
+		// Verify entrant structure
+		const first = entrants[0] as Record<string, unknown>;
+		expect(first).toHaveProperty('id');
+	}, LONG_TIMEOUT);
+
+	it('exports attendees as CSV', async () => {
+		const attendees = await exportAttendees(TOURNAMENT_ID);
+		log(`exportAttendees: ${attendees.length} attendees`);
+		expect(attendees.length).toBeGreaterThan(0);
+		// Verify CSV row structure
+		const first = attendees[0];
+		expect(first).toHaveProperty('gamerTag');
+		expect(first.gamerTag.length).toBeGreaterThan(0);
+		log(`  First attendee: ${first.gamerTag}`);
+	}, LONG_TIMEOUT);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
 // PHASE 5: FULL RESET CLEANUP
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -838,4 +878,38 @@ suite('E2E Phase 5: Full reset cleanup', () => {
 		log(`Final Standings state: ${fsData?.phase?.state}`);
 		expect(fsData?.phase?.state).toBe('CREATED');
 	}, LONG_TIMEOUT);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PHASE 6: SEEDER (dry-run against test tournament after cleanup)
+// ═════════════════════════════════════════════════════════════════════════════
+
+suite('E2E Phase 6: Seeder', () => {
+	it('computes Elo seeding from historical data (dry run)', async () => {
+		// Use a small historical window to keep it fast — just the test tournament itself
+		// The seeder targets "microspacing-vancouver-{targetNumber}" by convention,
+		// but we can test the pipeline by pointing it at a real past tournament
+		const result = await runSeeder({
+			mode: 'micro',
+			targetNumber: 100,
+			seasonStart: 99,
+			jitter: 50,
+			seed: 42,
+			apply: false,
+		}, (msg) => log(`  ${msg}`));
+
+		log(`Seeder returned ${result.entrants.length} entrants, ${result.pairings.length} pairings`);
+		log(`  ${result.unresolvedCollisions.length} unresolved collisions`);
+
+		// Even if the target tournament doesn't exist (dry run), the pipeline should complete
+		// without throwing. If it does find entrants, verify the structure.
+		if (result.entrants.length > 0) {
+			expect(result.pairings.length).toBeGreaterThan(0);
+			const first = result.entrants[0];
+			expect(first.elo).toBeDefined();
+			expect(first.seedNum).toBeGreaterThan(0);
+			expect(first.gamerTag.length).toBeGreaterThan(0);
+			log(`  Top seed: ${first.gamerTag} (Elo ${first.elo.toFixed(0)}, seed #${first.seedNum})`);
+		}
+	}, PHASE_TIMEOUT);
 });
