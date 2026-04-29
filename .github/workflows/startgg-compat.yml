@@ -27,4 +27,73 @@ jobs:
           EOF
 
       - name: Run StartGG compatibility tests
-        run: npx vitest run src/lib/server/startgg-compat.test.ts --reporter=verbose
+        id: tests
+        continue-on-error: true
+        run: npx vitest run src/lib/server/startgg-compat.test.ts --reporter=verbose 2>&1 | tee test-output.txt
+
+      - name: Create issue on failure
+        if: steps.tests.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('test-output.txt', 'utf8');
+
+            // Extract failed test names
+            const failedLines = output.split('\n')
+              .filter(l => l.includes('×') || l.includes('FAIL'))
+              .map(l => l.trim())
+              .slice(0, 20);
+
+            const body = [
+              '## StartGG API Compatibility Regression',
+              '',
+              'The daily compatibility check detected breaking changes in the StartGG API.',
+              '',
+              '**Run:** ' + `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              '',
+              '### Failed tests',
+              '```',
+              failedLines.join('\n') || 'See workflow run for details',
+              '```',
+              '',
+              '<details><summary>Full output (last 100 lines)</summary>',
+              '',
+              '```',
+              output.split('\n').slice(-100).join('\n'),
+              '```',
+              '</details>',
+            ].join('\n');
+
+            // Check for existing open issue to avoid duplicates
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'startgg-compat',
+              per_page: 1,
+            });
+
+            if (existing.length > 0) {
+              // Comment on existing issue instead of creating a new one
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing[0].number,
+                body: `### Still failing — ${new Date().toISOString().split('T')[0]}\n\n${body}`,
+              });
+              console.log(`Commented on existing issue #${existing[0].number}`);
+            } else {
+              const { data: issue } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'StartGG API compatibility regression detected',
+                body,
+                labels: ['startgg-compat'],
+              });
+              console.log(`Created issue #${issue.number}`);
+            }
+
+      - name: Fail workflow if tests failed
+        if: steps.tests.outcome == 'failure'
+        run: exit 1
