@@ -4,6 +4,8 @@
 
 /* ── Light mode ─────────────────────────────────────────── */
 :root {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
   --background: oklch(0.975 0.005 260);
   --foreground: oklch(0.13 0.02 260);
   --card: oklch(1.0 0 0);
@@ -38,6 +40,10 @@
   --shadow-card-hover: 0 4px 12px oklch(0 0 0 / 8%), 0 2px 4px oklch(0 0 0 / 5%);
   --shadow-elevated: 0 8px 24px oklch(0 0 0 / 10%), 0 4px 8px oklch(0 0 0 / 6%);
   --nav-border: oklch(0.88 0.015 250);
+
+  --scrollbar-track: oklch(0.94 0.005 260);
+  --scrollbar-thumb: oklch(0.80 0.01 260);
+  --scrollbar-thumb-hover: oklch(0.70 0.015 260);
 }
 
 /* ── Dark mode ──────────────────────────────────────────── */
@@ -75,10 +81,16 @@
   --shadow-card-hover: 0 4px 16px oklch(0 0 0 / 40%), 0 2px 4px oklch(0 0 0 / 25%);
   --shadow-elevated: 0 12px 32px oklch(0 0 0 / 50%), 0 4px 12px oklch(0 0 0 / 30%);
   --nav-border: oklch(0.28 0.04 250);
+
+  --scrollbar-track: oklch(0.14 0.02 260);
+  --scrollbar-thumb: oklch(0.30 0.02 260);
+  --scrollbar-thumb-hover: oklch(0.40 0.02 260);
 }
 
 /* ── Register as Tailwind utilities ─────────────────────── */
 @theme inline {
+  --font-sans: var(--font-sans);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -114,52 +126,45 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
-/* ── Backward-compat gray scale (unmigrated pages) ──────── */
-.dark {
-  --color-gray-950: oklch(12% 0.025 260);
-  --color-gray-900: oklch(17% 0.022 260);
-  --color-gray-800: oklch(22% 0.02 260);
-  --color-gray-700: oklch(32% 0.018 260);
-  --color-gray-600: oklch(45% 0.015 260);
-  --color-gray-500: oklch(56% 0.014 260);
-  --color-gray-400: oklch(68% 0.012 260);
-  --color-gray-300: oklch(80% 0.010 260);
-  --color-gray-200: oklch(90% 0.008 260);
-  --color-gray-100: oklch(96% 0.005 260);
+/* ── Theme transition ──────────────────────────────────── */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: color 0.25s ease, background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease !important;
 }
 
-:root:not(.dark) {
-  --color-gray-950: oklch(98% .004 260);
-  --color-gray-900: oklch(94% .005 260);
-  --color-gray-800: oklch(88% .008 260);
-  --color-gray-700: oklch(56% .015 260);
-  --color-gray-600: oklch(44% .020 260);
-  --color-gray-500: oklch(36% .022 260);
-  --color-gray-400: oklch(28% .025 260);
-  --color-gray-300: oklch(22% .028 260);
-  --color-gray-200: oklch(18% .030 260);
-  --color-gray-100: oklch(14% .010 260);
-
-  --color-violet-300: oklch(44% 0.22 277);
-  --color-violet-400: oklch(48% 0.22 277);
-  --color-amber-300: oklch(46% 0.13 78);
-  --color-amber-400: oklch(41% 0.13 78);
-  --color-yellow-300: oklch(46% 0.12 92);
-  --color-yellow-400: oklch(41% 0.12 92);
-  --color-green-300: oklch(38% 0.14 150);
-  --color-green-400: oklch(42% 0.15 150);
-  --color-red-400: oklch(42% 0.18 27);
-  --color-emerald-300: oklch(38% 0.14 163);
-  --color-emerald-400: oklch(42% 0.15 163);
-  --color-sky-300: oklch(44% 0.16 235);
-  --color-sky-400: oklch(48% 0.18 235);
+/* ── Selection ─────────────────────────────────────────── */
+::selection {
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
-:root:not(.dark) .text-white:not([class*="bg-violet"]):not([class*="bg-red-"]):not([class*="bg-blue-"]):not([class*="bg-emerald"]):not([class*="bg-primary"]):not([class*="bg-amber-"]):not([class*="bg-green-"]):not([class*="bg-orange-"]):not([class*="bg-yellow-"]) {
-  color: oklch(10% 0 0);
+/* ── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+@supports (scrollbar-color: auto) {
+  * {
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    scrollbar-width: thin;
+  }
 }
 
 /* ── Match card ────────────────────────────────────────── */
@@ -200,4 +205,12 @@
 /* ── Nav ────────────────────────────────────────────────── */
 .nav-border {
   border-bottom: 1px solid var(--nav-border);
+}
+
+/* ── Theme toggle icon ─────────────────────────────────── */
+.theme-icon {
+  transition: transform 0.3s ease;
+}
+.theme-icon:hover {
+  transform: rotate(15deg);
 }

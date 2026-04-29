@@ -419,10 +419,13 @@
 							{/if}
 							{#if onStream && ready}
 								<button onclick={() => onStream!(match)}
-									class="rounded px-2 py-0.5 text-xs transition-colors
+									class="rounded px-1.5 py-0.5 text-xs transition-colors inline-flex items-center
 										{match.isStream ? 'text-primary bg-primary/10 hover:bg-red-900/20 hover:text-red-400' : 'text-muted-foreground hover:text-primary hover:bg-primary/10'}"
 									title={match.isStream ? 'Remove from stream' : 'Set as stream match'}>
-									📺
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<rect x="2" y="3" width="20" height="14" rx="2" />
+										<path d="M8 21h8" /><path d="M12 17v4" />
+									</svg>
 								</button>
 							{/if}
 							{#if onReport}

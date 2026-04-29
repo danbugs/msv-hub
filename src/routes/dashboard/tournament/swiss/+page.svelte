@@ -437,9 +437,12 @@
 										<div class="flex items-center gap-1 shrink-0">
 											{#if isCurrent && !match.isStream}
 												<button onclick={() => setStreamMatch(match.id)}
-													class="text-xs px-2 py-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+													class="text-xs px-1.5 py-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors inline-flex items-center"
 													title="Set as stream match">
-													📺
+													<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+														<rect x="2" y="3" width="20" height="14" rx="2" />
+														<path d="M8 21h8" /><path d="M12 17v4" />
+													</svg>
 												</button>
 											{/if}
 											{#if round.status === 'completed' && match.winnerId}
