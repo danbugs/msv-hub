@@ -626,7 +626,10 @@ suite('E2E Phase 3b: Event management operations', () => {
 // PHASE 4: BRACKET REPORTING + GRAND FINALS RESET
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Reports all rounds of a bracket until complete. Returns total reported sets.
+// Reports all available rounds of a bracket. Returns total unique sets reported.
+// Note: StartGG's async propagation means deep losers bracket sets may not
+// have entrants populated during rapid-fire reporting. The function reports
+// everything available and waits briefly for cascading results.
 async function reportFullBracket(
 	pgId: number,
 	bracketName: string,
@@ -635,50 +638,53 @@ async function reportFullBracket(
 	let lastSetId = 0;
 	let lastE1 = 0;
 	let lastE2 = 0;
-	const MAX_ROUNDS = 10;
+	const MAX_ITERATIONS = 20;
+	const reportedPairs = new Set<string>();
 
-	for (let round = 1; round <= MAX_ROUNDS; round++) {
-		await wait(2000);
-		const sets = await fetchAdminPhaseGroupSetsRaw(pgId);
+	for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
+		await wait(3000);
+		let sets = await fetchAdminPhaseGroupSetsRaw(pgId);
 
-		// Wait for sets to populate (first round may need extra time)
-		if (round === 1) {
+		if (iter === 1) {
 			for (let attempt = 0; sets.length === 0 && attempt < 10; attempt++) {
 				await wait(3000);
-				const retry = await fetchAdminPhaseGroupSetsRaw(pgId);
-				if (retry.length > 0) { sets.length = 0; sets.push(...retry); break; }
+				sets = await fetchAdminPhaseGroupSetsRaw(pgId);
 			}
 		}
 
-		const unreported = sets.filter(s =>
-			!s.winnerId && s.entrant1Id && s.entrant2Id
-			&& Number(s.entrant1Id) > 0 && Number(s.entrant2Id) > 0
-		);
+		const completedCount = sets.filter(s => s.winnerId).length;
+		const unreported = sets.filter(s => {
+			if (s.winnerId) return false;
+			const e1 = Number(s.entrant1Id);
+			const e2 = Number(s.entrant2Id);
+			if (!(e1 > 0) || !(e2 > 0)) return false;
+			const key = `${Math.min(e1, e2)}-${Math.max(e1, e2)}`;
+			return !reportedPairs.has(key);
+		});
 
 		if (unreported.length === 0) {
-			log(`  ${bracketName} round ${round}: no more unreported sets — bracket complete`);
+			log(`  ${bracketName} iteration ${iter}: ${completedCount}/${sets.length} completed — no new sets available`);
 			break;
 		}
 
-		let roundReported = 0;
+		let iterReported = 0;
 		for (const set of unreported) {
 			const e1 = Number(set.entrant1Id);
 			const e2 = Number(set.entrant2Id);
-			if (!e1 || !e2 || isNaN(e1) || isNaN(e2)) continue;
-
 			const winnerId = Math.min(e1, e2);
 			const result = await completeSetViaAdminRest(pgId, e1, e2, winnerId, 2, 0, false);
 			if (result.ok) {
-				roundReported++;
+				iterReported++;
 				totalReported++;
 				lastSetId = Number(set.id) || 0;
 				lastE1 = e1;
 				lastE2 = e2;
+				reportedPairs.add(`${Math.min(e1, e2)}-${Math.max(e1, e2)}`);
 			} else {
 				log(`  ✗ ${bracketName} set ${set.id}: ${result.error}`);
 			}
 		}
-		log(`  ${bracketName} round ${round}: reported ${roundReported} sets`);
+		log(`  ${bracketName} iteration ${iter}: reported ${iterReported} sets (${completedCount + iterReported}/${sets.length} completed)`);
 	}
 
 	return { totalReported, lastSetId, lastE1, lastE2 };
@@ -697,8 +703,8 @@ suite('E2E Phase 4: Bracket reporting', () => {
 		log('Reporting full main bracket...');
 		const result = await reportFullBracket(mainPgId, 'Main');
 		mainLastSet = result;
-		log(`Main bracket complete: ${result.totalReported} total sets reported`);
-		expect(result.totalReported).toBeGreaterThanOrEqual(15); // 16-player DE = 15+ sets
+		log(`Main bracket complete: ${result.totalReported} unique sets reported`);
+		expect(result.totalReported).toBeGreaterThanOrEqual(20);
 
 		// Verify all reportable sets have winners
 		await wait(2000);
@@ -715,8 +721,8 @@ suite('E2E Phase 4: Bracket reporting', () => {
 
 		log('Reporting full redemption bracket...');
 		const result = await reportFullBracket(redPgId, 'Redemption');
-		log(`Redemption bracket complete: ${result.totalReported} total sets reported`);
-		expect(result.totalReported).toBeGreaterThanOrEqual(15);
+		log(`Redemption bracket complete: ${result.totalReported} unique sets reported`);
+		expect(result.totalReported).toBeGreaterThanOrEqual(20);
 
 		await wait(2000);
 		const verifyRed = await fetchAdminPhaseGroupSets(redPgId);
