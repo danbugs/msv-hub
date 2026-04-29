@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	interface TOConfig {
 		name: string;
@@ -185,24 +186,20 @@
 	{:else if config}
 
 		<!-- Pause Toggle -->
-		<section class="rounded-xl border {config.paused ? 'border-amber-700 bg-amber-900/10' : 'border-green-800 bg-green-900/10'} p-4 mb-6 flex items-center justify-between">
+		<section class="rounded-xl border {config.paused ? 'border-amber-700/40 bg-amber-900/10' : 'border-green-700/40 bg-green-900/10'} p-4 mb-6 flex items-center justify-between" style="box-shadow: var(--shadow-card)">
 			<div>
-				<p class="font-medium {config.paused ? 'text-amber-300' : 'text-green-300'}">
+				<p class="font-medium {config.paused ? 'text-amber-400' : 'text-green-400'}">
 					{config.paused ? 'Event creation paused' : 'Event creation active'}
 				</p>
-				<p class="text-sm text-gray-400 mt-0.5">
+				<p class="text-sm text-muted-foreground mt-0.5">
 					{config.paused
 						? 'The Tuesday cron will skip event creation until unpaused.'
 						: `Next run will create Microspacing Vancouver #${config.nextEventNumber}.`}
 				</p>
 			</div>
-			<button onclick={togglePaused}
-				class="rounded-lg px-4 py-2 text-sm font-medium transition-colors
-					{config.paused
-						? 'bg-green-800 text-white hover:bg-green-700'
-						: 'bg-amber-800 text-white hover:bg-amber-700'}">
+			<Button onclick={togglePaused} variant={config.paused ? 'default' : 'destructive'}>
 				{config.paused ? 'Unpause' : 'Pause'}
-			</button>
+			</Button>
 		</section>
 
 		<!-- Event Config -->
