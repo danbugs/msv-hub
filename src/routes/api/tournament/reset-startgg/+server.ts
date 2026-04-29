@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
-import { gql, EVENT_PHASES_QUERY } from '$lib/server/startgg';
+import { gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY } from '$lib/server/startgg';
 import { restartPhase, addEntrantsToPhase, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 
 /**
@@ -18,12 +18,38 @@ export const POST: RequestHandler = async ({ locals }) => {
 	const log = (msg: string) => { logs.push(msg); console.log(`[reset-startgg] ${msg}`); };
 
 	const swissEventId = tournament.startggEventId;
-	const mainEventId = tournament.startggMainBracketEventId;
-	const redEventId = tournament.startggRedemptionBracketEventId;
 	const eventSlug = tournament.startggEventSlug;
 
 	if (!swissEventId || !eventSlug) {
 		return Response.json({ error: 'No StartGG event linked' }, { status: 400 });
+	}
+
+	// Discover all events from StartGG (don't rely solely on stored IDs)
+	const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
+	let mainEventId = tournament.startggMainBracketEventId;
+	let redEventId = tournament.startggRedemptionBracketEventId;
+
+	if (tournamentSlug && (!mainEventId || !redEventId)) {
+		log('Discovering bracket events from StartGG...');
+		const tData = await gql<{ tournament: { events: { id: number; name: string; numEntrants: number }[] } }>(
+			TOURNAMENT_QUERY, { slug: tournamentSlug }
+		);
+		const allEvents = tData?.tournament?.events ?? [];
+		const otherEvents = allEvents.filter((e) => e.id !== swissEventId);
+		if (!mainEventId) {
+			const mainEvt = otherEvents.find((e) => /main/i.test(e.name));
+			if (mainEvt) { mainEventId = mainEvt.id; log(`  Found main: ${mainEvt.name} (${mainEvt.id})`); }
+		}
+		if (!redEventId) {
+			const redEvt = otherEvents.find((e) => /redemption/i.test(e.name));
+			if (redEvt) { redEventId = redEvt.id; log(`  Found redemption: ${redEvt.name} (${redEvt.id})`); }
+		}
+		if (!mainEventId && !redEventId && otherEvents.length === 2) {
+			const sorted = [...otherEvents].sort((a, b) => b.numEntrants - a.numEntrants);
+			mainEventId = sorted[0].id;
+			redEventId = sorted[1].id;
+			log(`  Fallback by size: main=${sorted[0].name}, redemption=${sorted[1].name}`);
+		}
 	}
 
 	// Step 1: Restart ALL phases across ALL events (Swiss + Main + Redemption)
@@ -83,7 +109,6 @@ export const POST: RequestHandler = async ({ locals }) => {
 	// (below) to remove players from bracket events entirely.
 
 	// Step 3: Remove all participants from bracket events (keep only Swiss)
-	const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
 	if (tournamentSlug && (mainEventId || redEventId)) {
 		log('Step 3: Removing participants from bracket events...');
 		const participants = await getTournamentParticipants(tournamentSlug);
