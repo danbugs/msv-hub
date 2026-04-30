@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
-import { gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY } from '$lib/server/startgg';
+import { gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, pushBracketSeeding, fetchPhaseGroups } from '$lib/server/startgg';
 import { restartPhase, addEntrantsToPhase, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 import { generateBracket, assignBracketStations } from '$lib/server/swiss';
 import type { FinalStanding } from '$lib/types/tournament';
@@ -158,6 +158,79 @@ export const POST: RequestHandler = async ({ locals }) => {
 		log('MSV Hub reset to Swiss Round 1');
 	}
 
+	// Step 5: Re-sync players and seeding on StartGG
+	if (tournament.mode === 'gauntlet' && mainEventId && tournamentSlug) {
+		log('Step 5: Re-syncing gauntlet players + seeding to StartGG...');
+
+		const mainPhaseData = await gql<{ event: { phases: { id: number }[] } }>(
+			EVENT_PHASES_QUERY, { eventId: mainEventId }
+		);
+		const mainPhaseId = mainPhaseData?.event?.phases?.[0]?.id;
+
+		// 5a: Add all players to main bracket (keep Swiss for seeding lookup)
+		const participants = await getTournamentParticipants(tournamentSlug);
+		let synced = 0;
+		for (const p of participants) {
+			if (p.currentEventIds.includes(mainEventId)) { synced++; continue; }
+			const targetEvents = [...new Set([...p.currentEventIds, mainEventId])];
+			const phaseDests = mainPhaseId ? [{ eventId: mainEventId, phaseId: mainPhaseId }] : [];
+			const result = await updateParticipantEvents(p.participantId, targetEvents, phaseDests);
+			if (result.ok) { synced++; } else { log(`  ✗ Add ${p.gamerTag}: ${result.error}`); }
+		}
+		log(`  Added ${synced} to Main`);
+
+		// 5b: Push seeding
+		if (mainPhaseId && tournament.brackets?.main) {
+			let swissPgId = tournament.startggPhase1Groups?.[0]?.id;
+			if (!swissPgId) {
+				const swissPhaseData2 = await gql<{ event: { phases: { id: number }[] } }>(
+					EVENT_PHASES_QUERY, { eventId: swissEventId }
+				);
+				const swissPhaseId = swissPhaseData2?.event?.phases?.[0]?.id;
+				if (swissPhaseId) {
+					const groups = await fetchPhaseGroups(swissPhaseId).catch(() => []);
+					if (groups.length) {
+						swissPgId = groups[0].id;
+						tournament.startggPhase1Groups = groups.map((g) => ({ ...g, phaseId: swissPhaseId, roundNumber: 1 }));
+					}
+				}
+			}
+			if (swissPgId) {
+				const mainGroups = await fetchPhaseGroups(mainPhaseId).catch(() => []);
+				const mainPgId = mainGroups[0]?.id;
+				if (mainPgId) {
+					const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+					const rankedEntrantIds = tournament.brackets.main.players
+						.sort((a, b) => a.seed - b.seed)
+						.map((p) => entrantMap.get(p.entrantId)?.startggEntrantId)
+						.filter((id): id is number => id !== undefined);
+					if (rankedEntrantIds.length) {
+						const result = await pushBracketSeeding(mainPhaseId, mainPgId, rankedEntrantIds, swissPgId)
+							.catch((e) => ({ ok: false as const, error: String(e) }));
+						log(`  Seeding: ${result.ok ? '✓' : '✗ ' + result.error}`);
+					}
+				}
+			} else {
+				log('  ✗ Could not resolve Swiss phase group for seeding');
+			}
+		}
+
+		// 5c: Remove players from Swiss
+		const freshParticipants = await getTournamentParticipants(tournamentSlug);
+		let removedFromSwiss = 0;
+		for (const p of freshParticipants) {
+			if (!p.currentEventIds.includes(swissEventId)) continue;
+			const targetEvents = p.currentEventIds.filter((id) => id !== swissEventId);
+			if (targetEvents.length === 0) targetEvents.push(mainEventId);
+			const result = await updateParticipantEvents(p.participantId, targetEvents);
+			if (result.ok) { removedFromSwiss++; } else { log(`  ✗ Remove Swiss ${p.gamerTag}: ${result.error}`); }
+		}
+		log(`  Removed ${removedFromSwiss} from Swiss`);
+	} else {
+		log('Step 5: Default mode — players already in Swiss, no seeding push needed');
+	}
+
+	tournament.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };
 	await saveTournament(tournament);
 
 	log('Done!');
