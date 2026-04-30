@@ -218,7 +218,7 @@
 
 			<div>
 				<div class="flex items-center gap-3 flex-wrap">
-					<h2 class="text-xl font-bold text-foreground">{entrant?.gamerTag}</h2>
+					<h2 class="text-xl font-bold text-foreground truncate min-w-0">{entrant?.gamerTag}</h2>
 					<span class="rounded-full bg-secondary px-3 py-0.5 text-xs text-foreground">Seed #{entrant?.initialSeed}</span>
 					<span class="rounded-full bg-secondary px-3 py-0.5 text-xs text-success">{swissW}W – {swissL}L Swiss</span>
 					{#if standing}
@@ -340,12 +340,12 @@
 									const next = new Set(expandedRounds);
 									if (next.has(round.number)) next.delete(round.number); else next.add(round.number);
 									expandedRounds = next;
-								}} class="cursor-pointer select-none flex items-center gap-2 text-sm font-medium text-foreground w-full text-left">
+								}} class="cursor-pointer select-none flex items-center gap-2 text-sm font-medium text-foreground w-full text-left min-w-0 overflow-hidden">
 									<span class="text-muted-foreground">{isOpen ? '▾' : '▸'}</span>
 									<span>Round {round.number}</span>
 									<span class="rounded-full px-2 py-0.5 text-xs {round.status === 'active' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}">{round.status}</span>
 									{#if round.byePlayerId}
-										<span class="text-xs text-warning">BYE: {getEntrant(round.byePlayerId)?.gamerTag}</span>
+										<span class="text-xs text-warning truncate">BYE: {getEntrant(round.byePlayerId)?.gamerTag}</span>
 									{/if}
 								</button>
 								{#if isOpen}

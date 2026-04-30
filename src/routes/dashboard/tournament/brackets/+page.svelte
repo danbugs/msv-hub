@@ -387,7 +387,7 @@
 	</div>
 
 	{#if error}
-		<div class="mt-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">{error}</div>
+		<div class="mt-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive break-words">{error}</div>
 	{/if}
 
 	<!-- StartGG split confirmation -->
@@ -468,7 +468,7 @@
 							{/if}
 							{#if bracket.matches.some((m) => m.isStream && !m.winnerId)}
 								{@const streamM = bracket.matches.find((m) => m.isStream && !m.winnerId)!}
-								<span class="text-primary">Stream: {getEntrant(streamM.topPlayerId)?.gamerTag} vs {getEntrant(streamM.bottomPlayerId)?.gamerTag}</span>
+								<span class="text-primary truncate min-w-0">Stream: {getEntrant(streamM.topPlayerId)?.gamerTag} vs {getEntrant(streamM.bottomPlayerId)?.gamerTag}</span>
 							{/if}
 						</div>
 
@@ -504,7 +504,7 @@
 						<div class="flex items-start justify-between">
 							<div>
 								<h3 class="text-base font-semibold text-foreground">Report Match</h3>
-								<p class="text-sm text-muted-foreground mt-0.5">{top?.gamerTag ?? '?'} vs {bot?.gamerTag ?? '?'}</p>
+								<p class="text-sm text-muted-foreground mt-0.5 truncate">{top?.gamerTag ?? '?'} vs {bot?.gamerTag ?? '?'}</p>
 							</div>
 							<Badge variant={isBo5 ? 'default' : 'secondary'}>
 								{isBo5 ? 'BO5' : 'BO3'}
@@ -514,11 +514,11 @@
 						<!-- Step 1: Pick winner -->
 						<div class="mt-4 flex gap-2">
 							<button onclick={() => { reportWinnerId = reportingMatch!.topPlayerId!; reportScore = ''; }}
-								class="flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors {reportWinnerId === reportingMatch.topPlayerId ? 'bg-emerald-600 text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
+								class="flex-1 min-w-0 truncate rounded-lg py-2.5 text-sm font-medium transition-colors {reportWinnerId === reportingMatch.topPlayerId ? 'bg-emerald-600 text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 								{top?.gamerTag ?? '?'}
 							</button>
 							<button onclick={() => { reportWinnerId = reportingMatch!.bottomPlayerId!; reportScore = ''; }}
-								class="flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors {reportWinnerId === reportingMatch.bottomPlayerId ? 'bg-emerald-600 text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
+								class="flex-1 min-w-0 truncate rounded-lg py-2.5 text-sm font-medium transition-colors {reportWinnerId === reportingMatch.bottomPlayerId ? 'bg-emerald-600 text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 								{bot?.gamerTag ?? '?'}
 							</button>
 						</div>

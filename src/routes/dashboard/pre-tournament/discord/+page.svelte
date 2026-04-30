@@ -688,7 +688,7 @@
 		<!-- Announcement -->
 		<div class="rounded-lg border border-border bg-card/50 p-4">
 			<div class="flex items-center justify-between">
-				<div>
+				<div class="min-w-0">
 					<p class="text-sm font-medium text-foreground">Registration Announcement</p>
 					<div class="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
 						<span class="inline-block h-1.5 w-1.5 rounded-full bg-primary"></span>
@@ -712,7 +712,7 @@
 		<!-- Waitlist Monitoring -->
 		<div class="mt-3 rounded-lg border border-border bg-card/50 p-4">
 			<div class="flex items-center justify-between">
-				<div>
+				<div class="min-w-0">
 					<p class="text-sm font-medium text-foreground">Waitlist Monitoring</p>
 					<p class="mt-1 text-xs text-muted-foreground">Checks every 5 min on Wednesdays via QStash. Auto-creates waitlist forum when cap is hit.</p>
 					<div class="mt-1.5">
@@ -787,7 +787,7 @@
 			</button>
 		</div>
 		{#if testRunning}<p class="mt-2 text-xs text-muted-foreground animate-pulse">Running {testRunning}...</p>{/if}
-		{#if testResult}<pre class="mt-2 text-xs whitespace-pre-wrap {testResult.ok ? 'text-success' : 'text-destructive'}">{testResult.msg}</pre>{/if}
+		{#if testResult}<pre class="mt-2 text-xs whitespace-pre-wrap break-words {testResult.ok ? 'text-success' : 'text-destructive'}">{testResult.msg}</pre>{/if}
 	</div>
 	</div>
 
@@ -818,7 +818,7 @@
 		<!-- Manual Fastest Reg -->
 		<div class="mt-4">
 			<p class="mb-1.5 text-xs font-medium text-muted-foreground">Manual Fastest Reg</p>
-			<div class="flex gap-2">
+			<div class="flex flex-wrap gap-2">
 				<input type="text" bind:value={fastestRegSlug} placeholder="tournament/microspacing-vancouver-135/event/ultimate-singles"
 					class="flex-1 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 				<label class="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -830,7 +830,7 @@
 					{fastestRegRunning ? '…' : 'Send'}
 				</button>
 			</div>
-			{#if fastestRegResult}<pre class="mt-1.5 text-xs whitespace-pre-wrap {fastestRegResult.ok ? 'text-success' : 'text-destructive'}">{fastestRegResult.msg}</pre>{/if}
+			{#if fastestRegResult}<pre class="mt-1.5 text-xs whitespace-pre-wrap break-words {fastestRegResult.ok ? 'text-success' : 'text-destructive'}">{fastestRegResult.msg}</pre>{/if}
 		</div>
 
 		<!-- Other tools -->

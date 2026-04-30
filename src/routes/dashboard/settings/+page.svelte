@@ -12,7 +12,7 @@
 		<ul class="mt-3 space-y-2">
 			{#each data.toEmails as email}
 				<li class="flex items-center justify-between rounded-lg bg-secondary px-4 py-2">
-					<span class="text-foreground">{email}</span>
+					<span class="flex-1 min-w-0 truncate text-foreground">{email}</span>
 				</li>
 			{/each}
 		</ul>

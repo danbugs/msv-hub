@@ -363,7 +363,7 @@
 							{round.status}
 						</span>
 						{#if round.byePlayerId}
-							<span class="text-xs text-warning">BYE: {getEntrant(round.byePlayerId)?.gamerTag}</span>
+							<span class="text-xs text-warning min-w-0">BYE: <span class="truncate">{getEntrant(round.byePlayerId)?.gamerTag}</span></span>
 						{/if}
 					</div>
 
@@ -462,7 +462,7 @@
 
 									{#if isPending}
 										<div class="flex items-center gap-2 px-3 pb-2">
-											<span class="text-xs text-muted-foreground ml-16">Score:</span>
+											<span class="text-xs text-muted-foreground ml-4">Score:</span>
 											<button
 												onclick={() => reportMatch(match.id, pendingWinner!.winnerId, '2-0', round.number)}
 												class="rounded bg-green-700 px-3 py-1 text-xs font-medium text-white hover:bg-green-600">
@@ -525,7 +525,7 @@
 									.sort((a, b) => b.wins - a.wins || a.losses - b.losses || a.initialSeed - b.initialSeed) as entrant, idx}
 									<tr class="border-b border-border">
 										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">{idx + 1}</td>
-										<td class="px-2 py-1.5 text-foreground">{entrant.gamerTag}</td>
+										<td class="px-2 py-1.5 text-foreground truncate max-w-[8rem]">{entrant.gamerTag}</td>
 										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">#{entrant.initialSeed}</td>
 										<td class="px-2 py-1.5 text-right font-mono text-success">{entrant.wins}</td>
 										<td class="px-2 py-1.5 text-right font-mono text-destructive">{entrant.losses}</td>
@@ -545,9 +545,9 @@
 					<div>
 						<h4 class="text-sm font-medium text-primary mb-2">Main Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'main').length} players)</h4>
 						{#each tournament.finalStandings.filter((s) => s.bracket === 'main') as s}
-							<div class="flex items-center gap-2 text-sm py-0.5">
+							<div class="flex items-center gap-2 text-sm py-0.5 min-w-0">
 								<span class="w-6 text-right font-mono text-muted-foreground">{s.rank}.</span>
-								<span class="text-foreground">{s.gamerTag}</span>
+								<span class="text-foreground truncate min-w-0">{s.gamerTag}</span>
 								<span class="text-muted-foreground">{s.wins}-{s.losses}</span>
 								{#if s.cinderellaBonus > 0}
 									<span class="text-warning text-xs">+{s.cinderellaBonus.toFixed(0)} Cinderella</span>
@@ -558,9 +558,9 @@
 					<div>
 						<h4 class="text-sm font-medium text-destructive mb-2">Redemption Bracket ({tournament.finalStandings.filter((s) => s.bracket === 'redemption').length} players)</h4>
 						{#each tournament.finalStandings.filter((s) => s.bracket === 'redemption') as s}
-							<div class="flex items-center gap-2 text-sm py-0.5">
+							<div class="flex items-center gap-2 text-sm py-0.5 min-w-0">
 								<span class="w-6 text-right font-mono text-muted-foreground">{s.rank}.</span>
-								<span class="text-foreground">{s.gamerTag}</span>
+								<span class="text-foreground truncate min-w-0">{s.gamerTag}</span>
 								<span class="text-muted-foreground">{s.wins}-{s.losses}</span>
 								{#if s.cinderellaBonus > 0}
 									<span class="text-warning text-xs">+{s.cinderellaBonus.toFixed(0)} Cinderella</span>
@@ -589,7 +589,7 @@
 									return 'tiebreaker';
 								})()}
 								{@const diffLabel = Math.abs(rawDiff) >= 0.5 ? `${rawDiff.toFixed(1)} more points` : 'tied on points'}
-								<div class="mt-4 rounded-lg border border-warning-border bg-warning-muted p-3 text-sm text-warning space-y-2">
+								<div class="mt-4 rounded-lg border border-warning-border bg-warning-muted p-3 text-sm text-warning space-y-2 break-words">
 									<p><strong>{firstRed.gamerTag}</strong> ({firstRed.wins}-{firstRed.losses}, seed #{firstRed.initialSeed}) was placed in Redemption
 									over <strong>{lastMain.gamerTag}</strong> ({lastMain.wins}-{lastMain.losses}, seed #{lastMain.initialSeed}) who made Main.</p>
 									<p class="text-xs text-warning">

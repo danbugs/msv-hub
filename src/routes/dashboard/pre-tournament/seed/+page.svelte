@@ -343,7 +343,7 @@
 				<!-- Seeding table with drag -->
 				<div>
 					<h3 class="text-sm font-medium text-foreground mb-2">Seeding — {result.entrants.length} players</h3>
-					<div class="max-h-[28rem] overflow-y-auto rounded-lg border border-border">
+					<div class="max-h-[28rem] overflow-auto rounded-lg border border-border">
 						<table class="w-full text-sm">
 							<thead class="sticky top-0 bg-card z-10">
 								<tr class="border-b border-border text-left text-muted-foreground">
@@ -365,7 +365,7 @@
 											{dragOverIdx === i ? 'bg-violet-900/30 border-violet-600' : 'hover:bg-secondary/50'}
 											{dragIdx === i ? 'opacity-40' : ''}">
 										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.seedNum}</td>
-										<td class="px-2 py-1.5 text-foreground">
+										<td class="px-2 py-1.5 text-foreground truncate max-w-[10rem]">
 											{e.gamerTag}
 											{#if e.isNewcomer}<span class="ml-1 text-xs text-warning">*</span>{/if}
 										</td>
@@ -414,7 +414,7 @@
 
 			<details class="mt-3 rounded-lg border border-border bg-card">
 				<summary class="cursor-pointer px-4 py-2 text-xs text-muted-foreground">Full Log ({result.logs.length})</summary>
-				<pre class="max-h-48 overflow-y-auto px-4 py-2 text-xs text-muted-foreground">{result.logs.join('\n')}</pre>
+				<pre class="max-h-48 overflow-y-auto px-4 py-2 text-xs text-muted-foreground whitespace-pre-wrap">{result.logs.join('\n')}</pre>
 			</details>
 		</div>
 	</div>

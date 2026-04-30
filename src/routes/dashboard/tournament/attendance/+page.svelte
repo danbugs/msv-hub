@@ -79,7 +79,7 @@
 	<p class="mt-1 text-muted-foreground">Track who's here and who brought a setup.</p>
 
 	{#if error}
-		<div class="mt-4 rounded-lg border border-destructive-border bg-destructive-muted px-4 py-3 text-sm text-destructive">
+		<div class="mt-4 rounded-lg border border-destructive-border bg-destructive-muted px-4 py-3 text-sm text-destructive break-words">
 			{error}
 		</div>
 	{/if}
@@ -126,7 +126,7 @@
 	{#if loading}
 		<div class="mt-6 text-muted-foreground animate-pulse">Loading...</div>
 	{:else}
-		<div class="mt-6">
+		<div class="mt-6 overflow-x-auto">
 			<table class="w-full text-sm">
 				<thead>
 					<tr class="border-b border-border text-left text-muted-foreground">
@@ -146,7 +146,7 @@
 					}) as attendee}
 						<tr class="border-b border-border {attendee.present ? 'bg-success-muted' : attendee.late ? 'bg-info-muted' : ''}">
 							<td class="px-2 py-1.5">
-								<span class="text-foreground">{attendee.gamerTag}</span>
+								<span class="text-foreground truncate">{attendee.gamerTag}</span>
 								{#if attendee.pledgedSetup}
 									<span class="ml-1 text-xs text-warning">setup</span>
 								{/if}

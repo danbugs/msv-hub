@@ -186,8 +186,8 @@
 	{:else if config}
 
 		<!-- Pause Toggle -->
-		<section class="rounded-xl border {config.paused ? 'border-warning-border bg-warning-muted' : 'border-success-border bg-success-muted'} p-4 mb-6 flex items-center justify-between" style="box-shadow: var(--shadow-card)">
-			<div>
+		<section class="rounded-xl border {config.paused ? 'border-warning-border bg-warning-muted' : 'border-success-border bg-success-muted'} p-4 mb-6 flex flex-wrap gap-3 items-center justify-between" style="box-shadow: var(--shadow-card)">
+			<div class="min-w-0">
 				<p class="font-medium {config.paused ? 'text-warning' : 'text-success'}">
 					{config.paused ? 'Event creation paused' : 'Event creation active'}
 				</p>
@@ -232,7 +232,7 @@
 				<p class="mt-3 text-xs text-muted-foreground">
 					Last created: tournament #{config.lastCreatedTournamentId}
 					{#if config.lastCreatedTournamentSlug}
-						(<a href="https://start.gg/tournament/{config.lastCreatedTournamentSlug}" target="_blank" class="text-primary hover:text-primary/80">{config.lastCreatedTournamentSlug}</a>)
+						(<a href="https://start.gg/tournament/{config.lastCreatedTournamentSlug}" target="_blank" class="text-primary hover:text-primary/80 break-all">{config.lastCreatedTournamentSlug}</a>)
 					{/if}
 				</p>
 			{/if}
@@ -258,10 +258,10 @@
 					<div class="flex items-center gap-3 rounded-lg border border-border bg-secondary/50 px-4 py-3">
 						<div class="flex-1 min-w-0">
 							<div class="flex items-center gap-2">
-								<span class="font-medium text-foreground">{to.name}</span>
+								<span class="font-medium text-foreground truncate">{to.name}</span>
 								{#if to.prefix}<span class="text-xs text-muted-foreground">[{to.prefix}]</span>{/if}
 							</div>
-							<div class="text-xs text-muted-foreground font-mono">{to.discriminator}
+							<div class="text-xs text-muted-foreground font-mono truncate">{to.discriminator}
 								{#if to.playerId}<span class="text-muted-foreground"> (player {to.playerId})</span>{/if}
 							</div>
 						</div>

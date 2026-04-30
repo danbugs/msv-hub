@@ -181,7 +181,7 @@
 						<div class="flex flex-wrap items-start gap-3">
 							<div class="flex-1 min-w-0">
 								<div class="flex items-center gap-2 flex-wrap">
-									<h2 class="font-semibold text-foreground">{tournament.name}</h2>
+									<h2 class="font-semibold text-foreground truncate min-w-0">{tournament.name}</h2>
 									<span class="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary">
 										{#if tournament.phase === 'swiss'}
 											Swiss R{tournament.currentRound}/{tournament.settings.numRounds}
@@ -199,11 +199,11 @@
 									{/if}
 								</p>
 								<a href="/live/{tournament.slug}" target="_blank"
-									class="mt-1 block text-xs text-muted-foreground hover:text-primary">
+									class="mt-1 block text-xs text-muted-foreground hover:text-primary min-w-0 truncate">
 									Live: /live/{tournament.slug} ↗
 								</a>
 							</div>
-							<div class="flex items-center gap-2 shrink-0">
+							<div class="flex flex-wrap items-center gap-2">
 								{#if tournament.phase === 'swiss'}
 									<a href="/dashboard/tournament/swiss"
 										class="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
