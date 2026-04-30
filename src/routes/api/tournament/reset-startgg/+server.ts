@@ -2,6 +2,8 @@ import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY } from '$lib/server/startgg';
 import { restartPhase, addEntrantsToPhase, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
+import { generateBracket, assignBracketStations } from '$lib/server/swiss';
+import type { FinalStanding } from '$lib/types/tournament';
 
 /**
  * POST — Full StartGG reset: restart all phases (Swiss + bracket),
@@ -129,16 +131,34 @@ export const POST: RequestHandler = async ({ locals }) => {
 		log(`  Removed ${cleaned} from brackets${failed > 0 ? `, ${failed} failed` : ''}`);
 	}
 
-	// Step 4: Reset MSV Hub tournament state to Swiss Round 1
+	// Step 4: Reset MSV Hub tournament state
 	log('Step 4: Resetting MSV Hub state...');
-	tournament.phase = 'swiss';
 	tournament.currentRound = 0;
 	tournament.rounds = [];
 	tournament.finalStandings = undefined;
-	tournament.brackets = undefined;
 	tournament.startggSync = undefined;
+
+	if (tournament.mode === 'gauntlet') {
+		// Regenerate fresh gauntlet main bracket
+		const players = tournament.entrants.map((e) => ({ entrantId: e.id, seed: e.initialSeed }));
+		const fakeStandings: FinalStanding[] = tournament.entrants.map((e) => ({
+			rank: e.initialSeed, entrantId: e.id, gamerTag: e.gamerTag,
+			wins: 0, losses: 0, initialSeed: e.initialSeed, totalScore: 0,
+			basePoints: 0, winPoints: 0, lossPoints: 0, cinderellaBonus: 0,
+			expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
+		}));
+		let mainBracket = generateBracket('main', players, fakeStandings);
+		mainBracket = assignBracketStations(mainBracket, tournament.settings);
+		tournament.phase = 'brackets';
+		tournament.brackets = { main: mainBracket };
+		log('MSV Hub reset to fresh Gauntlet bracket');
+	} else {
+		tournament.phase = 'swiss';
+		tournament.brackets = undefined;
+		log('MSV Hub reset to Swiss Round 1');
+	}
+
 	await saveTournament(tournament);
-	log('MSV Hub reset to Swiss Round 1');
 
 	log('Done!');
 	return Response.json({ ok: true, logs });
