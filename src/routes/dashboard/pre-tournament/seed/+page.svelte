@@ -164,6 +164,28 @@
 		return result.pairings.filter((p) => isCollision(p.top.playerId, p.bottom.playerId)).length;
 	});
 
+	let syncStatus = $state('');
+
+	async function runInitialSync(eventSlug?: string) {
+		syncStatus = 'Syncing players to StartGG...';
+		const body: Record<string, string> = {};
+		if (eventSlug) body.eventSlug = eventSlug;
+		const syncRes = await fetch('/api/tournament/startgg-initial-sync', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		});
+		const syncData = await syncRes.json().catch(() => ({}));
+		if (!syncRes.ok) {
+			syncStatus = '';
+			error = `StartGG sync: ${(syncData as { error?: string }).error ?? 'failed'}`;
+			return false;
+		}
+		const { moved, cleaned, failed: syncFailed } = syncData as { moved: number; cleaned: number; failed: number };
+		syncStatus = `Synced ${moved} players${cleaned ? ` (${cleaned} moved)` : ''}${syncFailed ? `, ${syncFailed} failed` : ''}`;
+		return true;
+	}
+
 	async function startFromEvent() {
 		if (!eventUrl.trim()) return;
 		if (tournamentMode === 'default' && swissRounds !== '' && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
@@ -177,9 +199,11 @@
 				mode: tournamentMode
 			})
 		});
+		if (!res.ok) { loadingEvent = false; const data = await res.json(); error = data.error ?? 'Failed'; return; }
+
+		const ok = await runInitialSync();
 		loadingEvent = false;
-		if (!res.ok) { const data = await res.json(); error = data.error ?? 'Failed'; }
-		else goto(tournamentMode === 'gauntlet' ? '/dashboard/tournament/brackets' : '/dashboard/tournament/swiss');
+		if (ok) goto(tournamentMode === 'gauntlet' ? '/dashboard/tournament/brackets' : '/dashboard/tournament/swiss');
 	}
 
 	async function startSwiss() {
@@ -214,9 +238,12 @@
 				mode: tournamentMode
 			})
 		});
+		if (!res.ok) { startingSwiss = false; const data = await res.json(); error = data.error ?? 'Failed'; return; }
+
+		// Step 3: Sync players on StartGG
+		const ok = await runInitialSync(result.targetSlug);
 		startingSwiss = false;
-		if (!res.ok) { const data = await res.json(); error = data.error ?? 'Failed'; }
-		else goto(tournamentMode === 'gauntlet' ? '/dashboard/tournament/brackets' : '/dashboard/tournament/swiss');
+		if (ok) goto(tournamentMode === 'gauntlet' ? '/dashboard/tournament/brackets' : '/dashboard/tournament/swiss');
 	}
 
 	const inputClass = 'mt-1 block w-full rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring';
@@ -480,7 +507,7 @@
 				{/if}
 				<button onclick={startSwiss} disabled={startingSwiss || !numStations}
 					class="rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-					{startingSwiss ? 'Creating...' : tournamentMode === 'gauntlet' ? 'Apply & Start Gauntlet →' : 'Apply & Start Swiss →'}
+					{startingSwiss ? (syncStatus || 'Creating...') : tournamentMode === 'gauntlet' ? 'Apply & Start Gauntlet →' : 'Apply & Start Swiss →'}
 				</button>
 			</div>
 		</div>
@@ -546,7 +573,7 @@
 					{/if}
 					<button onclick={startFromEvent} disabled={loadingEvent || !eventUrl.trim()}
 						class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-						{loadingEvent ? 'Loading…' : tournamentMode === 'gauntlet' ? 'Start Gauntlet →' : 'Start Swiss →'}
+						{loadingEvent ? (syncStatus || 'Loading…') : tournamentMode === 'gauntlet' ? 'Start Gauntlet →' : 'Start Swiss →'}
 					</button>
 				</div>
 			</div>
