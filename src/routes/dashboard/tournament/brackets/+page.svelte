@@ -314,6 +314,8 @@
 
 	let syncingFromStartGG = $state(false);
 	let syncResult = $state('');
+	let redemptionSyncing = $state(false);
+	let redemptionSyncResult = $state('');
 	async function syncFromStartGG() {
 		if (!confirm(`Sync ${activeBracket} bracket from StartGG? This overwrites MSV Hub's bracket state with StartGG's current results.`)) return;
 		syncingFromStartGG = true;
@@ -364,9 +366,30 @@
 			error = data.error ?? 'Failed to report match';
 			submittingReport = false;
 		} else {
+			const data = await res.json();
 			reportingMatch = null;
 			await loadTournament();
 			submittingReport = false;
+
+			// Auto-sync redemption to StartGG when generated in gauntlet mode
+			if (data.redemptionBracket && tournament?.mode === 'gauntlet') {
+				redemptionSyncing = true;
+				redemptionSyncResult = '';
+				fetch('/api/tournament/startgg-sync', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({})
+				}).then(async (syncRes) => {
+					const syncData = await syncRes.json().catch(() => ({}));
+					redemptionSyncing = false;
+					if (syncRes.ok) {
+						redemptionSyncResult = `Redemption synced to StartGG (${(syncData as { split?: { redemptionOk?: number } }).split?.redemptionOk ?? 0} players)`;
+						await loadTournament();
+					} else {
+						redemptionSyncResult = `Sync failed: ${(syncData as { error?: string }).error ?? 'unknown'}`;
+					}
+				}).catch(() => { redemptionSyncing = false; redemptionSyncResult = 'Sync failed: network error'; });
+			}
 		}
 	}
 </script>
@@ -417,25 +440,21 @@
 		</div>
 	{/if}
 
-	<!-- Gauntlet: Sync players to StartGG -->
+	<!-- Gauntlet: Re-sync players to StartGG (fallback if initial sync missed or failed) -->
 	{#if tournament && tournament.mode === 'gauntlet' && tournament.startggEventSlug && !tournament.startggSync?.splitConfirmed}
-		<div class="mt-4 rounded-lg border border-warning-border bg-warning-muted px-4 py-3">
-			<p class="text-sm text-warning">
-				<span class="font-semibold">StartGG:</span> Click <strong>Sync Players</strong> to move all players
-				to the Main Bracket event on StartGG, push seeding, and start reporting.
-			</p>
-			<div class="mt-2 flex items-center gap-3">
-				<Button onclick={confirmSplit} disabled={splitConfirming} size="sm">
-					{splitConfirming ? 'Syncing players & seeding...' : 'Sync Players to StartGG'}
+		<div class="mt-4 rounded-lg border border-border bg-card/50 px-4 py-3">
+			<div class="flex items-center gap-3">
+				<p class="text-sm text-muted-foreground flex-1">
+					Players not synced to StartGG yet.
+				</p>
+				<Button variant="outline" onclick={confirmSplit} disabled={splitConfirming} size="sm">
+					{splitConfirming ? 'Syncing...' : 'Sync to StartGG'}
 				</Button>
 				{#if splitResult}
 					<span class="text-xs text-muted-foreground">
-						Flushed {splitResult.reported} match(es)
-						{#if splitResult.failed > 0}<span class="text-destructive">, {splitResult.failed} failed (see errors below)</span>{/if}
+						{splitResult.reported} flushed
+						{#if splitResult.failed > 0}<span class="text-destructive">, {splitResult.failed} failed</span>{/if}
 					</span>
-				{/if}
-				{#if tournament.startggMainBracketEventId}
-					<span class="text-xs text-success">Main: linked</span>
 				{/if}
 			</div>
 		</div>
@@ -514,6 +533,21 @@
 				{/if}
 			{/each}
 		</div>
+
+		<!-- Redemption sync status -->
+		{#if redemptionSyncing}
+			<div class="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-foreground flex items-center gap-3">
+				<svg class="animate-spin h-4 w-4 text-primary shrink-0" viewBox="0 0 24 24" fill="none">
+					<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"/>
+					<path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+				</svg>
+				<span>Syncing redemption players to StartGG...</span>
+			</div>
+		{:else if redemptionSyncResult}
+			<div class="mt-4 rounded-xl border border-success/30 bg-success/5 p-3 text-sm text-success">
+				{redemptionSyncResult}
+			</div>
+		{/if}
 
 		{#if tournament?.mode === 'gauntlet' && !tournament.brackets?.redemption && tournament.brackets?.main}
 			{@const mainMatches = tournament.brackets.main.matches}
