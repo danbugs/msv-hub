@@ -1052,6 +1052,7 @@ export function generateBracket(
 		}
 	}
 
+
 	const bracketPlayers = sortedPlayers.map((p, i) => ({ entrantId: p.entrantId, seed: i + 1 }));
 
 	const state: BracketState = {
@@ -1093,6 +1094,36 @@ function advancePlayer(allMatches: BracketMatch[], completedMatch: BracketMatch)
 	}
 }
 
+/**
+ * After advancing players, auto-advance any match that has exactly one player
+ * and whose empty slot will never be filled (all feeders for that slot have resolved).
+ * Repeats until stable to handle cascading BYEs.
+ */
+function autoAdvanceByes(allMatches: BracketMatch[]) {
+	let changed = true;
+	while (changed) {
+		changed = false;
+		for (const m of allMatches) {
+			if (m.winnerId) continue;
+			const hasTop = !!m.topPlayerId;
+			const hasBot = !!m.bottomPlayerId;
+			if (hasTop === hasBot) continue; // both filled (real match) or both empty (waiting)
+			const emptySlot: 'top' | 'bottom' = hasTop ? 'bottom' : 'top';
+			const feeder = allMatches.find((f) =>
+				(f.winnerNextMatchId === m.id && f.winnerNextSlot === emptySlot) ||
+				(f.loserNextMatchId === m.id && f.loserNextSlot === emptySlot)
+			);
+			if (!feeder || feeder.winnerId) {
+				m.winnerId = m.topPlayerId ?? m.bottomPlayerId;
+				if (m.winnerId) {
+					advancePlayer(allMatches, m);
+					changed = true;
+				}
+			}
+		}
+	}
+}
+
 export function reportBracketMatch(
 	bracket: BracketState,
 	matchId: string,
@@ -1130,6 +1161,7 @@ export function reportBracketMatch(
 	}
 
 	advancePlayer(updated.matches, match);
+	autoAdvanceByes(updated.matches);
 
 	// Defensive: detect duplicate-player in any match and clear the duplicate.
 	// This should never happen with correct advancement logic; if it does, it means
