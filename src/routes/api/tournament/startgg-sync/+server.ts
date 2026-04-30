@@ -13,8 +13,8 @@ import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { flushPendingBracketMatches } from '$lib/server/startgg-reporter';
-import { pushBracketSeeding, gql, EVENT_PHASES_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
-import { assignBracketSplit } from '$lib/server/startgg-admin';
+import { pushBracketSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
+import { assignBracketSplit, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 import { sendMessage } from '$lib/server/discord';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -28,8 +28,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (tournament.phase !== 'brackets' && tournament.phase !== 'completed') {
 		return Response.json({ error: 'Tournament is not in brackets phase' }, { status: 400 });
 	}
-	if (!tournament.finalStandings || !tournament.brackets) {
-		return Response.json({ error: 'No final standings or brackets' }, { status: 400 });
+	if (!tournament.brackets) {
+		return Response.json({ error: 'No brackets generated' }, { status: 400 });
+	}
+
+	const isGauntlet = tournament.mode === 'gauntlet';
+
+	if (!isGauntlet && !tournament.finalStandings) {
+		return Response.json({ error: 'No final standings' }, { status: 400 });
 	}
 
 	const logs: string[] = [];
@@ -37,32 +43,108 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Step 1: Auto-assign players to bracket events on StartGG
 	const swissEventId = tournament.startggEventId;
-	const mainEventId = tournament.startggMainBracketEventId;
-	const redEventId = tournament.startggRedemptionBracketEventId;
+	let mainEventId = tournament.startggMainBracketEventId;
+	let redEventId = tournament.startggRedemptionBracketEventId;
 	const eventSlug = tournament.startggEventSlug;
+
+	const hasGauntletRedemption = isGauntlet && !!tournament.brackets.redemption;
+
+	// Auto-discover bracket events if not yet linked
+	if (eventSlug && (!mainEventId || (!isGauntlet && !redEventId) || (hasGauntletRedemption && !redEventId))) {
+		const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
+		if (tournamentSlug) {
+			const tData = await gql<{ tournament: { events: { id: number; name: string; numEntrants: number }[] } }>(
+				TOURNAMENT_QUERY, { slug: tournamentSlug }
+			);
+			const allEvents = tData?.tournament?.events ?? [];
+			const otherEvents = allEvents.filter((e) => e.id !== swissEventId);
+			if (!mainEventId) {
+				const mainEvt = otherEvents.find((e) => /main/i.test(e.name));
+				if (mainEvt) { mainEventId = mainEvt.id; tournament.startggMainBracketEventId = mainEvt.id; log(`Auto-linked main: ${mainEvt.name} (${mainEvt.id})`); }
+			}
+			if (!redEventId) {
+				const redEvt = otherEvents.find((e) => /redemption/i.test(e.name));
+				if (redEvt) { redEventId = redEvt.id; tournament.startggRedemptionBracketEventId = redEvt.id; log(`Auto-linked redemption: ${redEvt.name} (${redEvt.id})`); }
+			}
+			if (!mainEventId && !redEventId && otherEvents.length === 2) {
+				const sorted = [...otherEvents].sort((a, b) => b.numEntrants - a.numEntrants);
+				mainEventId = sorted[0].id; tournament.startggMainBracketEventId = sorted[0].id;
+				redEventId = sorted[1].id; tournament.startggRedemptionBracketEventId = sorted[1].id;
+				log(`Auto-linked by size: main=${sorted[0].name}, redemption=${sorted[1].name}`);
+			}
+		}
+	}
 
 	let splitResult = { mainOk: 0, redemptionOk: 0, failed: 0, errors: [] as string[] };
 
-	if (swissEventId && mainEventId && redEventId && eventSlug) {
-		const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
-		if (tournamentSlug) {
-			const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
-			const mainTags = tournament.finalStandings
-				.filter((s) => s.bracket === 'main')
-				.map((s) => entrantMap.get(s.entrantId)?.gamerTag ?? '')
-				.filter(Boolean);
-			const redTags = tournament.finalStandings
-				.filter((s) => s.bracket === 'redemption')
-				.map((s) => entrantMap.get(s.entrantId)?.gamerTag ?? '')
-				.filter(Boolean);
+	if (isGauntlet) {
+		// Gauntlet: move ALL players to main bracket event
+		if (swissEventId && mainEventId && eventSlug) {
+			const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
+			if (tournamentSlug) {
+				const allTags = tournament.entrants.map((e) => e.gamerTag);
+				log(`Gauntlet: assigning all ${allTags.length} players to Main bracket...`);
+				splitResult = await assignBracketSplit(
+					tournamentSlug, swissEventId, mainEventId,
+					redEventId ?? mainEventId,
+					allTags, [], log
+				);
 
-			log(`Assigning ${mainTags.length} players to Main, ${redTags.length} to Redemption...`);
-			splitResult = await assignBracketSplit(
-				tournamentSlug, swissEventId, mainEventId, redEventId, mainTags, redTags, log
-			);
+				// If redemption bracket exists, add eliminated players to redemption event
+				if (hasGauntletRedemption && redEventId) {
+					const redemptionBracket = tournament.brackets.redemption!;
+					const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+					const redTags = new Set(
+						redemptionBracket.players
+							.map((p) => entrantMap.get(p.entrantId)?.gamerTag?.toLowerCase())
+							.filter((t): t is string => !!t)
+					);
+					log(`Gauntlet: adding ${redTags.size} eliminated players to Redemption event...`);
+
+					const redPhaseData = await gql<{ event: { phases: { id: number }[] } }>(
+						EVENT_PHASES_QUERY, { eventId: redEventId }
+					);
+					const redPhaseId = redPhaseData?.event?.phases?.[0]?.id;
+
+					const participants = await getTournamentParticipants(tournamentSlug);
+					let redOk = 0;
+					for (const p of participants) {
+						if (!redTags.has(p.gamerTag.toLowerCase())) continue;
+						if (p.currentEventIds.includes(redEventId)) { redOk++; continue; }
+						const newEvents = [...new Set([...p.currentEventIds, redEventId])];
+						const phaseDests = redPhaseId ? [{ eventId: redEventId, phaseId: redPhaseId }] : [];
+						const result = await updateParticipantEvents(p.participantId, newEvents, phaseDests);
+						if (result.ok) { redOk++; log(`  ✓ ${p.gamerTag} → +Redemption`); }
+						else { splitResult.failed++; log(`  ✗ ${p.gamerTag}: ${result.error}`); }
+					}
+					splitResult.redemptionOk = redOk;
+				}
+			}
+		} else {
+			log('Skipping auto-assign: missing event IDs');
 		}
 	} else {
-		log('Skipping auto-assign: missing event IDs');
+		// Default: split players into main and redemption
+		if (swissEventId && mainEventId && redEventId && eventSlug && tournament.finalStandings) {
+			const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
+			if (tournamentSlug) {
+				const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+				const mainTags = tournament.finalStandings
+					.filter((s) => s.bracket === 'main')
+					.map((s) => entrantMap.get(s.entrantId)?.gamerTag ?? '')
+					.filter(Boolean);
+				const redTags = tournament.finalStandings
+					.filter((s) => s.bracket === 'redemption')
+					.map((s) => entrantMap.get(s.entrantId)?.gamerTag ?? '')
+					.filter(Boolean);
+				log(`Assigning ${mainTags.length} players to Main, ${redTags.length} to Redemption...`);
+				splitResult = await assignBracketSplit(
+					tournamentSlug, swissEventId, mainEventId, redEventId, mainTags, redTags, log
+				);
+			}
+		} else {
+			log('Skipping auto-assign: missing event IDs');
+		}
 	}
 
 	// Step 2: Push bracket seeding + trigger conversion
@@ -126,6 +208,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		if (appUrl) lines.push(`MSV Hub live: ${appUrl}/live/${tournament.slug}`);
 		await sendMessage(channelId, lines.join('\n')).catch(() => { /* best-effort */ });
 	}
+
+	await saveTournament(tournament);
 
 	return Response.json({
 		ok: true,
