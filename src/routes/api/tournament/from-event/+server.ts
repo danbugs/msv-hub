@@ -5,6 +5,7 @@ import {
 	gql,
 	EVENT_BY_SLUG_QUERY,
 	EVENT_PHASES_QUERY,
+	TOURNAMENT_QUERY,
 	fetchPhaseSeedsWithTags,
 	fetchPhaseSeeds,
 	fetchPhaseGroups
@@ -51,10 +52,39 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const phaseId = phases[0].id;
 
 	// Fetch seeds (tags for display + raw for entrant IDs) in parallel.
-	const [seeds, sgSeeds] = await Promise.all([
+	let [seeds, sgSeeds] = await Promise.all([
 		fetchPhaseSeedsWithTags(phaseId),
 		fetchPhaseSeeds(phaseId).catch(() => [])
 	]);
+
+	// If Swiss phase is empty (e.g. after a gauntlet reset moved everyone to Main),
+	// try reading seeds from other events in the same tournament.
+	if (!seeds.length) {
+		const tournSlug = slug.match(/tournament\/([^/]+)/)?.[1];
+		if (tournSlug) {
+			const tData = await gql<{ tournament: { events: { id: number; name: string }[] } }>(
+				TOURNAMENT_QUERY, { slug: tournSlug }
+			);
+			const otherEvents = (tData?.tournament?.events ?? []).filter((e) => e.id !== eventId);
+			for (const evt of otherEvents) {
+				const evtPhases = await gql<{ event: { phases: { id: number }[] } }>(
+					EVENT_PHASES_QUERY, { eventId: evt.id }
+				);
+				const fallbackPhaseId = evtPhases?.event?.phases?.[0]?.id;
+				if (!fallbackPhaseId) continue;
+				const [fallbackSeeds, fallbackSgSeeds] = await Promise.all([
+					fetchPhaseSeedsWithTags(fallbackPhaseId),
+					fetchPhaseSeeds(fallbackPhaseId).catch(() => [])
+				]);
+				if (fallbackSeeds.length) {
+					seeds = fallbackSeeds;
+					sgSeeds = fallbackSgSeeds;
+					break;
+				}
+			}
+		}
+	}
+
 	if (!seeds.length) {
 		return Response.json({ error: 'No seeds found in first phase' }, { status: 404 });
 	}
