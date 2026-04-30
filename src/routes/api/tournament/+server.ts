@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { saveTournament, getActiveTournament, deleteTournament } from '$lib/server/store';
 import { calculateRecommendedRounds, generateBracket, assignBracketStations } from '$lib/server/swiss';
-import type { TournamentState, Entrant, FinalStanding } from '$lib/types/tournament';
+import type { TournamentState, Entrant, FinalStanding, TournamentSettings } from '$lib/types/tournament';
 
 /** GET — fetch the active tournament */
 export const GET: RequestHandler = async ({ locals }) => {
@@ -44,8 +44,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			basePoints: 0, winPoints: 0, lossPoints: 0, cinderellaBonus: 0,
 			expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
 		}));
-		const settings = { numRounds: 0, numStations, streamStation: streamStation ?? 16 };
-		const mainBracket = generateBracket('main', players, fakeStandings, settings);
+		const settings: TournamentSettings = { numRounds: 0, numStations, streamStation: streamStation ?? 16 };
+		// No bracketName → all stations go to main (no redemption yet)
+		let mainBracket = generateBracket('main', players, fakeStandings);
+		mainBracket = assignBracketStations(mainBracket, settings);
 
 		const state: TournamentState = {
 			slug, name, mode: 'gauntlet',

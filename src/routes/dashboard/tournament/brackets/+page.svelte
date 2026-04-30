@@ -390,8 +390,8 @@
 		<div class="mt-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive break-words">{error}</div>
 	{/if}
 
-	<!-- StartGG split confirmation -->
-	{#if tournament && !tournament.startggSync?.splitConfirmed}
+	<!-- StartGG split confirmation (default mode only — gauntlet has no Swiss→bracket split) -->
+	{#if tournament && tournament.mode !== 'gauntlet' && !tournament.startggSync?.splitConfirmed}
 		<div class="mt-4 rounded-lg border border-warning-border bg-warning-muted px-4 py-3">
 			<p class="text-sm text-warning">
 				<span class="font-semibold">StartGG:</span> Click <strong>Run Bracket Split</strong> to automatically assign players

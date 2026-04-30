@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { saveTournament } from '$lib/server/store';
-import { calculateRecommendedRounds, generateBracket } from '$lib/server/swiss';
+import { calculateRecommendedRounds, generateBracket, assignBracketStations } from '$lib/server/swiss';
 import {
 	gql,
 	EVENT_BY_SLUG_QUERY,
@@ -88,7 +88,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			basePoints: 0, winPoints: 0, lossPoints: 0, cinderellaBonus: 0,
 			expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
 		}));
-		const mainBracket = generateBracket('main', players, fakeStandings, settings);
+		let mainBracket = generateBracket('main', players, fakeStandings);
+		mainBracket = assignBracketStations(mainBracket, settings);
 
 		const state: TournamentState = {
 			slug: tourneySlug, name: eventName, mode: 'gauntlet',
