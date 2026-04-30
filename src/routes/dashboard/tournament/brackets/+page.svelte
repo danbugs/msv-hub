@@ -417,6 +417,30 @@
 		</div>
 	{/if}
 
+	<!-- Gauntlet: Sync players to StartGG -->
+	{#if tournament && tournament.mode === 'gauntlet' && tournament.startggEventSlug && !tournament.startggSync?.splitConfirmed}
+		<div class="mt-4 rounded-lg border border-warning-border bg-warning-muted px-4 py-3">
+			<p class="text-sm text-warning">
+				<span class="font-semibold">StartGG:</span> Click <strong>Sync Players</strong> to move all players
+				to the Main Bracket event on StartGG, push seeding, and start reporting.
+			</p>
+			<div class="mt-2 flex items-center gap-3">
+				<Button onclick={confirmSplit} disabled={splitConfirming} size="sm">
+					{splitConfirming ? 'Syncing players & seeding...' : 'Sync Players to StartGG'}
+				</Button>
+				{#if splitResult}
+					<span class="text-xs text-muted-foreground">
+						Flushed {splitResult.reported} match(es)
+						{#if splitResult.failed > 0}<span class="text-destructive">, {splitResult.failed} failed (see errors below)</span>{/if}
+					</span>
+				{/if}
+				{#if tournament.startggMainBracketEventId}
+					<span class="text-xs text-success">Main: linked</span>
+				{/if}
+			</div>
+		</div>
+	{/if}
+
 	<!-- Bracket events are auto-linked during bracket generation. No manual step needed. -->
 
 	<!-- StartGG errors -->
@@ -491,10 +515,31 @@
 			{/each}
 		</div>
 
-		{#if tournament?.mode === 'gauntlet' && !tournament.brackets?.redemption}
+		{#if tournament?.mode === 'gauntlet' && !tournament.brackets?.redemption && tournament.brackets?.main}
+			{@const mainMatches = tournament.brackets.main.matches}
+			{@const lr1 = mainMatches.filter((m) => m.round === -1)}
+			{@const lr2 = mainMatches.filter((m) => m.round === -2)}
+			{@const lr1Done = lr1.filter((m) => m.winnerId).length}
+			{@const lr2Done = lr2.filter((m) => m.winnerId).length}
+			{@const totalNeeded = lr1.length + lr2.length}
+			{@const totalDone = lr1Done + lr2Done}
 			<div class="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
-				<p class="font-medium">Gauntlet Mode</p>
-				<p class="mt-1 text-muted-foreground">Redemption bracket will be generated automatically once all 0-2 and 1-2 players are eliminated from the main bracket.</p>
+				<div class="flex items-center justify-between">
+					<p class="font-medium">Gauntlet — Redemption Progress</p>
+					{#if totalNeeded > 0}
+						<span class="text-xs text-muted-foreground">{totalDone}/{totalNeeded} eliminations decided</span>
+					{/if}
+				</div>
+				{#if totalNeeded > 0}
+					<div class="mt-2 h-2 rounded-full bg-muted overflow-hidden">
+						<div class="h-full rounded-full bg-primary transition-all" style="width: {Math.round((totalDone / totalNeeded) * 100)}%"></div>
+					</div>
+					<div class="mt-2 flex gap-4 text-xs text-muted-foreground">
+						<span>0-2 players (LR1): {lr1Done}/{lr1.length}</span>
+						<span>1-2 players (LR2): {lr2Done}/{lr2.length}</span>
+					</div>
+				{/if}
+				<p class="mt-2 text-muted-foreground">Redemption bracket generates automatically once all 0-2 and 1-2 eliminations are complete.</p>
 			</div>
 		{/if}
 
