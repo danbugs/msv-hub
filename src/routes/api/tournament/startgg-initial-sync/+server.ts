@@ -3,14 +3,17 @@
  *
  * Validates and fixes player placement on StartGG after tournament creation.
  * - Default mode: ensure all players are in Swiss event only (remove from bracket events)
- * - Gauntlet mode: discover main bracket event, move all players there (remove from Swiss)
+ * - Gauntlet mode: add players to main bracket, push seeding, then remove from Swiss
  *
  * Accepts optional { eventSlug } in body for tournaments created without StartGG links.
  */
 
 import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
-import { gql, TOURNAMENT_QUERY, EVENT_BY_SLUG_QUERY, EVENT_PHASES_QUERY } from '$lib/server/startgg';
+import {
+	gql, TOURNAMENT_QUERY, EVENT_BY_SLUG_QUERY, EVENT_PHASES_QUERY,
+	pushBracketSeeding, fetchPhaseGroups
+} from '$lib/server/startgg';
 import { getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -76,7 +79,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const mainEventId = tournament.startggMainBracketEventId;
-	const redEventId = tournament.startggRedemptionBracketEventId;
 
 	const participants = await getTournamentParticipants(tournamentSlug);
 	log(`Found ${participants.length} participants`);
@@ -84,6 +86,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let moved = 0;
 	let cleaned = 0;
 	let failed = 0;
+	let seedingResult = '';
 
 	if (isGauntlet) {
 		if (!mainEventId) {
@@ -91,29 +94,92 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return Response.json({ error: 'Cannot find main bracket event on StartGG. Create an event with "Main" in the name.' }, { status: 400 });
 		}
 
-		// Get the main bracket phase for destination routing
+		// Get the main bracket phase + phase group for seeding
 		const mainPhaseData = await gql<{ event: { phases: { id: number }[] } }>(
 			EVENT_PHASES_QUERY, { eventId: mainEventId }
 		);
 		const mainPhaseId = mainPhaseData?.event?.phases?.[0]?.id;
 
-		log(`Moving all players to Main bracket (${mainEventId})...`);
+		// Step 1: Add players to main bracket (KEEP Swiss for seeding lookup)
+		log(`Step 1: Adding all players to Main bracket (keeping Swiss for seeding)...`);
 		for (const p of participants) {
-			const targetEvents = [mainEventId];
-			const currentSet = new Set(p.currentEventIds);
-			if (currentSet.size === 1 && currentSet.has(mainEventId)) { moved++; continue; }
+			const targetEvents = [...new Set([...p.currentEventIds, mainEventId])];
+			if (p.currentEventIds.includes(mainEventId)) { moved++; continue; }
 			const phaseDests = mainPhaseId ? [{ eventId: mainEventId, phaseId: mainPhaseId }] : [];
 			const result = await updateParticipantEvents(p.participantId, targetEvents, phaseDests);
-			if (result.ok) {
-				moved++;
-				const wasElsewhere = p.currentEventIds.some((id) => id !== mainEventId);
-				if (wasElsewhere) { cleaned++; log(`  ${p.gamerTag} → Main only`); }
+			if (result.ok) { moved++; log(`  ${p.gamerTag} → +Main`); }
+			else { failed++; log(`  ✗ ${p.gamerTag}: ${result.error}`); }
+		}
+		log(`Added ${moved} to Main, ${failed} failed`);
+
+		// Step 2: Push seeding to main bracket
+		if (mainPhaseId && tournament.brackets?.main) {
+			log(`Step 2: Pushing seeding to Main bracket...`);
+
+			// Resolve Swiss phase group ID if not stored
+			let swissPgId = tournament.startggPhase1Groups?.[0]?.id;
+			if (!swissPgId) {
+				const swissPhaseData = await gql<{ event: { phases: { id: number }[] } }>(
+					EVENT_PHASES_QUERY, { eventId: swissEventId }
+				);
+				const swissPhaseId = swissPhaseData?.event?.phases?.[0]?.id;
+				if (swissPhaseId) {
+					const groups = await fetchPhaseGroups(swissPhaseId).catch(() => []);
+					if (groups.length) {
+						swissPgId = groups[0].id;
+						tournament.startggPhase1Groups = groups.map((g) => ({ ...g, phaseId: swissPhaseId, roundNumber: 1 }));
+						log(`  Resolved Swiss phase group: ${swissPgId}`);
+					}
+				}
+			}
+
+			if (swissPgId) {
+				const mainGroups = await fetchPhaseGroups(mainPhaseId).catch(() => []);
+				const mainPgId = mainGroups[0]?.id;
+				if (mainPgId) {
+					const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+					const rankedEntrantIds = tournament.brackets.main.players
+						.sort((a, b) => a.seed - b.seed)
+						.map((p) => entrantMap.get(p.entrantId)?.startggEntrantId)
+						.filter((id): id is number => id !== undefined);
+
+					if (rankedEntrantIds.length) {
+						const result = await pushBracketSeeding(mainPhaseId, mainPgId, rankedEntrantIds, swissPgId)
+							.catch((e) => ({ ok: false as const, error: String(e) }));
+						if (result.ok) {
+							seedingResult = `Pushed seeding for ${rankedEntrantIds.length} players`;
+							log(`  ✓ ${seedingResult}`);
+						} else {
+							seedingResult = `Seeding failed: ${result.error}`;
+							log(`  ✗ ${seedingResult}`);
+						}
+					} else {
+						seedingResult = 'No StartGG entrant IDs on tournament players';
+						log(`  ✗ ${seedingResult}`);
+					}
+				} else {
+					seedingResult = 'Could not find main bracket phase group';
+					log(`  ✗ ${seedingResult}`);
+				}
 			} else {
-				failed++;
-				log(`  ✗ ${p.gamerTag}: ${result.error}`);
+				seedingResult = 'Could not resolve Swiss phase group for seeding lookup';
+				log(`  ✗ ${seedingResult}`);
 			}
 		}
-		log(`Done: ${moved} in Main, ${cleaned} moved, ${failed} failed`);
+
+		// Step 3: Remove players from Swiss (now that seeding is pushed)
+		log(`Step 3: Removing players from Swiss...`);
+		let removedFromSwiss = 0;
+		const freshParticipants = await getTournamentParticipants(tournamentSlug);
+		for (const p of freshParticipants) {
+			if (!p.currentEventIds.includes(swissEventId)) continue;
+			const targetEvents = p.currentEventIds.filter((id) => id !== swissEventId);
+			if (targetEvents.length === 0) targetEvents.push(mainEventId);
+			const result = await updateParticipantEvents(p.participantId, targetEvents);
+			if (result.ok) { removedFromSwiss++; }
+			else { log(`  ✗ Remove Swiss ${p.gamerTag}: ${result.error}`); }
+		}
+		log(`Removed ${removedFromSwiss} from Swiss`);
 	} else {
 		log(`Ensuring all players are in Swiss only (${swissEventId})...`);
 		for (const p of participants) {
@@ -135,5 +201,5 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	await saveTournament(tournament);
 
-	return Response.json({ ok: true, moved, cleaned, failed, logs });
+	return Response.json({ ok: true, moved, cleaned, failed, seedingResult, logs });
 };
