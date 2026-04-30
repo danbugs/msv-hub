@@ -209,6 +209,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await sendMessage(channelId, lines.join('\n')).catch(() => { /* best-effort */ });
 	}
 
+	if (!tournament.startggSync) {
+		tournament.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };
+	} else {
+		tournament.startggSync.splitConfirmed = true;
+	}
 	await saveTournament(tournament);
 
 	return Response.json({
@@ -218,7 +223,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		reported,
 		failed,
 		logs,
-		errors: tournament.startggSync?.errors ?? []
+		errors: tournament.startggSync.errors
 	});
 };
 
