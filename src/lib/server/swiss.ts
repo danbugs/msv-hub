@@ -284,16 +284,26 @@ export function calculateSwissPairings(
 
 	// Round 1: all players are 0-0 — use deterministic seed-order pairing (1 vs N/2+1,
 	// 2 vs N/2+2, …) to match StartGG's seeded-event pairings exactly.
+	// When odd, StartGG pads to the next even number — the player who would face
+	// the phantom slot gets the BYE (e.g., 31 players → seed 16 gets BYE).
 	if (roundNumber === 1) {
 		const allPlayers = [...standings.entries()].sort((a, b) => a[1].seed - b[1].seed);
 		let byeEntry: PlayerEntry | null = null;
-		const toMatch = [...allPlayers];
-		if (toMatch.length % 2 === 1) {
-			byeEntry = toMatch.pop()!;
-		}
-		const half = toMatch.length / 2;
-		for (let i = 0; i < half; i++) {
-			pairings.push([toMatch[i], toMatch[i + half]]);
+
+		if (allPlayers.length % 2 === 1) {
+			const padded = allPlayers.length + 1;
+			const half = padded / 2;
+			byeEntry = allPlayers[half - 1];
+			const topHalf = allPlayers.slice(0, half - 1);
+			const bottomHalf = allPlayers.slice(half);
+			for (let i = 0; i < topHalf.length; i++) {
+				pairings.push([topHalf[i], bottomHalf[i]]);
+			}
+		} else {
+			const half = allPlayers.length / 2;
+			for (let i = 0; i < half; i++) {
+				pairings.push([allPlayers[i], allPlayers[i + half]]);
+			}
 		}
 		return { pairings, bye: byeEntry };
 	}
