@@ -199,6 +199,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		log(`Done: ${moved} in Swiss, ${cleaned} cleaned, ${failed} failed`);
 	}
 
+	// Mark split as confirmed so match reports go through immediately (not queued)
+	if (!tournament.startggSync) {
+		tournament.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };
+	} else {
+		tournament.startggSync.splitConfirmed = true;
+	}
+
 	await saveTournament(tournament);
 
 	return Response.json({ ok: true, moved, cleaned, failed, seedingResult, logs });
