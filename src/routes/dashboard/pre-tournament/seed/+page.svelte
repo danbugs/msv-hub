@@ -164,7 +164,7 @@
 
 	async function startFromEvent() {
 		if (!eventUrl.trim()) return;
-		if (swissRounds && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
+		if (swissRounds !== '' && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
 		loadingEvent = true; error = '';
 		const res = await fetch('/api/tournament/from-event', {
 			method: 'POST',
@@ -178,7 +178,7 @@
 
 	async function startSwiss() {
 		if (!result) return;
-		if (swissRounds && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
+		if (swissRounds !== '' && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
 		startingSwiss = true; error = '';
 
 		// Step 1: Apply seeding to StartGG
