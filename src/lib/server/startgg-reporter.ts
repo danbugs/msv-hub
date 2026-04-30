@@ -324,7 +324,8 @@ export async function reportSwissMatch(
 		return { ok: false, error: msg };
 	}
 
-	const pgId = tournament.startggPhase1Groups?.[roundNumber - 1]?.id;
+	const pgId = (tournament.startggPhase1Groups?.find(g => g.roundNumber === roundNumber)
+		?? tournament.startggPhase1Groups?.[roundNumber - 1])?.id;
 	if (!pgId) {
 		const msg = `No phase group for round ${roundNumber}`;
 		addError(sync, match.id, msg);

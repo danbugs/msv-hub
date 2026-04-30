@@ -90,11 +90,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return numA - numB;
 		});
 	const finalStandingsPhase = phases.find((p) => p.name.toLowerCase().includes('final'));
-	const allRoundGroups: { id: number; displayIdentifier: string; phaseId: number }[] = [];
-	for (const phase of swissPhases) {
+	const allRoundGroups: { id: number; displayIdentifier: string; phaseId: number; roundNumber: number }[] = [];
+	for (let i = 0; i < swissPhases.length; i++) {
+		const phase = swissPhases[i];
+		const roundNum = parseInt(phase.name.match(/\d+/)?.[0] ?? String(i + 1));
 		const groups = await fetchPhaseGroups(phase.id).catch(() => []);
 		if (groups.length > 0) {
-			allRoundGroups.push({ ...groups[0], phaseId: phase.id });
+			allRoundGroups.push({ ...groups[0], phaseId: phase.id, roundNumber: roundNum });
 		}
 	}
 	// Fetch phase group for Final Standings phase (used to push Swiss standings after bracket split)

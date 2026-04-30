@@ -282,7 +282,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 	// For round 2+, push our custom pairings to StartGG's phase group BEFORE triggering
 	// conversion/caching — the phase group must have the correct seeding first.
-	const roundGroup = tournament.startggPhase1Groups?.[nextRound - 1];
+	const roundGroup = tournament.startggPhase1Groups?.find(g => g.roundNumber === nextRound)
+		?? tournament.startggPhase1Groups?.[nextRound - 1];
 	const pgId = roundGroup?.id;
 	const roundPhaseId = roundGroup?.phaseId ?? tournament.startggPhase1Id;
 	if (nextRound > 1 && roundPhaseId && pgId) {
@@ -579,7 +580,8 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 				// Try to re-seed on StartGG. If the pool is already started (conversion
 				// already happened), set pendingPhaseReset so the UI shows a prompt.
-				const roundGroup = latestState.startggPhase1Groups?.[nextRound.number - 1];
+				const roundGroup = latestState.startggPhase1Groups?.find(g => g.roundNumber === nextRound.number)
+					?? latestState.startggPhase1Groups?.[nextRound.number - 1];
 				const rPgId = roundGroup?.id;
 				const rPhaseId = roundGroup?.phaseId ?? latestState.startggPhase1Id;
 				// Since we trigger conversion at round start, the pool is always started.
