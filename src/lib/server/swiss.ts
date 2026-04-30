@@ -1268,3 +1268,128 @@ function countBracketRematches(
 	}
 	return count;
 }
+
+// ── Gauntlet mode helpers ───────────────────────────────────────────────
+
+/**
+ * Compute each player's W-L record from completed bracket matches.
+ */
+export function computeBracketRecords(
+	matches: BracketMatch[]
+): Map<string, { wins: number; losses: number }> {
+	const records = new Map<string, { wins: number; losses: number }>();
+
+	function ensure(id: string) {
+		if (!records.has(id)) records.set(id, { wins: 0, losses: 0 });
+		return records.get(id)!;
+	}
+
+	for (const m of matches) {
+		if (!m.winnerId || !m.topPlayerId || !m.bottomPlayerId) continue;
+		// Skip BYE auto-advances (one slot empty)
+		if (m.topPlayerId === m.bottomPlayerId) continue;
+
+		const loserId = m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId;
+		ensure(m.winnerId).wins++;
+		ensure(loserId).losses++;
+	}
+
+	return records;
+}
+
+/**
+ * Collect players eliminated from a bracket (lost with no loserNextMatchId = terminal loss).
+ * Returns a list of entrant IDs that have been eliminated.
+ */
+export function getEliminatedPlayers(matches: BracketMatch[]): string[] {
+	const eliminated: string[] = [];
+	for (const m of matches) {
+		if (!m.winnerId) continue;
+		const loserId = m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId;
+		if (!loserId) continue;
+		// Terminal loss: losers side match with no loser route out, OR any match without loserNextMatchId
+		// where the loser has nowhere to go (already in losers or GF).
+		if (!m.loserNextMatchId) {
+			eliminated.push(loserId);
+		}
+	}
+	return eliminated;
+}
+
+/**
+ * Check if all LR1 and LR2 matches are complete (i.e. all 0-2 and 1-2 players are known).
+ */
+export function isGauntletRedemptionReady(matches: BracketMatch[]): boolean {
+	const lr1 = matches.filter((m) => m.round === -1);
+	const lr2 = matches.filter((m) => m.round === -2);
+	if (lr1.length === 0) return false;
+	// LR1 done = all 0-2 players known; LR2 done = all 1-2 players known
+	const lr1Done = lr1.every((m) => m.winnerId);
+	const lr2Done = lr2.length === 0 || lr2.every((m) => m.winnerId);
+	return lr1Done && lr2Done;
+}
+
+/**
+ * Build the redemption bracket for gauntlet mode.
+ * Seeds by: bracket W-L (0-2 behind 1-2), then initial seed.
+ * Uses main bracket opponent history for rematch avoidance in R1.
+ */
+export function generateGauntletRedemption(
+	mainMatches: BracketMatch[],
+	entrants: Entrant[],
+	settings?: TournamentSettings
+): BracketState {
+	const records = computeBracketRecords(mainMatches);
+	const eliminated = getEliminatedPlayers(mainMatches);
+	const entrantMap = new Map(entrants.map((e) => [e.id, e]));
+
+	// Filter to 0-2 and 1-2 only
+	const redemptionIds = eliminated.filter((id) => {
+		const r = records.get(id);
+		if (!r) return false;
+		return (r.wins === 0 && r.losses === 2) || (r.wins === 1 && r.losses === 2);
+	});
+
+	// Sort: 1-2 players first (they did better), then 0-2. Within each group, by initial seed.
+	const sorted = redemptionIds
+		.map((id) => ({
+			entrantId: id,
+			record: records.get(id)!,
+			initialSeed: entrantMap.get(id)?.initialSeed ?? 999
+		}))
+		.sort((a, b) => {
+			if (a.record.wins !== b.record.wins) return b.record.wins - a.record.wins;
+			return a.initialSeed - b.initialSeed;
+		});
+
+	const players = sorted.map((s, i) => ({ entrantId: s.entrantId, seed: i + 1 }));
+
+	// Build opponent map from main bracket for rematch avoidance
+	const mainOpponents = new Map<string, string>();
+	for (const m of mainMatches) {
+		if (!m.winnerId || !m.topPlayerId || !m.bottomPlayerId) continue;
+		if (m.topPlayerId === m.bottomPlayerId) continue;
+		mainOpponents.set(m.topPlayerId, m.bottomPlayerId);
+		mainOpponents.set(m.bottomPlayerId, m.topPlayerId);
+	}
+
+	// Build fake FinalStanding array for generateBracket compatibility
+	const fakeStandings: FinalStanding[] = sorted.map((s, i) => ({
+		rank: i + 1,
+		entrantId: s.entrantId,
+		gamerTag: entrantMap.get(s.entrantId)?.gamerTag ?? '',
+		wins: s.record.wins,
+		losses: s.record.losses,
+		initialSeed: s.initialSeed,
+		totalScore: 0,
+		basePoints: 0,
+		winPoints: 0,
+		lossPoints: 0,
+		cinderellaBonus: 0,
+		expectedWins: 0,
+		winsAboveExpected: 0,
+		bracket: 'redemption' as const
+	}));
+
+	return generateBracket('redemption', players, fakeStandings, settings, mainOpponents);
+}

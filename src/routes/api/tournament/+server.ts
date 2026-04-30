@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { saveTournament, getActiveTournament, deleteTournament } from '$lib/server/store';
-import { calculateRecommendedRounds } from '$lib/server/swiss';
-import type { TournamentState, Entrant } from '$lib/types/tournament';
+import { calculateRecommendedRounds, generateBracket, assignBracketStations } from '$lib/server/swiss';
+import type { TournamentState, Entrant, FinalStanding } from '$lib/types/tournament';
 
 /** GET — fetch the active tournament */
 export const GET: RequestHandler = async ({ locals }) => {
@@ -14,17 +14,53 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const body = await request.json();
-	const { name, slug, entrants, numStations, streamStation, numRounds: numRoundsOverride } = body as {
+	const { name, slug, entrants, numStations, streamStation, numRounds: numRoundsOverride, mode: modeParam } = body as {
 		name: string;
 		slug: string;
 		entrants: { gamerTag: string; initialSeed: number }[];
 		numStations: number;
 		streamStation?: number;
 		numRounds?: number;
+		mode?: 'default' | 'gauntlet';
 	};
 
 	if (!name || !slug || !entrants?.length || !numStations) {
 		return Response.json({ error: 'name, slug, entrants, and numStations are required' }, { status: 400 });
+	}
+
+	const mode = modeParam ?? 'default';
+
+	const tournamentEntrants: Entrant[] = entrants.map((e, i) => ({
+		id: `e-${i + 1}`,
+		gamerTag: e.gamerTag,
+		initialSeed: e.initialSeed
+	}));
+
+	if (mode === 'gauntlet') {
+		const players = tournamentEntrants.map((e) => ({ entrantId: e.id, seed: e.initialSeed }));
+		const fakeStandings: FinalStanding[] = tournamentEntrants.map((e) => ({
+			rank: e.initialSeed, entrantId: e.id, gamerTag: e.gamerTag,
+			wins: 0, losses: 0, initialSeed: e.initialSeed, totalScore: 0,
+			basePoints: 0, winPoints: 0, lossPoints: 0, cinderellaBonus: 0,
+			expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
+		}));
+		const settings = { numRounds: 0, numStations, streamStation: streamStation ?? 16 };
+		const mainBracket = generateBracket('main', players, fakeStandings, settings);
+
+		const state: TournamentState = {
+			slug, name, mode: 'gauntlet',
+			phase: 'brackets',
+			entrants: tournamentEntrants,
+			settings,
+			rounds: [],
+			currentRound: 0,
+			brackets: { main: mainBracket },
+			createdAt: Date.now(),
+			updatedAt: Date.now()
+		};
+
+		await saveTournament(state);
+		return Response.json(state);
 	}
 
 	const numRounds = numRoundsOverride ?? calculateRecommendedRounds(entrants.length, numStations);
@@ -37,12 +73,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (numRounds < 1) {
 		return Response.json({ error: 'At least 1 Swiss round required' }, { status: 400 });
 	}
-
-	const tournamentEntrants: Entrant[] = entrants.map((e, i) => ({
-		id: `e-${i + 1}`,
-		gamerTag: e.gamerTag,
-		initialSeed: e.initialSeed
-	}));
 
 	const state: TournamentState = {
 		slug,

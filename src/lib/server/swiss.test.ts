@@ -12,7 +12,12 @@ import {
 	calculateSwissPairings,
 	calculateStandings,
 	calculateFinalStandings,
-	generateBracket
+	generateBracket,
+	computeBracketRecords,
+	getEliminatedPlayers,
+	isGauntletRedemptionReady,
+	generateGauntletRedemption,
+	reportBracketMatch
 } from './swiss';
 import type { Entrant, SwissRound, SwissMatch } from '$lib/types/tournament';
 
@@ -290,6 +295,110 @@ describe('Full tournament integration', () => {
 			if (m.round > 0 && !m.id.includes('-GF-') && !m.id.includes('-GFR-')) {
 				expect(m.winnerNextMatchId).toBeDefined();
 			}
+		}
+	});
+});
+
+// ── Gauntlet mode ───────────────────────────────────────────────────────
+
+describe('Gauntlet mode helpers', () => {
+	const fakeStandings = ENTRANTS.map((e) => ({
+		rank: e.initialSeed, entrantId: e.id, gamerTag: e.gamerTag,
+		wins: 0, losses: 0, initialSeed: e.initialSeed, totalScore: 0,
+		basePoints: 0, winPoints: 0, lossPoints: 0, cinderellaBonus: 0,
+		expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
+	}));
+	const players = ENTRANTS.map((e) => ({ entrantId: e.id, seed: e.initialSeed }));
+
+	function simulateGauntlet() {
+		let bracket = generateBracket('main', players, fakeStandings);
+
+		// Play all WR1 matches: higher seed wins
+		const wr1 = bracket.matches.filter((m) => m.round === 1 && m.topPlayerId && m.bottomPlayerId && !m.winnerId);
+		for (const m of wr1) {
+			bracket = reportBracketMatch(bracket, m.id, m.topPlayerId!);
+		}
+
+		// Play all LR1 matches: higher seed wins (lower loss player advances)
+		const lr1 = bracket.matches.filter((m) => m.round === -1 && m.topPlayerId && m.bottomPlayerId && !m.winnerId);
+		for (const m of lr1) {
+			const topSeed = ENTRANTS.find((e) => e.id === m.topPlayerId)?.initialSeed ?? 999;
+			const botSeed = ENTRANTS.find((e) => e.id === m.bottomPlayerId)?.initialSeed ?? 999;
+			bracket = reportBracketMatch(bracket, m.id, topSeed < botSeed ? m.topPlayerId! : m.bottomPlayerId!);
+		}
+
+		// Play all WR2 matches: higher seed wins
+		const wr2 = bracket.matches.filter((m) => m.round === 2 && m.topPlayerId && m.bottomPlayerId && !m.winnerId);
+		for (const m of wr2) {
+			const topSeed = ENTRANTS.find((e) => e.id === m.topPlayerId)?.initialSeed ?? 999;
+			const botSeed = ENTRANTS.find((e) => e.id === m.bottomPlayerId)?.initialSeed ?? 999;
+			bracket = reportBracketMatch(bracket, m.id, topSeed < botSeed ? m.topPlayerId! : m.bottomPlayerId!);
+		}
+
+		// Play all LR2 matches: higher seed wins
+		const lr2 = bracket.matches.filter((m) => m.round === -2 && m.topPlayerId && m.bottomPlayerId && !m.winnerId);
+		for (const m of lr2) {
+			const topSeed = ENTRANTS.find((e) => e.id === m.topPlayerId)?.initialSeed ?? 999;
+			const botSeed = ENTRANTS.find((e) => e.id === m.bottomPlayerId)?.initialSeed ?? 999;
+			bracket = reportBracketMatch(bracket, m.id, topSeed < botSeed ? m.topPlayerId! : m.bottomPlayerId!);
+		}
+
+		return bracket;
+	}
+
+	it('computeBracketRecords tracks wins and losses', () => {
+		const bracket = simulateGauntlet();
+		const records = computeBracketRecords(bracket.matches);
+
+		// Seed 1 won WR1 and WR2 = 2-0
+		expect(records.get('e-1')).toEqual({ wins: 2, losses: 0 });
+		// Seed 16 lost WR1, lost LR1 = 0-2
+		expect(records.get('e-16')).toEqual({ wins: 0, losses: 2 });
+	});
+
+	it('getEliminatedPlayers finds players with no loserNextMatchId', () => {
+		const bracket = simulateGauntlet();
+		const eliminated = getEliminatedPlayers(bracket.matches);
+		// 4 eliminated from LR1 (0-2) + 4 from LR2 (1-2) = 8
+		expect(eliminated.length).toBe(8);
+	});
+
+	it('isGauntletRedemptionReady returns true after LR1 and LR2 complete', () => {
+		let bracket = generateBracket('main', players, fakeStandings);
+		expect(isGauntletRedemptionReady(bracket.matches)).toBe(false);
+
+		bracket = simulateGauntlet();
+		expect(isGauntletRedemptionReady(bracket.matches)).toBe(true);
+	});
+
+	it('generateGauntletRedemption creates bracket with correct player count', () => {
+		const bracket = simulateGauntlet();
+		const redemption = generateGauntletRedemption(bracket.matches, ENTRANTS);
+
+		// 4 players with 0-2 + 4 with 1-2 = 8 players
+		expect(redemption.players.length).toBe(8);
+		expect(redemption.name).toBe('redemption');
+
+		// 1-2 players should be seeded ahead of 0-2 players
+		const records = computeBracketRecords(bracket.matches);
+		const firstPlayer = redemption.players[0];
+		const firstRecord = records.get(firstPlayer.entrantId);
+		expect(firstRecord?.wins).toBe(1);
+	});
+
+	it('gauntlet redemption has no overlap with still-alive main bracket players', () => {
+		const bracket = simulateGauntlet();
+		const redemption = generateGauntletRedemption(bracket.matches, ENTRANTS);
+		const redemptionIds = new Set(redemption.players.map((p) => p.entrantId));
+
+		// Players still alive in main bracket should NOT be in redemption
+		const aliveInMain = new Set<string>();
+		for (const m of bracket.matches) {
+			if (!m.winnerId && m.topPlayerId) aliveInMain.add(m.topPlayerId);
+			if (!m.winnerId && m.bottomPlayerId) aliveInMain.add(m.bottomPlayerId);
+		}
+		for (const id of aliveInMain) {
+			expect(redemptionIds.has(id)).toBe(false);
 		}
 	});
 });

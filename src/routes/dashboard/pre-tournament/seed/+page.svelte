@@ -23,6 +23,8 @@
 	let swissRounds = $state('');  // empty = auto (calculated from player count + stations)
 	let eventUrl = $state('');
 	let loadingEvent = $state(false);
+	let tournamentMode = $state<'default' | 'gauntlet'>('default');
+	let showModeInfo = $state(false);
 
 	// Drag state
 	let dragIdx = $state<number | null>(null);
@@ -164,21 +166,25 @@
 
 	async function startFromEvent() {
 		if (!eventUrl.trim()) return;
-		if (swissRounds !== '' && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
+		if (tournamentMode === 'default' && swissRounds !== '' && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
 		loadingEvent = true; error = '';
 		const res = await fetch('/api/tournament/from-event', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ eventSlug: eventUrl.trim(), numStations: Number(numStations), streamStation: 16, numRounds: swissRounds ? Number(swissRounds) : undefined })
+			body: JSON.stringify({
+				eventSlug: eventUrl.trim(), numStations: Number(numStations), streamStation: 16,
+				numRounds: tournamentMode === 'default' && swissRounds ? Number(swissRounds) : undefined,
+				mode: tournamentMode
+			})
 		});
 		loadingEvent = false;
 		if (!res.ok) { const data = await res.json(); error = data.error ?? 'Failed'; }
-		else goto('/dashboard/tournament/swiss');
+		else goto(tournamentMode === 'gauntlet' ? '/dashboard/tournament/brackets' : '/dashboard/tournament/swiss');
 	}
 
 	async function startSwiss() {
 		if (!result) return;
-		if (swissRounds !== '' && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
+		if (tournamentMode === 'default' && swissRounds !== '' && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
 		startingSwiss = true; error = '';
 
 		// Step 1: Apply seeding to StartGG
@@ -204,12 +210,13 @@
 				name, slug,
 				entrants: result.entrants.map((e) => ({ gamerTag: e.gamerTag, initialSeed: e.seedNum })),
 				numStations: Number(numStations), streamStation: 16,
-				numRounds: swissRounds ? Number(swissRounds) : undefined
+				numRounds: tournamentMode === 'default' && swissRounds ? Number(swissRounds) : undefined,
+				mode: tournamentMode
 			})
 		});
 		startingSwiss = false;
 		if (!res.ok) { const data = await res.json(); error = data.error ?? 'Failed'; }
-		else goto('/dashboard/tournament/swiss');
+		else goto(tournamentMode === 'gauntlet' ? '/dashboard/tournament/brackets' : '/dashboard/tournament/swiss');
 	}
 
 	const inputClass = 'mt-1 block w-full rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring';
@@ -419,7 +426,7 @@
 		</div>
 	</div>
 
-	<!-- ═══ Step 3: Apply & Start Swiss ═══ -->
+	<!-- ═══ Step 3: Apply & Start ═══ -->
 	<div class="flex gap-4">
 		<div class="flex flex-col items-center">
 			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border
@@ -427,8 +434,35 @@
 				text-xs font-bold">3</div>
 		</div>
 		<div class="pb-6 pt-1 min-w-0 flex-1">
-			<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Apply & Start Swiss</p>
+			<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Apply & Start</p>
 			<p class="mb-3 text-xs text-muted-foreground">Creates the tournament from the seeding above. Seeding will be applied to StartGG automatically.</p>
+
+			<!-- Mode selector -->
+			<div class="mb-4">
+				<div class="flex items-center gap-2 mb-1.5">
+					<span class="text-xs text-muted-foreground">Format</span>
+					<button type="button" onclick={() => showModeInfo = !showModeInfo}
+						class="text-muted-foreground hover:text-foreground transition-colors" title="What are these modes?">
+						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-width="2" d="M12 16v-4m0-4h.01"/></svg>
+					</button>
+				</div>
+				{#if showModeInfo}
+					<div class="mb-3 rounded-lg border border-border bg-card/50 p-3 text-xs text-muted-foreground space-y-2">
+						<p><strong class="text-foreground">Default</strong> — Swiss rounds to seed players, then split into Main + Redemption brackets based on record.</p>
+						<p><strong class="text-foreground">Gauntlet</strong> — All players enter one Main bracket (DE). Players eliminated early with 0-2 or 1-2 records are placed into a Redemption bracket once all early losers are known. Redemption is seeded by bracket performance + initial seed with rematch avoidance.</p>
+					</div>
+				{/if}
+				<div class="flex gap-2">
+					<button type="button" onclick={() => tournamentMode = 'default'}
+						class="rounded-lg px-4 py-1.5 text-sm font-medium transition-colors {tournamentMode === 'default' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
+						Default
+					</button>
+					<button type="button" onclick={() => tournamentMode = 'gauntlet'}
+						class="rounded-lg px-4 py-1.5 text-sm font-medium transition-colors {tournamentMode === 'gauntlet' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
+						Gauntlet
+					</button>
+				</div>
+			</div>
 
 			<div class="flex items-end gap-3 flex-wrap">
 				<div>
@@ -436,15 +470,17 @@
 					<input id="num-stations" type="number" bind:value={numStations} min="1"
 						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground focus:border-ring focus:outline-none" />
 				</div>
-				<div>
-					<label for="swiss-rounds" class="block text-xs text-muted-foreground">Swiss rounds</label>
-					<input id="swiss-rounds" type="number" bind:value={swissRounds} min="1" max="5"
-						placeholder="auto"
-						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
-				</div>
+				{#if tournamentMode === 'default'}
+					<div>
+						<label for="swiss-rounds" class="block text-xs text-muted-foreground">Swiss rounds</label>
+						<input id="swiss-rounds" type="number" bind:value={swissRounds} min="1" max="5"
+							placeholder="auto"
+							class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
+					</div>
+				{/if}
 				<button onclick={startSwiss} disabled={startingSwiss || !numStations}
 					class="rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-					{startingSwiss ? 'Creating...' : 'Apply & Start Swiss →'}
+					{startingSwiss ? 'Creating...' : tournamentMode === 'gauntlet' ? 'Apply & Start Gauntlet →' : 'Apply & Start Swiss →'}
 				</button>
 			</div>
 		</div>
@@ -461,7 +497,35 @@
 			<div class="rounded-lg border border-border bg-card/50 p-4">
 				<p class="text-sm font-medium text-foreground">Start from existing seeded event</p>
 				<p class="mt-0.5 text-xs text-muted-foreground">Skip Elo seeding — use the current StartGG seedings directly.</p>
-				<div class="mt-3 flex flex-wrap items-end gap-3">
+
+				<!-- Mode selector (same state as Step 3) -->
+				<div class="mt-3 mb-3">
+					<div class="flex items-center gap-2 mb-1.5">
+						<span class="text-xs text-muted-foreground">Format</span>
+						<button type="button" onclick={() => showModeInfo = !showModeInfo}
+							class="text-muted-foreground hover:text-foreground transition-colors" title="What are these modes?">
+							<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-width="2" d="M12 16v-4m0-4h.01"/></svg>
+						</button>
+					</div>
+					{#if showModeInfo}
+						<div class="mb-3 rounded-lg border border-border bg-card/80 p-3 text-xs text-muted-foreground space-y-2">
+							<p><strong class="text-foreground">Default</strong> — Swiss rounds to seed players, then split into Main + Redemption brackets based on record.</p>
+							<p><strong class="text-foreground">Gauntlet</strong> — All players enter one Main bracket (DE). Players eliminated early with 0-2 or 1-2 records are placed into a Redemption bracket once all early losers are known. Redemption is seeded by bracket performance + initial seed with rematch avoidance.</p>
+						</div>
+					{/if}
+					<div class="flex gap-2">
+						<button type="button" onclick={() => tournamentMode = 'default'}
+							class="rounded-lg px-3 py-1 text-xs font-medium transition-colors {tournamentMode === 'default' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
+							Default
+						</button>
+						<button type="button" onclick={() => tournamentMode = 'gauntlet'}
+							class="rounded-lg px-3 py-1 text-xs font-medium transition-colors {tournamentMode === 'gauntlet' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
+							Gauntlet
+						</button>
+					</div>
+				</div>
+
+				<div class="flex flex-wrap items-end gap-3">
 					<div class="flex-1 min-w-48">
 						<label for="event-url" class="block text-xs text-muted-foreground">StartGG event URL</label>
 						<input id="event-url" type="text" bind:value={eventUrl}
@@ -472,15 +536,17 @@
 						<input id="fe-stations" type="number" bind:value={numStations} min="1"
 							class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground focus:border-ring focus:outline-none" />
 					</div>
-					<div>
-						<label for="fe-rounds" class="block text-xs text-muted-foreground">Swiss rounds</label>
-						<input id="fe-rounds" type="number" bind:value={swissRounds} min="1" max="5"
-							placeholder="auto"
-							class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
-					</div>
+					{#if tournamentMode === 'default'}
+						<div>
+							<label for="fe-rounds" class="block text-xs text-muted-foreground">Swiss rounds</label>
+							<input id="fe-rounds" type="number" bind:value={swissRounds} min="1" max="5"
+								placeholder="auto"
+								class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
+						</div>
+					{/if}
 					<button onclick={startFromEvent} disabled={loadingEvent || !eventUrl.trim()}
 						class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-						{loadingEvent ? 'Loading…' : 'Start Swiss →'}
+						{loadingEvent ? 'Loading…' : tournamentMode === 'gauntlet' ? 'Start Gauntlet →' : 'Start Swiss →'}
 					</button>
 				</div>
 			</div>

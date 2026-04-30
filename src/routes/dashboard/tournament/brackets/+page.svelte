@@ -434,8 +434,10 @@
 
 	{#if !tournament?.brackets}
 		<div class="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
-			No brackets yet. Complete Swiss rounds first.
-			<a href="/dashboard/tournament/swiss" class="block mt-2 text-primary hover:text-primary/80">Go to Swiss &rarr;</a>
+			No brackets yet. {tournament?.mode === 'gauntlet' ? 'Something went wrong.' : 'Complete Swiss rounds first.'}
+			{#if tournament?.mode !== 'gauntlet'}
+				<a href="/dashboard/tournament/swiss" class="block mt-2 text-primary hover:text-primary/80">Go to Swiss &rarr;</a>
+			{/if}
 		</div>
 	{:else}
 		<!-- Both brackets side by side -->
@@ -488,6 +490,13 @@
 				{/if}
 			{/each}
 		</div>
+
+		{#if tournament?.mode === 'gauntlet' && !tournament.brackets?.redemption}
+			<div class="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
+				<p class="font-medium">Gauntlet Mode</p>
+				<p class="mt-1 text-muted-foreground">Redemption bracket will be generated automatically once all 0-2 and 1-2 players are eliminated from the main bracket.</p>
+			</div>
+		{/if}
 
 		{@const bracket = getBracket()}{#if bracket}
 

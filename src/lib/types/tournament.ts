@@ -23,12 +23,13 @@ export interface TournamentState {
 	slug: string;
 	name: string;
 	phase: 'swiss' | 'brackets' | 'completed';
+	mode?: 'default' | 'gauntlet';
 	entrants: Entrant[];
 	settings: TournamentSettings;
 	rounds: SwissRound[];
 	currentRound: number;
 	finalStandings?: FinalStanding[];
-	brackets?: { main: BracketState; redemption: BracketState };
+	brackets?: { main: BracketState; redemption?: BracketState };
 	createdAt: number;
 	updatedAt: number;
 	/** StartGG event ID — set when tournament is loaded from a StartGG event */

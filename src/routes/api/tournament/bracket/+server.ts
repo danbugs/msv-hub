@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
-import { reportBracketMatch } from '$lib/server/swiss';
+import { reportBracketMatch, isGauntletRedemptionReady, generateGauntletRedemption } from '$lib/server/swiss';
 import { reportBracketMatch as reportBracketMatchToStartGG } from '$lib/server/startgg-reporter';
 
 /** PATCH — report a bracket match result */
@@ -73,9 +73,21 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 400 });
 	}
 
+	// Gauntlet mode: auto-generate redemption bracket when all 0-2 / 1-2 players are eliminated
+	let redemptionGenerated = false;
+	if (tournament.mode === 'gauntlet' && bracketName === 'main' && !tournament.brackets.redemption) {
+		const mainMatches = tournament.brackets.main.matches;
+		if (isGauntletRedemptionReady(mainMatches)) {
+			tournament.brackets.redemption = generateGauntletRedemption(
+				mainMatches, tournament.entrants, tournament.settings
+			);
+			redemptionGenerated = true;
+		}
+	}
+
 	// Check if all bracket matches are complete
-	const allComplete = Object.values(tournament.brackets).every((b) =>
-		b.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).every((m) => m.winnerId)
+	const allComplete = Object.values(tournament.brackets).filter(Boolean).every((b) =>
+		b!.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).every((m) => m.winnerId)
 	);
 
 	if (allComplete) tournament.phase = 'completed';
@@ -131,6 +143,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	return Response.json({
 		ok: true,
 		bracket: tournament.brackets[bracketName],
+		redemptionBracket: redemptionGenerated ? tournament.brackets.redemption : undefined,
 		tournamentComplete: allComplete,
 		startgg: {
 			ok: sgResult.ok,

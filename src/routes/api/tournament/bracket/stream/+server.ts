@@ -29,7 +29,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		const halfIdx = Math.floor(allRegular.length / 2);
 		const pool = bracketName === 'redemption' ? allRegular.slice(halfIdx) : allRegular.slice(0, halfIdx);
 		const usedStations = new Set(
-			[...tournament.brackets.main.matches, ...tournament.brackets.redemption.matches]
+			[...tournament.brackets.main.matches, ...(tournament.brackets.redemption?.matches ?? [])]
 				.filter((m) => m.station !== undefined && m.station !== streamStn && !m.winnerId && m.id !== targetMatch.id)
 				.map((m) => m.station!)
 		);
@@ -51,7 +51,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	const redemptionPool = new Set(allRegular.slice(halfIdx));
 
 	// Collect all used stations across both brackets (excluding stream station)
-	const allMatches = [...tournament.brackets.main.matches, ...tournament.brackets.redemption.matches];
+	const allMatches = [...tournament.brackets.main.matches, ...(tournament.brackets.redemption?.matches ?? [])];
 	const usedStations = new Set(
 		allMatches
 			.filter((m) => m.station !== undefined && m.station !== streamStn && !m.winnerId)
@@ -61,8 +61,8 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	// Swap stations: old stream match gets the new stream match's station, new stream match gets stream station
 	const targetOldStation = targetMatch.station;
 
-	for (const b of Object.values(tournament.brackets)) {
-		for (const m of b.matches) {
+	for (const b of Object.values(tournament.brackets).filter(Boolean)) {
+		for (const m of b!.matches) {
 			if (m.isStream && m.id !== targetMatch.id) {
 				m.isStream = false;
 				// Give the old stream match the new stream match's old station

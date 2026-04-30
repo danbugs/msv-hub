@@ -89,7 +89,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 		// Find ready matches for each bracket
 		const mainReady = tournament.brackets.main.matches.filter(m => m.topPlayerId && m.bottomPlayerId && !m.winnerId);
-		const redReady = tournament.brackets.redemption.matches.filter(m => m.topPlayerId && m.bottomPlayerId && !m.winnerId);
+		const redReady = tournament.brackets.redemption?.matches.filter(m => m.topPlayerId && m.bottomPlayerId && !m.winnerId) ?? [];
 
 		// Pick the highest-hype main match for stream (lowest combined seed = best players)
 		const standingsMap = new Map(finalStandings.map(s => [s.entrantId, s]));

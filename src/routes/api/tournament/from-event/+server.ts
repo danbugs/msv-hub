@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { saveTournament } from '$lib/server/store';
-import { calculateRecommendedRounds } from '$lib/server/swiss';
+import { calculateRecommendedRounds, generateBracket } from '$lib/server/swiss';
 import {
 	gql,
 	EVENT_BY_SLUG_QUERY,
@@ -9,18 +9,19 @@ import {
 	fetchPhaseSeeds,
 	fetchPhaseGroups
 } from '$lib/server/startgg';
-import type { TournamentState, Entrant } from '$lib/types/tournament';
+import type { TournamentState, Entrant, FinalStanding } from '$lib/types/tournament';
 
 /** POST — create a tournament from an existing StartGG event's seedings */
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const body = await request.json();
-	const { eventSlug, numStations, streamStation, numRounds: numRoundsOverride } = body as {
+	const { eventSlug, numStations, streamStation, numRounds: numRoundsOverride, mode: modeParam } = body as {
 		eventSlug: string;
 		numStations: number;
 		streamStation?: number;
 		numRounds?: number;
+		mode?: 'default' | 'gauntlet';
 	};
 
 	if (!eventSlug || !numStations) {
@@ -58,6 +59,50 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'No seeds found in first phase' }, { status: 404 });
 	}
 
+	const mode = modeParam ?? 'default';
+
+	// Build seedNum → startggEntrantId map
+	const sgSeedToEntrantId = new Map<number, number>();
+	for (const seed of sgSeeds) {
+		const seedNum = Number((seed as { seedNum?: unknown }).seedNum);
+		const entrantId = Number((seed as { entrant?: { id?: unknown } }).entrant?.id);
+		if (seedNum && entrantId && !isNaN(seedNum) && !isNaN(entrantId)) {
+			sgSeedToEntrantId.set(seedNum, entrantId);
+		}
+	}
+
+	const tourneySlug = slug.replace(/\//g, '-');
+	const entrants: Entrant[] = seeds.map((s, i) => ({
+		id: `e-${i + 1}`,
+		gamerTag: s.gamerTag,
+		initialSeed: s.seedNum,
+		startggEntrantId: sgSeedToEntrantId.get(s.seedNum)
+	}));
+
+	if (mode === 'gauntlet') {
+		const settings = { numRounds: 0, numStations, streamStation: streamStation ?? 16 };
+		const players = entrants.map((e) => ({ entrantId: e.id, seed: e.initialSeed }));
+		const fakeStandings: FinalStanding[] = entrants.map((e) => ({
+			rank: e.initialSeed, entrantId: e.id, gamerTag: e.gamerTag,
+			wins: 0, losses: 0, initialSeed: e.initialSeed, totalScore: 0,
+			basePoints: 0, winPoints: 0, lossPoints: 0, cinderellaBonus: 0,
+			expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
+		}));
+		const mainBracket = generateBracket('main', players, fakeStandings, settings);
+
+		const state: TournamentState = {
+			slug: tourneySlug, name: eventName, mode: 'gauntlet',
+			phase: 'brackets', entrants, settings,
+			rounds: [], currentRound: 0,
+			brackets: { main: mainBracket },
+			startggEventId: eventId, startggEventSlug: slug,
+			createdAt: Date.now(), updatedAt: Date.now()
+		};
+
+		await saveTournament(state);
+		return Response.json(state);
+	}
+
 	const numRounds = numRoundsOverride ?? calculateRecommendedRounds(seeds.length, numStations);
 	if (numRounds === null) {
 		return Response.json({ error: 'Too few stations for this number of players' }, { status: 400 });
@@ -69,20 +114,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'At least 1 Swiss round required' }, { status: 400 });
 	}
 
-	// Build seedNum → startggEntrantId map (exact match by seed number, no fragile gamerTag comparison).
-	// Use Number() to ensure the ID is stored as a number regardless of what the API returns —
-	// the GraphQL ID scalar can be serialized as either a string or integer.
-	const sgSeedToEntrantId = new Map<number, number>();
-	for (const seed of sgSeeds) {
-		const seedNum = Number((seed as { seedNum?: unknown }).seedNum);
-		const entrantId = Number((seed as { entrant?: { id?: unknown } }).entrant?.id);
-		if (seedNum && entrantId && !isNaN(seedNum) && !isNaN(entrantId)) {
-			sgSeedToEntrantId.set(seedNum, entrantId);
-		}
-	}
-
 	// Fetch phase groups for ALL Swiss rounds (each StartGG phase = one round).
-	// Separate "Final Standings" phase from Swiss round phases.
 	const swissPhases = phases.filter((p) => !p.name.toLowerCase().includes('final'))
 		.sort((a, b) => {
 			const numA = parseInt(a.name.match(/\d+/)?.[0] ?? '0');
@@ -99,20 +131,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			allRoundGroups.push({ ...groups[0], phaseId: phase.id, roundNumber: roundNum });
 		}
 	}
-	// Fetch phase group for Final Standings phase (used to push Swiss standings after bracket split)
 	let finalStandingsPhaseGroupId: number | undefined;
 	if (finalStandingsPhase) {
 		const groups = await fetchPhaseGroups(finalStandingsPhase.id).catch(() => []);
 		if (groups.length > 0) finalStandingsPhaseGroupId = groups[0].id;
 	}
-
-	const tourneySlug = slug.replace(/\//g, '-');
-	const entrants: Entrant[] = seeds.map((s, i) => ({
-		id: `e-${i + 1}`,
-		gamerTag: s.gamerTag,
-		initialSeed: s.seedNum,
-		startggEntrantId: sgSeedToEntrantId.get(s.seedNum)
-	}));
 
 	const state: TournamentState = {
 		slug: tourneySlug,

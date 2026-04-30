@@ -229,8 +229,8 @@ async function handleBracket(): Promise<string> {
 
 	const openMatches: string[] = [];
 
-	for (const bracket of [tournament.brackets.main, tournament.brackets.redemption]) {
-		for (const match of bracket.matches) {
+	for (const bracket of [tournament.brackets.main, tournament.brackets.redemption].filter(Boolean)) {
+		for (const match of bracket!.matches) {
 			// Open = both players assigned, no winner yet
 			if (match.topPlayerId && match.bottomPlayerId && !match.winnerId) {
 				const top = entrantMap.get(match.topPlayerId) ?? '???';
