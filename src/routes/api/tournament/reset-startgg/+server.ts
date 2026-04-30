@@ -215,20 +215,17 @@ export const POST: RequestHandler = async ({ locals }) => {
 			}
 		}
 
-		// 5c: Push seeding to Swiss too (so from-event works if user switches to default mode)
-		const swissPgId2 = tournament.startggPhase1Groups?.[0]?.id;
-		const swissPhaseId2 = tournament.startggPhase1Groups?.[0]?.phaseId ?? tournament.startggPhase1Id;
-		if (swissPgId2 && swissPhaseId2) {
-			const rankedEntrantIds = tournament.entrants
-				.sort((a, b) => a.initialSeed - b.initialSeed)
-				.map((e) => e.startggEntrantId)
-				.filter((id): id is number => id !== undefined);
-			if (rankedEntrantIds.length) {
-				const result = await pushFinalStandingsSeeding(swissPhaseId2, swissPgId2, rankedEntrantIds)
-					.catch((e) => ({ ok: false as const, error: String(e) }));
-				log(`  Swiss seeding: ${result.ok ? '✓' : '✗ ' + result.error}`);
-			}
+		// 5c: Remove players from Swiss
+		const freshParticipants = await getTournamentParticipants(tournamentSlug);
+		let removedFromSwiss = 0;
+		for (const p of freshParticipants) {
+			if (!p.currentEventIds.includes(swissEventId)) continue;
+			const targetEvents = p.currentEventIds.filter((id) => id !== swissEventId);
+			if (targetEvents.length === 0) targetEvents.push(mainEventId);
+			const result = await updateParticipantEvents(p.participantId, targetEvents);
+			if (result.ok) { removedFromSwiss++; } else { log(`  ✗ Remove Swiss ${p.gamerTag}: ${result.error}`); }
 		}
+		log(`  Removed ${removedFromSwiss} from Swiss`);
 	} else {
 		log('Step 5: Default mode — re-pushing Swiss seeding...');
 		let swissPgId = tournament.startggPhase1Groups?.[0]?.id;
