@@ -148,7 +148,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Step 2: Push bracket seeding + trigger conversion
-	const swissPgId = tournament.startggPhase1Groups?.[0]?.id;
+	let swissPgId = tournament.startggPhase1Groups?.[0]?.id;
+	if (!swissPgId && eventSlug) {
+		const swissPhaseData = await gql<{ event: { phases: { id: number }[] } }>(
+			EVENT_PHASES_QUERY, { eventId: swissEventId }
+		);
+		const swissPhaseId = swissPhaseData?.event?.phases?.[0]?.id;
+		if (swissPhaseId) {
+			const groups = await fetchPhaseGroups(swissPhaseId).catch(() => []);
+			if (groups.length) {
+				swissPgId = groups[0].id;
+				tournament.startggPhase1Groups = groups.map((g) => ({ ...g, phaseId: swissPhaseId, roundNumber: 1 }));
+				log(`Resolved Swiss phase group: ${swissPgId}`);
+			}
+		}
+	}
+	if (!swissPgId) log('WARNING: Could not resolve Swiss phase group — seeding will not be pushed');
 	const bracketEntrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
 	for (const [bName, bEventId] of [
 		['main', mainEventId] as const,
