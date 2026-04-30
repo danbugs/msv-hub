@@ -83,7 +83,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Fetch phase groups for ALL Swiss rounds (each StartGG phase = one round).
 	// Separate "Final Standings" phase from Swiss round phases.
-	const swissPhases = phases.filter((p) => !p.name.toLowerCase().includes('final'));
+	const swissPhases = phases.filter((p) => !p.name.toLowerCase().includes('final'))
+		.sort((a, b) => {
+			const numA = parseInt(a.name.match(/\d+/)?.[0] ?? '0');
+			const numB = parseInt(b.name.match(/\d+/)?.[0] ?? '0');
+			return numA - numB;
+		});
 	const finalStandingsPhase = phases.find((p) => p.name.toLowerCase().includes('final'));
 	const allRoundGroups: { id: number; displayIdentifier: string; phaseId: number }[] = [];
 	for (const phase of swissPhases) {
