@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
-import { gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, pushBracketSeeding, pushFinalStandingsSeeding, fetchPhaseGroups } from '$lib/server/startgg';
+import { gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, pushBracketSeeding, pushFinalStandingsSeeding, fetchPhaseGroups, fetchPhaseSeeds, extractPlayerId } from '$lib/server/startgg';
 import { restartPhase, addEntrantsToPhase, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 import { generateBracket, assignBracketStations } from '$lib/server/swiss';
 import type { FinalStanding } from '$lib/types/tournament';
@@ -270,6 +270,45 @@ export const POST: RequestHandler = async ({ locals }) => {
 			}
 		} else {
 			log('  ✗ Could not resolve Swiss phase group for seeding');
+		}
+
+		// Update startggEntrantId to Swiss entrant IDs (may differ from Main bracket IDs)
+		if (swissPhaseId2) {
+			const swissSeeds = await fetchPhaseSeeds(swissPhaseId2).catch(() => []);
+			const playerToSwissEntrant = new Map<number, number>();
+			for (const seed of swissSeeds) {
+				const playerId = extractPlayerId(seed as Record<string, unknown>);
+				const entrantId = (seed as { entrant?: { id?: number } }).entrant?.id;
+				if (playerId && entrantId) playerToSwissEntrant.set(playerId, Number(entrantId));
+			}
+			if (playerToSwissEntrant.size > 0 && mainEventId) {
+				const oldEntrantToPlayer = new Map<number, number>();
+				const mainPhData2 = await gql<{ event: { phases: { id: number }[] } }>(
+					EVENT_PHASES_QUERY, { eventId: mainEventId }
+				);
+				const mainPhId2 = mainPhData2?.event?.phases?.[0]?.id;
+				if (mainPhId2) {
+					const mainSeeds = await fetchPhaseSeeds(mainPhId2).catch(() => []);
+					for (const seed of mainSeeds) {
+						const playerId = extractPlayerId(seed as Record<string, unknown>);
+						const entrantId = (seed as { entrant?: { id?: number } }).entrant?.id;
+						if (playerId && entrantId) oldEntrantToPlayer.set(Number(entrantId), playerId);
+					}
+				}
+				let updated = 0;
+				for (const entrant of tournament.entrants) {
+					if (!entrant.startggEntrantId) continue;
+					const playerId = oldEntrantToPlayer.get(entrant.startggEntrantId);
+					if (playerId) {
+						const swissEntrantId = playerToSwissEntrant.get(playerId);
+						if (swissEntrantId && swissEntrantId !== entrant.startggEntrantId) {
+							entrant.startggEntrantId = swissEntrantId;
+							updated++;
+						}
+					}
+				}
+				if (updated) log(`  Updated ${updated} entrant IDs to Swiss IDs`);
+			}
 		}
 	}
 
