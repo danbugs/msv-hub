@@ -135,6 +135,9 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		freshBracket.matches = freshBracket.matches.filter((fm) => ourMatchMap.has(fm.id));
 
 		if (tournament.phase === 'completed') fresh.phase = 'completed';
+		if (redemptionGenerated && tournament.brackets.redemption) {
+			fresh.brackets!.redemption = tournament.brackets.redemption;
+		}
 		await saveTournament(fresh);
 		tournament.brackets[bracketName] = freshBracket;
 	} else {
