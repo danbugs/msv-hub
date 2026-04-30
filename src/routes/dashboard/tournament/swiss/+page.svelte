@@ -454,7 +454,7 @@
 										</div>
 									</div>
 
-									<!-- Score picker (shown when a winner is selected but no score yet) -->
+									<!-- Score picker / reporting indicator -->
 									{#if isReporting}
 										<div class="flex items-center gap-2 px-3 pb-2">
 											<span class="text-xs text-muted-foreground ml-16 animate-pulse">Reporting...</span>
@@ -481,6 +481,8 @@
 											<button onclick={() => pendingWinner = null}
 												class="text-xs text-muted-foreground hover:text-foreground px-2">Cancel</button>
 										</div>
+									{:else if isCurrent}
+										<div class="px-3 pb-2" style="min-height:2.25rem"></div>
 									{/if}
 								</div>
 								{/each}
