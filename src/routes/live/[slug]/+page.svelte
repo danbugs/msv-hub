@@ -8,8 +8,6 @@
 
 	let searchQuery = $state('');
 	let selectedEntrantId = $state<string | null>(null);
-	let showBracket = $state<'main' | 'redemption'>('main');
-	// Track which Swiss rounds are expanded (persists across auto-refresh)
 	let expandedRounds = $state(new Set<number>());
 
 	function getEntrant(id?: string): Entrant | undefined {
@@ -207,7 +205,7 @@
 		</div>
 	</div>
 
-	<div class="mx-auto max-w-3xl px-4 py-6 space-y-8">
+	<div class="mx-auto px-4 py-6 space-y-8 {tournament?.phase === 'brackets' ? '' : 'max-w-3xl'}">
 
 		{#if !tournament}
 			<div class="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
@@ -316,8 +314,8 @@
 					{@const bracket = tournament.brackets[bn]}
 					{@const streamMatch = bracket.matches.find((m) => m.isStream && !m.winnerId)}
 					{#if streamMatch}
-						<div class="rounded-xl border-2 border-red-500 bg-red-500/10 p-4 text-center">
-							<div class="text-xs font-bold text-red-400 mb-1">🔴 STREAM · {matchLabel(streamMatch, bracket)}</div>
+						<div class="rounded-xl border-2 border-primary bg-primary/10 p-4 text-center">
+							<div class="text-xs font-bold text-primary mb-1">STREAM · {matchLabel(streamMatch, bracket)}</div>
 							<div class="text-lg font-semibold">
 								{getEntrant(streamMatch.topPlayerId)?.gamerTag ?? '?'}
 								<span class="text-muted-foreground text-sm mx-2">vs</span>
@@ -360,29 +358,24 @@
 				{/if}
 			{/if}
 
-			<!-- Bracket views (when in brackets phase) -->
+			<!-- Bracket views (when in brackets phase) — both brackets side by side -->
 			{#if tournament.brackets}
-				<!-- Bracket tab selector -->
-				<div>
-					<div class="flex gap-2 mb-4">
-						<button onclick={() => showBracket = 'main'}
-							class="rounded-lg px-4 py-1.5 text-sm font-medium transition-colors {showBracket === 'main' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'}">
-							Main
-						</button>
-						<button onclick={() => showBracket = 'redemption'}
-							class="rounded-lg px-4 py-1.5 text-sm font-medium transition-colors {showBracket === 'redemption' ? 'bg-red-600 text-white' : 'bg-secondary text-muted-foreground hover:text-foreground'}">
-							Redemption
-						</button>
-					</div>
-
-					{#if tournament.brackets[showBracket]}
-					{@const bracket = tournament.brackets[showBracket]}
-					{@const totalM = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).length}
-					{@const doneM = bracket.matches.filter((m) => m.winnerId).length}
-					<p class="text-xs text-muted-foreground mb-3">{doneM}/{totalM} matches complete</p>
-					<BracketView bracket={bracket} entrants={tournament.entrants} />
+				{#each (['main', 'redemption'] as const) as bracketName}
+					{@const bracket = tournament.brackets[bracketName]}
+					{#if bracket}
+						{@const totalM = bracket.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).length}
+						{@const doneM = bracket.matches.filter((m) => m.winnerId).length}
+						<section class="min-w-0 rounded-xl border {bracketName === 'main' ? 'border-primary/20' : 'border-destructive/20'} bg-card/50 p-4">
+							<div class="flex items-center justify-between mb-2">
+								<h2 class="text-sm font-bold {bracketName === 'main' ? 'text-primary' : 'text-destructive'}">
+									{bracketName === 'main' ? 'Main Bracket' : 'Redemption Bracket'}
+								</h2>
+								<span class="text-xs text-muted-foreground">{doneM}/{totalM} matches</span>
+							</div>
+							<BracketView bracket={bracket} entrants={tournament.entrants} />
+						</section>
 					{/if}
-				</div>
+				{/each}
 			{/if}
 
 			<!-- Swiss rounds history (all rounds, most recent first) -->

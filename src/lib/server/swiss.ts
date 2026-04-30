@@ -470,12 +470,16 @@ export function assignBracketStations(
 		}
 		const maxP = Math.max(...ready.map((m) => priority(m)));
 		const topPMatches = ready.filter((m) => priority(m) === maxP);
+		// Shuffle first so equal-priority matches get a fair random pick
+		for (let i = topPMatches.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[topPMatches[i], topPMatches[j]] = [topPMatches[j], topPMatches[i]];
+		}
 		const streamCount = (id?: string) => (id ? streamCountByPlayer?.get(id) ?? 0 : 0);
 		topPMatches.sort((a, b) => {
 			const aC = streamCount(a.topPlayerId) + streamCount(a.bottomPlayerId);
 			const bC = streamCount(b.topPlayerId) + streamCount(b.bottomPlayerId);
-			if (aC !== bC) return aC - bC; // fewer prior appearances wins
-			return Math.random() - 0.5;     // small jitter so it's not deterministic
+			return aC - bC;
 		});
 		const streamCandidate = topPMatches[0];
 		if (streamCandidate) {
