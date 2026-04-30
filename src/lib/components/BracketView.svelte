@@ -407,6 +407,8 @@
 								{:else}
 									<span class="text-xs text-muted-foreground shrink-0">Stn {match.station}</span>
 								{/if}
+							{:else if ready}
+								<span class="text-xs text-warning shrink-0">Waiting</span>
 							{/if}
 						</div>
 						<div class="flex items-center gap-1 shrink-0">

@@ -181,8 +181,11 @@
 			error = `StartGG sync: ${(syncData as { error?: string }).error ?? 'failed'}`;
 			return false;
 		}
-		const { moved, cleaned, failed: syncFailed } = syncData as { moved: number; cleaned: number; failed: number };
+		const { moved, cleaned, failed: syncFailed, seedingResult } = syncData as { moved: number; cleaned: number; failed: number; seedingResult?: string };
 		syncStatus = `Synced ${moved} players${cleaned ? ` (${cleaned} moved)` : ''}${syncFailed ? `, ${syncFailed} failed` : ''}`;
+		if (seedingResult && seedingResult.includes('failed')) {
+			error = `StartGG seeding: ${seedingResult}`;
+		}
 		return true;
 	}
 
