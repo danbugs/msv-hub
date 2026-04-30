@@ -653,20 +653,22 @@ export async function pushPairingsToPhaseGroup(
 		if (entrantId && seed.id) entrantToSeedId.set(entrantId, String(seed.id));
 	}
 
-	// Fold pattern: pair i's players go to seeds (i+1) and (K+i+1)
+	// Fold pattern: StartGG pads N to next even P, then pairs seed i vs seed (P/2 + i).
+	// For odd counts the phantom slot is at P, so seed P/2 (= K+1) gets the BYE.
+	// Place BYE player at K+1 and shift bottom-half players to K+2..2K+1.
 	const K = pairings.length;
 	const seedMapping: { seedId: string; phaseGroupId: string; seedNum: number }[] = [];
+	const bottomOffset = byeEntrantId ? K + 2 : K + 1;
 	pairings.forEach(([e1, e2], i) => {
 		const s1 = entrantToSeedId.get(e1);
 		const s2 = entrantToSeedId.get(e2);
 		if (s1) seedMapping.push({ seedId: s1, phaseGroupId: String(phaseGroupId), seedNum: i + 1 });
-		if (s2) seedMapping.push({ seedId: s2, phaseGroupId: String(phaseGroupId), seedNum: K + i + 1 });
+		if (s2) seedMapping.push({ seedId: s2, phaseGroupId: String(phaseGroupId), seedNum: bottomOffset + i });
 	});
 
-	// Bye player goes to the last seed so they don't interfere with fold pairings
 	if (byeEntrantId) {
 		const s = entrantToSeedId.get(byeEntrantId);
-		if (s) seedMapping.push({ seedId: s, phaseGroupId: String(phaseGroupId), seedNum: 2 * K + 1 });
+		if (s) seedMapping.push({ seedId: s, phaseGroupId: String(phaseGroupId), seedNum: K + 1 });
 	}
 
 	if (!seedMapping.length) return { ok: false, error: 'No matching seeds found for pairings' };
