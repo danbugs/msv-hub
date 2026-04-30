@@ -205,7 +205,7 @@
 		</div>
 	</div>
 
-	<div class="mx-auto px-4 py-6 space-y-8 {tournament?.phase === 'brackets' ? '' : 'max-w-3xl'}">
+	<div class="mx-auto max-w-3xl px-4 py-6 space-y-8">
 
 		{#if !tournament}
 			<div class="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
@@ -340,9 +340,9 @@
 				{/if}
 			{/if}
 
-			<!-- Bracket views — side by side on xl, stacked on smaller -->
+			<!-- Bracket views — break out of max-w-3xl to use full width -->
 			{#if tournament.brackets}
-				<div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+				<div class="grid grid-cols-1 xl:grid-cols-2 gap-4 w-[calc(100vw-2rem)] relative left-1/2 -translate-x-1/2 px-4 max-w-[100vw]">
 				{#each (['main', 'redemption'] as const) as bracketName}
 					{@const bracket = tournament.brackets[bracketName]}
 					{#if bracket}
