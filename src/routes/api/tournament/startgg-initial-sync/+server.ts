@@ -167,19 +167,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
-		// Step 3: Remove players from Swiss (now that seeding is pushed)
-		log(`Step 3: Removing players from Swiss...`);
-		let removedFromSwiss = 0;
-		const freshParticipants = await getTournamentParticipants(tournamentSlug);
-		for (const p of freshParticipants) {
-			if (!p.currentEventIds.includes(swissEventId)) continue;
-			const targetEvents = p.currentEventIds.filter((id) => id !== swissEventId);
-			if (targetEvents.length === 0) targetEvents.push(mainEventId);
-			const result = await updateParticipantEvents(p.participantId, targetEvents);
-			if (result.ok) { removedFromSwiss++; }
-			else { log(`  ✗ Remove Swiss ${p.gamerTag}: ${result.error}`); }
-		}
-		log(`Removed ${removedFromSwiss} from Swiss`);
+		// Step 3: Keep players in Swiss (with seeding) so from-event works if mode switches later
+		log(`Step 3: Players remain in Swiss + Main (seeding preserved in both)`);
 	} else {
 		log(`Ensuring all players are in Swiss only (${swissEventId})...`);
 		for (const p of participants) {
