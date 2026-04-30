@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
-import { gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, pushBracketSeeding, fetchPhaseGroups } from '$lib/server/startgg';
+import { gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, pushBracketSeeding, pushFinalStandingsSeeding, fetchPhaseGroups } from '$lib/server/startgg';
 import { restartPhase, addEntrantsToPhase, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 import { generateBracket, assignBracketStations } from '$lib/server/swiss';
 import type { FinalStanding } from '$lib/types/tournament';
@@ -227,7 +227,35 @@ export const POST: RequestHandler = async ({ locals }) => {
 		}
 		log(`  Removed ${removedFromSwiss} from Swiss`);
 	} else {
-		log('Step 5: Default mode — players already in Swiss, no seeding push needed');
+		log('Step 5: Default mode — re-pushing Swiss seeding...');
+		let swissPgId = tournament.startggPhase1Groups?.[0]?.id;
+		let swissPhaseId2 = tournament.startggPhase1Groups?.[0]?.phaseId ?? tournament.startggPhase1Id;
+		if (!swissPgId) {
+			const spData = await gql<{ event: { phases: { id: number }[] } }>(
+				EVENT_PHASES_QUERY, { eventId: swissEventId }
+			);
+			swissPhaseId2 = spData?.event?.phases?.[0]?.id;
+			if (swissPhaseId2) {
+				const groups = await fetchPhaseGroups(swissPhaseId2).catch(() => []);
+				if (groups.length) {
+					swissPgId = groups[0].id;
+					tournament.startggPhase1Groups = groups.map((g) => ({ ...g, phaseId: swissPhaseId2!, roundNumber: 1 }));
+				}
+			}
+		}
+		if (swissPgId && swissPhaseId2) {
+			const rankedEntrantIds = tournament.entrants
+				.sort((a, b) => a.initialSeed - b.initialSeed)
+				.map((e) => e.startggEntrantId)
+				.filter((id): id is number => id !== undefined);
+			if (rankedEntrantIds.length) {
+				const result = await pushFinalStandingsSeeding(swissPhaseId2, swissPgId, rankedEntrantIds)
+					.catch((e) => ({ ok: false as const, error: String(e) }));
+				log(`  Seeding: ${result.ok ? '✓' : '✗ ' + result.error}`);
+			}
+		} else {
+			log('  ✗ Could not resolve Swiss phase group for seeding');
+		}
 	}
 
 	tournament.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };

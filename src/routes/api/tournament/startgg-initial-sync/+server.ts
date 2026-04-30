@@ -12,7 +12,7 @@ import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import {
 	gql, TOURNAMENT_QUERY, EVENT_BY_SLUG_QUERY, EVENT_PHASES_QUERY,
-	pushBracketSeeding, fetchPhaseGroups
+	pushBracketSeeding, pushFinalStandingsSeeding, fetchPhaseGroups
 } from '$lib/server/startgg';
 import { getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 
@@ -197,6 +197,42 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 		log(`Done: ${moved} in Swiss, ${cleaned} cleaned, ${failed} failed`);
+
+		// Push seeding to Swiss Round 1 phase group
+		let swissPgId = tournament.startggPhase1Groups?.[0]?.id;
+		let swissPhaseId = tournament.startggPhase1Groups?.[0]?.phaseId ?? tournament.startggPhase1Id;
+		if (!swissPgId) {
+			const swissPhaseData = await gql<{ event: { phases: { id: number }[] } }>(
+				EVENT_PHASES_QUERY, { eventId: swissEventId }
+			);
+			swissPhaseId = swissPhaseData?.event?.phases?.[0]?.id;
+			if (swissPhaseId) {
+				const groups = await fetchPhaseGroups(swissPhaseId).catch(() => []);
+				if (groups.length) {
+					swissPgId = groups[0].id;
+					tournament.startggPhase1Groups = groups.map((g) => ({ ...g, phaseId: swissPhaseId!, roundNumber: 1 }));
+				}
+			}
+		}
+		if (swissPgId && swissPhaseId) {
+			const rankedEntrantIds = tournament.entrants
+				.sort((a, b) => a.initialSeed - b.initialSeed)
+				.map((e) => e.startggEntrantId)
+				.filter((id): id is number => id !== undefined);
+			if (rankedEntrantIds.length) {
+				const result = await pushFinalStandingsSeeding(swissPhaseId, swissPgId, rankedEntrantIds)
+					.catch((e) => ({ ok: false as const, error: String(e) }));
+				if (result.ok) {
+					seedingResult = `Pushed Swiss seeding for ${rankedEntrantIds.length} players`;
+					log(`  ✓ ${seedingResult}`);
+				} else {
+					seedingResult = `Swiss seeding failed: ${result.error}`;
+					log(`  ✗ ${seedingResult}`);
+				}
+			}
+		} else {
+			log('  Could not resolve Swiss phase group for seeding push');
+		}
 	}
 
 	// Mark split as confirmed so match reports go through immediately (not queued)
