@@ -249,8 +249,23 @@ export const POST: RequestHandler = async ({ locals }) => {
 				.map((e) => e.startggEntrantId)
 				.filter((id): id is number => id !== undefined);
 			if (rankedEntrantIds.length) {
-				const result = await pushFinalStandingsSeeding(swissPhaseId2, swissPgId, rankedEntrantIds)
-					.catch((e) => ({ ok: false as const, error: String(e) }));
+				// Entrant IDs may be from Main bracket — use cross-event mapping if available
+				let sourcePgId: number | undefined;
+				if (mainEventId) {
+					const mainPhData = await gql<{ event: { phases: { id: number }[] } }>(
+						EVENT_PHASES_QUERY, { eventId: mainEventId }
+					);
+					const mainPhId = mainPhData?.event?.phases?.[0]?.id;
+					if (mainPhId) {
+						const mainGroups = await fetchPhaseGroups(mainPhId).catch(() => []);
+						sourcePgId = mainGroups[0]?.id;
+					}
+				}
+				const result = sourcePgId
+					? await pushBracketSeeding(swissPhaseId2, swissPgId, rankedEntrantIds, sourcePgId)
+						.catch((e) => ({ ok: false as const, error: String(e) }))
+					: await pushFinalStandingsSeeding(swissPhaseId2, swissPgId, rankedEntrantIds)
+						.catch((e) => ({ ok: false as const, error: String(e) }));
 				log(`  Seeding: ${result.ok ? '✓' : '✗ ' + result.error}`);
 			}
 		} else {

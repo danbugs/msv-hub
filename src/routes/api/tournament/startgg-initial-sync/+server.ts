@@ -220,8 +220,25 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				.map((e) => e.startggEntrantId)
 				.filter((id): id is number => id !== undefined);
 			if (rankedEntrantIds.length) {
-				const result = await pushFinalStandingsSeeding(swissPhaseId, swissPgId, rankedEntrantIds)
-					.catch((e) => ({ ok: false as const, error: String(e) }));
+				// Entrant IDs may be from Main bracket (different event = different IDs).
+				// Use cross-event mapping via pushBracketSeeding when Main exists,
+				// fall back to same-event pushFinalStandingsSeeding otherwise.
+				let mainPgId: number | undefined;
+				if (mainEventId) {
+					const mainPhData = await gql<{ event: { phases: { id: number }[] } }>(
+						EVENT_PHASES_QUERY, { eventId: mainEventId }
+					);
+					const mainPhId = mainPhData?.event?.phases?.[0]?.id;
+					if (mainPhId) {
+						const mainGroups = await fetchPhaseGroups(mainPhId).catch(() => []);
+						mainPgId = mainGroups[0]?.id;
+					}
+				}
+				const result = mainPgId
+					? await pushBracketSeeding(swissPhaseId, swissPgId, rankedEntrantIds, mainPgId)
+						.catch((e) => ({ ok: false as const, error: String(e) }))
+					: await pushFinalStandingsSeeding(swissPhaseId, swissPgId, rankedEntrantIds)
+						.catch((e) => ({ ok: false as const, error: String(e) }));
 				if (result.ok) {
 					seedingResult = `Pushed Swiss seeding for ${rankedEntrantIds.length} players`;
 					log(`  ✓ ${seedingResult}`);
