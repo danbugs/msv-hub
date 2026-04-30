@@ -26,8 +26,13 @@
 		resetResult = '';
 		const res = await fetch('/api/tournament/reset-startgg', { method: 'POST' });
 		const data = await res.json();
-		if (res.ok) resetResult = 'StartGG reset complete';
-		else resetResult = data.error ?? 'Reset failed';
+		if (res.ok) {
+			resetResult = 'StartGG reset complete';
+			const refreshed = await fetch('/api/tournament');
+			tournament = refreshed.ok ? await refreshed.json() : tournament;
+		} else {
+			resetResult = data.error ?? 'Reset failed';
+		}
 		resettingStartGG = false;
 	}
 </script>
