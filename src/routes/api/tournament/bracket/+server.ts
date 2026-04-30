@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
-import { reportBracketMatch, isGauntletRedemptionReady, generateGauntletRedemption } from '$lib/server/swiss';
+import { reportBracketMatch, isGauntletRedemptionReady, generateGauntletRedemption, assignBracketStations } from '$lib/server/swiss';
 import { reportBracketMatch as reportBracketMatchToStartGG } from '$lib/server/startgg-reporter';
 
 /** PATCH — report a bracket match result */
@@ -78,10 +78,37 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (tournament.mode === 'gauntlet' && bracketName === 'main' && !tournament.brackets.redemption) {
 		const mainMatches = tournament.brackets.main.matches;
 		if (isGauntletRedemptionReady(mainMatches)) {
+			const mainOccupied = new Set(
+				mainMatches
+					.filter((m) => m.station !== undefined && !m.winnerId)
+					.map((m) => m.station!)
+			);
 			tournament.brackets.redemption = generateGauntletRedemption(
-				mainMatches, tournament.entrants, tournament.settings
+				mainMatches, tournament.entrants, tournament.settings, mainOccupied
 			);
 			redemptionGenerated = true;
+		}
+	}
+
+	// Gauntlet: reassign stations on the OTHER bracket when a match frees a station
+	if (tournament.mode === 'gauntlet' && tournament.brackets.redemption) {
+		const otherName = bracketName === 'main' ? 'redemption' : 'main';
+		const otherBracket = tournament.brackets[otherName];
+		if (otherBracket) {
+			const hasWaiting = otherBracket.matches.some(
+				(m) => m.topPlayerId && m.bottomPlayerId && !m.winnerId && m.station === undefined
+			);
+			if (hasWaiting) {
+				const thisBracketOccupied = new Set(
+					tournament.brackets[bracketName].matches
+						.filter((m) => m.station !== undefined && !m.winnerId)
+						.map((m) => m.station!)
+				);
+				tournament.brackets[otherName] = assignBracketStations(
+					otherBracket, tournament.settings, otherName as 'main' | 'redemption',
+					false, undefined, thisBracketOccupied
+				);
+			}
 		}
 	}
 

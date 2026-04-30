@@ -446,7 +446,9 @@ export function assignBracketStations(
 	bracketName?: 'main' | 'redemption',
 	otherBracketHasStream?: boolean,
 	/** Cumulative stream appearances per player across all rounds + brackets */
-	streamCountByPlayer?: Map<string, number>
+	streamCountByPlayer?: Map<string, number>,
+	/** Stations occupied by the other bracket (gauntlet mode cross-bracket awareness) */
+	externalOccupiedStations?: Set<number>
 ): BracketState {
 	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
 
@@ -503,12 +505,15 @@ export function assignBracketStations(
 	const halfIdx = Math.floor(allRegular.length / 2);
 	const stationPool = bracketName === 'redemption' ? allRegular.slice(halfIdx) : allRegular.slice(0, halfIdx);
 
-	// Collect stations already in use by active (unreported) matches
+	// Collect stations already in use by active (unreported) matches + other bracket
 	const usedStations = new Set(
 		updated.matches
 			.filter((m) => m.station !== undefined && !m.winnerId)
 			.map((m) => m.station!)
 	);
+	if (externalOccupiedStations) {
+		for (const s of externalOccupiedStations) usedStations.add(s);
+	}
 
 	// If our bracket's pool is exhausted, overflow into the other bracket's half
 	// (so every active match still gets a unique station rather than going blank or duplicate).
@@ -1337,7 +1342,8 @@ export function isGauntletRedemptionReady(matches: BracketMatch[]): boolean {
 export function generateGauntletRedemption(
 	mainMatches: BracketMatch[],
 	entrants: Entrant[],
-	settings?: TournamentSettings
+	settings?: TournamentSettings,
+	mainOccupiedStations?: Set<number>
 ): BracketState {
 	const records = computeBracketRecords(mainMatches);
 	const eliminated = getEliminatedPlayers(mainMatches);
@@ -1391,5 +1397,8 @@ export function generateGauntletRedemption(
 		bracket: 'redemption' as const
 	}));
 
-	return generateBracket('redemption', players, fakeStandings, settings, mainOpponents);
+	// Generate bracket without station assignment, then assign stations with cross-bracket awareness
+	const bracket = generateBracket('redemption', players, fakeStandings, undefined, mainOpponents);
+	if (!settings) return bracket;
+	return assignBracketStations(bracket, settings, 'redemption', false, undefined, mainOccupiedStations);
 }
