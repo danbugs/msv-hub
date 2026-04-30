@@ -150,6 +150,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						if (result.ok) {
 							seedingResult = `Pushed seeding for ${rankedEntrantIds.length} players`;
 							log(`  ✓ ${seedingResult}`);
+							log('  Restarting Main bracket to regenerate sets...');
+							await restartPhase(mainPhaseId).catch(() => {});
+							await new Promise<void>((r) => setTimeout(r, 1500));
+							const rePush = await pushBracketSeeding(mainPhaseId, mainPgId, rankedEntrantIds, swissPgId)
+								.catch((e) => ({ ok: false as const, error: String(e) }));
+							log(`  Re-push seeding: ${rePush.ok ? '✓' : '✗ ' + rePush.error}`);
 						} else {
 							seedingResult = `Seeding failed: ${result.error}`;
 							log(`  ✗ ${seedingResult}`);
