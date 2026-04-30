@@ -15,7 +15,7 @@ import {
 	pushBracketSeeding, pushFinalStandingsSeeding, fetchPhaseGroups,
 	fetchPhaseSeeds, extractPlayerId
 } from '$lib/server/startgg';
-import { getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
+import { getTournamentParticipants, updateParticipantEvents, restartPhase } from '$lib/server/startgg-admin';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -238,6 +238,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				} else {
 					seedingResult = `Swiss seeding failed: ${result.error}`;
 					log(`  ✗ ${seedingResult}`);
+				}
+
+				// Restart Swiss R1 phase so StartGG regenerates sets with new seeding,
+				// then re-push seeding (restart may clear it).
+				if (result.ok) {
+					log('  Restarting Swiss R1 to regenerate sets...');
+					await restartPhase(swissPhaseId).catch(() => {});
+					await new Promise<void>((r) => setTimeout(r, 1500));
+					const rePush = mainPgId
+						? await pushBracketSeeding(swissPhaseId, swissPgId, rankedEntrantIds, mainPgId).catch((e) => ({ ok: false as const, error: String(e) }))
+						: await pushFinalStandingsSeeding(swissPhaseId, swissPgId, rankedEntrantIds).catch((e) => ({ ok: false as const, error: String(e) }));
+					log(`  Re-push seeding: ${rePush.ok ? '✓' : '✗ ' + rePush.error}`);
 				}
 			}
 

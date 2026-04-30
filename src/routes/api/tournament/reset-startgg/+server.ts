@@ -272,6 +272,17 @@ export const POST: RequestHandler = async ({ locals }) => {
 					: await pushFinalStandingsSeeding(swissPhaseId2, swissPgId, rankedEntrantIds)
 						.catch((e) => ({ ok: false as const, error: String(e) }));
 				log(`  Seeding: ${result.ok ? '✓' : '✗ ' + result.error}`);
+
+				// Restart Swiss R1 so StartGG regenerates sets, then re-push seeding
+				if (result.ok) {
+					log('  Restarting Swiss R1 to regenerate sets...');
+					await restartPhase(swissPhaseId2).catch(() => {});
+					await new Promise<void>((r) => setTimeout(r, 1500));
+					const rePush = sourcePgId
+						? await pushBracketSeeding(swissPhaseId2, swissPgId, rankedEntrantIds, sourcePgId).catch((e) => ({ ok: false as const, error: String(e) }))
+						: await pushFinalStandingsSeeding(swissPhaseId2, swissPgId, rankedEntrantIds).catch((e) => ({ ok: false as const, error: String(e) }));
+					log(`  Re-push seeding: ${rePush.ok ? '✓' : '✗ ' + rePush.error}`);
+				}
 			}
 		} else {
 			log('  ✗ Could not resolve Swiss phase group for seeding');
