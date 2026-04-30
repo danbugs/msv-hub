@@ -128,7 +128,7 @@
 				error = data.error ?? 'Failed to report match';
 			} else {
 				fixingMatchId = null;
-				pendingWinner = null;
+				if (pendingWinner?.matchId === matchId) pendingWinner = null;
 				// StartGG errors are already shown via startggSync.errors boxes — no need
 				// to also set the main error banner (which caused duplicate display).
 				await loadTournament();
@@ -435,6 +435,12 @@
 
 										<!-- Actions -->
 										<div class="flex items-center gap-1 shrink-0">
+											{#if isReporting}
+												<svg class="animate-spin h-3.5 w-3.5 text-muted-foreground" viewBox="0 0 24 24" fill="none">
+													<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+													<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+												</svg>
+											{/if}
 											{#if isCurrent && !match.isStream}
 												<button onclick={() => setStreamMatch(match.id)}
 													class="text-xs px-1.5 py-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors inline-flex items-center"
@@ -454,12 +460,7 @@
 										</div>
 									</div>
 
-									<!-- Score picker / reporting indicator -->
-									{#if isReporting}
-										<div class="flex items-center gap-2 px-3 pb-2">
-											<span class="text-xs text-muted-foreground ml-16 animate-pulse">Reporting...</span>
-										</div>
-									{:else if isPending}
+									{#if isPending}
 										<div class="flex items-center gap-2 px-3 pb-2">
 											<span class="text-xs text-muted-foreground ml-16">Score:</span>
 											<button
@@ -481,8 +482,6 @@
 											<button onclick={() => pendingWinner = null}
 												class="text-xs text-muted-foreground hover:text-foreground px-2">Cancel</button>
 										</div>
-									{:else if isCurrent}
-										<div class="px-3 pb-2" style="min-height:2.25rem"></div>
 									{/if}
 								</div>
 								{/each}
