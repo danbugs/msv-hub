@@ -239,7 +239,7 @@
 						<div class="space-y-1">
 							{#each swissMatches as m}
 								{@const opp = m.opponentId === 'BYE' ? null : getEntrant(m.opponentId)}
-								<div class="flex items-center gap-2 rounded-lg bg-card px-3 py-2 text-sm">
+								<div class="flex items-center gap-2 rounded-lg bg-card px-3 py-2 text-sm min-w-0">
 									<span class="text-xs text-muted-foreground w-12 shrink-0">R{m.round}</span>
 									<span class="w-2 h-2 rounded-full shrink-0 {m.won ? 'bg-green-500' : 'bg-red-500'}"></span>
 									<span class="{m.won ? 'text-success' : 'text-destructive'} font-medium w-8 shrink-0">{m.won ? 'W' : 'L'}</span>
@@ -272,7 +272,7 @@
 										{@const opp = getEntrant(oppId)}
 										{@const won = match.winnerId === selectedEntrantId}
 										{@const label = matchLabel(match, tournament.brackets![bn])}
-										<div class="flex items-center gap-2 rounded-lg bg-card px-3 py-2 text-sm">
+										<div class="flex items-center gap-2 rounded-lg bg-card px-3 py-2 text-sm min-w-0">
 											<span class="text-xs text-muted-foreground w-24 shrink-0 truncate">{label}</span>
 											{#if match.winnerId}
 												<span class="w-2 h-2 rounded-full shrink-0 {won ? 'bg-green-500' : 'bg-red-500'}"></span>
@@ -289,11 +289,11 @@
 											{/if}
 										</div>
 										{#if match.topCharacters?.length || match.bottomCharacters?.length}
-											<div class="flex gap-2 px-3 pb-1 text-xs text-muted-foreground">
+											<div class="flex gap-2 px-3 pb-1 text-xs text-muted-foreground min-w-0">
 												{#if isTop && match.topCharacters?.length}
-													<span>{match.topCharacters.join(', ')}</span>
+													<span class="truncate">{match.topCharacters.join(', ')}</span>
 												{:else if !isTop && match.bottomCharacters?.length}
-													<span>{match.bottomCharacters.join(', ')}</span>
+													<span class="truncate">{match.bottomCharacters.join(', ')}</span>
 												{/if}
 											</div>
 										{/if}
@@ -308,24 +308,6 @@
 		{:else}
 			<!-- ── Full tournament view ── -->
 
-			{#if tournament.phase === 'brackets' && tournament.brackets}
-				<!-- Stream banner -->
-				{#each (['main', 'redemption'] as const) as bn}
-					{@const bracket = tournament.brackets[bn]}
-					{@const streamMatch = bracket.matches.find((m) => m.isStream && !m.winnerId)}
-					{#if streamMatch}
-						<div class="rounded-xl border-2 border-primary bg-primary/10 p-4 text-center">
-							<div class="text-xs font-bold text-primary mb-1">STREAM · {matchLabel(streamMatch, bracket)}</div>
-							<div class="text-lg font-semibold">
-								{getEntrant(streamMatch.topPlayerId)?.gamerTag ?? '?'}
-								<span class="text-muted-foreground text-sm mx-2">vs</span>
-								{getEntrant(streamMatch.bottomPlayerId)?.gamerTag ?? '?'}
-							</div>
-						</div>
-					{/if}
-				{/each}
-			{/if}
-
 			<!-- Swiss active round (if running) -->
 			{#if tournament.phase === 'swiss'}
 				{@const round = getCurrentRound()}
@@ -336,14 +318,14 @@
 							{#each round.matches.sort((a, b) => (a.station ?? 99) - (b.station ?? 99)) as match}
 								{@const top = getEntrant(match.topPlayerId)}
 								{@const bot = getEntrant(match.bottomPlayerId)}
-								<div class="rounded-xl p-3 {match.isStream ? 'border-2 border-red-500 bg-red-500/10' : 'border border-border bg-card'} {match.winnerId ? 'opacity-50' : ''}">
-									<div class="text-xs font-bold {match.isStream ? 'text-red-400' : 'text-muted-foreground'} mb-1">
+								<div class="rounded-xl p-3 {match.isStream ? 'border-2 border-primary bg-primary/10' : 'border border-border bg-card'} {match.winnerId ? 'opacity-50' : ''}">
+									<div class="text-xs font-bold {match.isStream ? 'text-primary' : 'text-muted-foreground'} mb-1">
 										{match.isStream ? 'STREAM' : `Stn ${match.station}`}
 									</div>
-									<div class="flex items-center gap-1 text-sm">
-										<span class="{match.winnerId === match.topPlayerId ? 'text-success font-semibold' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} truncate flex-1">{top?.gamerTag ?? '?'}</span>
+									<div class="flex items-center gap-1 text-sm min-w-0">
+										<span class="{match.winnerId === match.topPlayerId ? 'text-success font-semibold' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} truncate flex-1 min-w-0">{top?.gamerTag ?? '?'}</span>
 										<span class="text-muted-foreground shrink-0 text-xs">vs</span>
-										<span class="{match.winnerId === match.bottomPlayerId ? 'text-success font-semibold' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} truncate flex-1 text-right">{bot?.gamerTag ?? '?'}</span>
+										<span class="{match.winnerId === match.bottomPlayerId ? 'text-success font-semibold' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} truncate flex-1 min-w-0 text-right">{bot?.gamerTag ?? '?'}</span>
 									</div>
 									{#if match.winnerId && match.topScore !== undefined}
 										<div class="text-xs text-center text-muted-foreground mt-0.5">{match.topScore} – {match.bottomScore}</div>
@@ -358,8 +340,9 @@
 				{/if}
 			{/if}
 
-			<!-- Bracket views (when in brackets phase) — both brackets side by side -->
+			<!-- Bracket views — side by side on xl, stacked on smaller -->
 			{#if tournament.brackets}
+				<div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
 				{#each (['main', 'redemption'] as const) as bracketName}
 					{@const bracket = tournament.brackets[bracketName]}
 					{#if bracket}
@@ -372,10 +355,13 @@
 								</h2>
 								<span class="text-xs text-muted-foreground">{doneM}/{totalM} matches</span>
 							</div>
-							<BracketView bracket={bracket} entrants={tournament.entrants} />
+							<div class="overflow-x-auto">
+								<BracketView bracket={bracket} entrants={tournament.entrants} />
+							</div>
 						</section>
 					{/if}
 				{/each}
+				</div>
 			{/if}
 
 			<!-- Swiss rounds history (all rounds, most recent first) -->
@@ -403,7 +389,7 @@
 									{#each round.matches as match}
 										{@const top = getEntrant(match.topPlayerId)}
 										{@const bot = getEntrant(match.bottomPlayerId)}
-										<div class="flex items-center gap-2 rounded-lg bg-card px-3 py-1.5 text-sm">
+										<div class="flex items-center gap-2 rounded-lg bg-card px-3 py-1.5 text-sm min-w-0">
 											<span class="text-xs {match.isStream ? 'text-primary' : 'text-muted-foreground'} w-14 shrink-0">
 												{match.isStream ? 'STREAM' : `Stn ${match.station}`}
 											</span>
