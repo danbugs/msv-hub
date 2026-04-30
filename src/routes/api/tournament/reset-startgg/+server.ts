@@ -110,25 +110,30 @@ export const POST: RequestHandler = async ({ locals }) => {
 	// Instead, rely on restartPhase (already done) + updateParticipantEvents
 	// (below) to remove players from bracket events entirely.
 
-	// Step 3: Remove all participants from bracket events (keep only Swiss)
+	// Step 3: Ensure all participants are in Swiss.
+	// For gauntlet mode: move to Swiss only (step 5 re-adds to Main).
+	// For default mode: ADD to Swiss but keep Main (step 5 needs Main seeds for cross-event seeding).
 	if (tournamentSlug && (mainEventId || redEventId)) {
-		log('Step 3: Removing participants from bracket events...');
+		const isGauntlet = tournament.mode === 'gauntlet';
+		log(`Step 3: ${isGauntlet ? 'Moving' : 'Adding'} participants to Swiss...`);
 		const participants = await getTournamentParticipants(tournamentSlug);
 		let cleaned = 0;
 		let failed = 0;
 		for (const p of participants) {
-			const inMain = mainEventId ? p.currentEventIds.includes(mainEventId) : false;
-			const inRed = redEventId ? p.currentEventIds.includes(redEventId) : false;
-			if (!inMain && !inRed) continue;
-			const result = await updateParticipantEvents(p.participantId, [swissEventId], []);
-			if (result.ok) {
-				cleaned++;
+			if (isGauntlet) {
+				const inMain = mainEventId ? p.currentEventIds.includes(mainEventId) : false;
+				const inRed = redEventId ? p.currentEventIds.includes(redEventId) : false;
+				if (!inMain && !inRed) continue;
+				const result = await updateParticipantEvents(p.participantId, [swissEventId], []);
+				if (result.ok) { cleaned++; } else { failed++; log(`  ✗ ${p.gamerTag}: ${result.error}`); }
 			} else {
-				failed++;
-				log(`  ✗ ${p.gamerTag}: ${result.error}`);
+				if (p.currentEventIds.includes(swissEventId)) continue;
+				const targetEvents = [...new Set([...p.currentEventIds, swissEventId])];
+				const result = await updateParticipantEvents(p.participantId, targetEvents);
+				if (result.ok) { cleaned++; } else { failed++; log(`  ✗ ${p.gamerTag}: ${result.error}`); }
 			}
 		}
-		log(`  Removed ${cleaned} from brackets${failed > 0 ? `, ${failed} failed` : ''}`);
+		log(`  ${isGauntlet ? 'Moved' : 'Added'} ${cleaned} to Swiss${failed > 0 ? `, ${failed} failed` : ''}`);
 	}
 
 	// Step 4: Reset MSV Hub tournament state
@@ -309,6 +314,20 @@ export const POST: RequestHandler = async ({ locals }) => {
 				}
 				if (updated) log(`  Updated ${updated} entrant IDs to Swiss IDs`);
 			}
+		}
+
+		// Now remove from non-Swiss events (seeding + ID update done)
+		if (tournamentSlug) {
+			log('  Removing players from non-Swiss events...');
+			const finalParticipants = await getTournamentParticipants(tournamentSlug);
+			let removedCount = 0;
+			for (const p of finalParticipants) {
+				const nonSwiss = p.currentEventIds.filter((id) => id !== swissEventId);
+				if (nonSwiss.length === 0) continue;
+				const result = await updateParticipantEvents(p.participantId, [swissEventId]);
+				if (result.ok) { removedCount++; } else { log(`  ✗ ${p.gamerTag}: ${result.error}`); }
+			}
+			if (removedCount) log(`  Removed ${removedCount} from non-Swiss events`);
 		}
 	}
 
