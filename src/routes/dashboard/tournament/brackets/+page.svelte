@@ -526,7 +526,7 @@
 						<!-- Step 2: Pick score (BO3 or BO5) -->
 						{#if reportWinnerId}
 							{#if isBo5}
-								<div class="mt-3 grid grid-cols-4 gap-2">
+								<div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
 									{#each ['3-0', '3-1', '3-2'] as s}
 										<button onclick={() => setScore(s)}
 											class="rounded-lg py-2 text-sm font-medium transition-colors {reportScore === s ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
