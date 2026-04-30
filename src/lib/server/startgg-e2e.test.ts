@@ -48,6 +48,7 @@ const REDEMPTION_BRACKET_PHASE = 2243231;
 const TIMEOUT = 30_000;
 const LONG_TIMEOUT = 120_000;
 const PHASE_TIMEOUT = 300_000;
+const BRACKET_TIMEOUT = 600_000;
 
 // ── Imports (lazy — only resolved when tests run) ────────────────────────────
 
@@ -61,6 +62,8 @@ import {
 	pushPairingsToPhaseGroup,
 	pushBracketSeeding,
 	getUserByDiscriminator,
+	reportSet,
+	PHASE_GROUP_SETS_QUERY,
 } from '$lib/server/startgg';
 import {
 	restartPhase,
@@ -630,65 +633,127 @@ suite('E2E Phase 3b: Event management operations', () => {
 // PHASE 4: BRACKET REPORTING + GRAND FINALS RESET
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Reports all available rounds of a bracket. Returns total unique sets reported.
-// Note: StartGG's async propagation means deep losers bracket sets may not
-// have entrants populated during rapid-fire reporting. The function reports
-// everything available and waits briefly for cascading results.
+// Reports all rounds of a DE bracket to completion (16-player = 30 sets + GF reset).
+// Uses GQL then admin REST fallback, with long quiet waits for deep losers propagation.
 async function reportFullBracket(
 	pgId: number,
 	bracketName: string,
+	expectedSets: number = 30,
 ): Promise<{ totalReported: number; lastSetId: number; lastE1: number; lastE2: number }> {
+	type GqlSet = {
+		id: string;
+		winnerId: number | null;
+		slots: Array<{ entrant: { id: string } | null }>;
+	};
+
 	let totalReported = 0;
 	let lastSetId = 0;
 	let lastE1 = 0;
 	let lastE2 = 0;
-	const MAX_ITERATIONS = 20;
-	const reportedPairs = new Set<string>();
+	const MAX_ITERATIONS = 40;
+	// Track by set ID — NOT by entrant pair, since DE brackets have rematches
+	const reportedSetIds = new Set<number>();
+	let consecutiveStalls = 0;
 
 	for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
 		await wait(3000);
-		let sets = await fetchAdminPhaseGroupSetsRaw(pgId);
+
+		// Fetch sets via GQL
+		const data = await gql<{ phaseGroup: { sets: { nodes: GqlSet[] } } }>(
+			PHASE_GROUP_SETS_QUERY, { phaseGroupId: pgId }, { delay: 0 }
+		);
+		let sets = data?.phaseGroup?.sets?.nodes ?? [];
 
 		if (iter === 1) {
 			for (let attempt = 0; sets.length === 0 && attempt < 10; attempt++) {
 				await wait(3000);
-				sets = await fetchAdminPhaseGroupSetsRaw(pgId);
+				const retry = await gql<{ phaseGroup: { sets: { nodes: GqlSet[] } } }>(
+					PHASE_GROUP_SETS_QUERY, { phaseGroupId: pgId }, { delay: 0 }
+				);
+				sets = retry?.phaseGroup?.sets?.nodes ?? [];
 			}
 		}
 
-		const completedCount = sets.filter(s => s.winnerId).length;
-		const unreported = sets.filter(s => {
+		let unreported = sets.filter(s => {
 			if (s.winnerId) return false;
-			const e1 = Number(s.entrant1Id);
-			const e2 = Number(s.entrant2Id);
+			const e1 = Number(s.slots?.[0]?.entrant?.id);
+			const e2 = Number(s.slots?.[1]?.entrant?.id);
 			if (!(e1 > 0) || !(e2 > 0)) return false;
-			const key = `${Math.min(e1, e2)}-${Math.max(e1, e2)}`;
-			return !reportedPairs.has(key);
+			return !reportedSetIds.has(Number(s.id));
 		});
 
-		if (unreported.length === 0) {
-			log(`  ${bracketName} iteration ${iter}: ${completedCount}/${sets.length} completed — no new sets available`);
-			break;
+		// Strategy 2: admin REST has fresher entrant data than GQL
+		if (unreported.length === 0 && totalReported < expectedSets) {
+			const adminSets = await fetchAdminPhaseGroupSets(pgId);
+			const adminUnreported = adminSets.filter(s => {
+				if (s.winnerId) return false;
+				if (!(s.entrant1Id > 0) || !(s.entrant2Id > 0)) return false;
+				return !reportedSetIds.has(s.id);
+			});
+			if (adminUnreported.length > 0) {
+				log(`  ${bracketName} iteration ${iter}: GQL empty but admin REST found ${adminUnreported.length} sets`);
+				for (const as of adminUnreported) {
+					if (totalReported >= expectedSets) break;
+					const winnerId = Math.min(as.entrant1Id, as.entrant2Id);
+					const result = await completeSetViaAdminRest(pgId, as.entrant1Id, as.entrant2Id, winnerId, 2, 0, false);
+					if (result.ok) {
+						totalReported++;
+						lastSetId = as.id;
+						lastE1 = as.entrant1Id;
+						lastE2 = as.entrant2Id;
+						reportedSetIds.add(as.id);
+					} else {
+						log(`  ✗ ${bracketName} admin set ${as.id}: ${result.error}`);
+					}
+				}
+				consecutiveStalls = 0;
+				log(`  ${bracketName} iteration ${iter}: ${totalReported}/${expectedSets} total after admin REST`);
+				continue;
+			}
 		}
 
+		if (unreported.length === 0) {
+			if (totalReported >= expectedSets) {
+				log(`  ${bracketName} iteration ${iter}: bracket complete — ${totalReported} sets reported`);
+				break;
+			}
+			consecutiveStalls++;
+
+			// Diagnostic: show what admin REST has for unreported sets
+			const rawSets = await fetchAdminPhaseGroupSetsRaw(pgId);
+			const rawUnreported = rawSets.filter(s => !s.winnerId && !reportedSetIds.has(Number(s.id)));
+			log(`  ${bracketName} iteration ${iter}: STALL at ${totalReported}/${expectedSets}. ${rawUnreported.length} unreported raw sets:`);
+			for (const s of rawUnreported) {
+				log(`    set ${s.id} | round=${s.round} | e1=${s.entrant1Id ?? 'null'} e2=${s.entrant2Id ?? 'null'} | ${s.fullRoundText ?? '?'}`);
+			}
+
+			const stallWait = 30_000;
+			log(`  Waiting ${stallWait / 1000}s for propagation...`);
+			await wait(stallWait);
+			continue;
+		}
+
+		consecutiveStalls = 0;
 		let iterReported = 0;
 		for (const set of unreported) {
-			const e1 = Number(set.entrant1Id);
-			const e2 = Number(set.entrant2Id);
+			if (totalReported >= expectedSets) break;
+			const e1 = Number(set.slots[0].entrant!.id);
+			const e2 = Number(set.slots[1].entrant!.id);
 			const winnerId = Math.min(e1, e2);
-			const result = await completeSetViaAdminRest(pgId, e1, e2, winnerId, 2, 0, false);
+
+			const result = await reportSet(String(set.id), winnerId);
 			if (result.ok) {
 				iterReported++;
 				totalReported++;
-				lastSetId = Number(set.id) || 0;
+				lastSetId = Number(result.reportedSetId ?? set.id) || 0;
 				lastE1 = e1;
 				lastE2 = e2;
-				reportedPairs.add(`${Math.min(e1, e2)}-${Math.max(e1, e2)}`);
+				reportedSetIds.add(lastSetId);
 			} else {
 				log(`  ✗ ${bracketName} set ${set.id}: ${result.error}`);
 			}
 		}
-		log(`  ${bracketName} iteration ${iter}: reported ${iterReported} sets (${completedCount + iterReported}/${sets.length} completed)`);
+		log(`  ${bracketName} iteration ${iter}: reported ${iterReported} sets (${totalReported}/${expectedSets} total)`);
 	}
 
 	return { totalReported, lastSetId, lastE1, lastE2 };
@@ -708,14 +773,14 @@ suite('E2E Phase 4: Bracket reporting', () => {
 		const result = await reportFullBracket(mainPgId, 'Main');
 		mainLastSet = result;
 		log(`Main bracket complete: ${result.totalReported} unique sets reported`);
-		expect(result.totalReported).toBeGreaterThanOrEqual(20);
+		expect(result.totalReported).toBeGreaterThanOrEqual(30);
 
 		// Verify all reportable sets have winners
 		await wait(2000);
 		const verifyMain = await fetchAdminPhaseGroupSets(mainPgId);
 		const withWinners = verifyMain.filter(s => s.winnerId);
 		log(`  Verified: ${withWinners.length}/${verifyMain.length} sets completed`);
-	}, PHASE_TIMEOUT);
+	}, BRACKET_TIMEOUT);
 
 	it('reports all rounds of redemption bracket to completion', async () => {
 		await wait(2000);
@@ -726,13 +791,13 @@ suite('E2E Phase 4: Bracket reporting', () => {
 		log('Reporting full redemption bracket...');
 		const result = await reportFullBracket(redPgId, 'Redemption');
 		log(`Redemption bracket complete: ${result.totalReported} unique sets reported`);
-		expect(result.totalReported).toBeGreaterThanOrEqual(20);
+		expect(result.totalReported).toBeGreaterThanOrEqual(30);
 
 		await wait(2000);
 		const verifyRed = await fetchAdminPhaseGroupSets(redPgId);
 		const withWinners = verifyRed.filter(s => s.winnerId);
 		log(`  Verified: ${withWinners.length}/${verifyRed.length} sets completed`);
-	}, PHASE_TIMEOUT);
+	}, BRACKET_TIMEOUT);
 
 	it('resets grand finals and re-reports with different winner', async () => {
 		if (!mainPgId || !mainLastSet.lastSetId) {
