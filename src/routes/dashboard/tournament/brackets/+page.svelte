@@ -371,6 +371,14 @@
 			await loadTournament();
 			submittingReport = false;
 
+			// Show StartGG reporting status
+			const sg = (data as { startgg?: { ok?: boolean; queued?: boolean; error?: string } }).startgg;
+			if (sg && !sg.ok && sg.error) {
+				error = `StartGG: ${sg.error}`;
+			} else if (sg?.queued) {
+				error = 'StartGG: report queued (sync not confirmed yet — click "Sync to StartGG" first)';
+			}
+
 			// Auto-sync redemption to StartGG when generated in gauntlet mode
 			if (data.redemptionBracket && tournament?.mode === 'gauntlet') {
 				redemptionSyncing = true;
