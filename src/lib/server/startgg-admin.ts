@@ -185,7 +185,7 @@ export async function updateParticipantEvents(
 	}));
 
 	type Result = { updateParticipantRegistration: { id: number; events: { id: number; name: string }[] } };
-	const data = await adminGql<Result>(UPDATE_PARTICIPANT_REG, {
+	const vars = {
 		participantId,
 		regData: [],
 		entrantData: {
@@ -196,13 +196,17 @@ export async function updateParticipantEvents(
 			phaseGroupDest
 		},
 		validationKey: 'updateParticipantEventReg'
-	});
+	};
 
-	if (!data?.updateParticipantRegistration) {
-		return { ok: false, error: 'updateParticipantRegistration returned null' };
+	for (let attempt = 0; attempt < 3; attempt++) {
+		const data = await adminGql<Result>(UPDATE_PARTICIPANT_REG, vars);
+		if (data?.updateParticipantRegistration) {
+			return { ok: true, events: data.updateParticipantRegistration.events };
+		}
+		if (attempt < 2) await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
 	}
 
-	return { ok: true, events: data.updateParticipantRegistration.events };
+	return { ok: false, error: 'updateParticipantRegistration returned null after 3 attempts' };
 }
 
 /**
