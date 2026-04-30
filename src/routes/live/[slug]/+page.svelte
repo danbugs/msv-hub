@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
-	import type { TournamentState, Entrant, BracketMatch, BracketState, SwissRound } from '$lib/types/tournament';
+	import type { TournamentState, Entrant, BracketMatch, BracketState } from '$lib/types/tournament';
 	import BracketView from '$lib/components/BracketView.svelte';
 
 	let { data } = $props();
@@ -138,10 +138,6 @@
 				return { ...e, wins, losses };
 			})
 			.sort((a, b) => b.wins - a.wins || a.losses - b.losses || a.initialSeed - b.initialSeed);
-	}
-
-	function getCurrentRound(): SwissRound | undefined {
-		return tournament?.rounds.find((r) => r.status === 'active');
 	}
 
 	// Auto-refresh every 15s
@@ -307,38 +303,6 @@
 
 		{:else}
 			<!-- ── Full tournament view ── -->
-
-			<!-- Swiss active round (if running) -->
-			{#if tournament.phase === 'swiss'}
-				{@const round = getCurrentRound()}
-				{#if round}
-					<div>
-						<h2 class="text-base font-bold text-foreground mb-3">Round {round.number} — Active</h2>
-						<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-							{#each round.matches.sort((a, b) => (a.station ?? 99) - (b.station ?? 99)) as match}
-								{@const top = getEntrant(match.topPlayerId)}
-								{@const bot = getEntrant(match.bottomPlayerId)}
-								<div class="rounded-xl p-3 {match.isStream ? 'border-2 border-primary bg-primary/10' : 'border border-border bg-card'} {match.winnerId ? 'opacity-50' : ''}">
-									<div class="text-xs font-bold {match.isStream ? 'text-primary' : 'text-muted-foreground'} mb-1">
-										{match.isStream ? 'STREAM' : `Stn ${match.station}`}
-									</div>
-									<div class="flex items-center gap-1 text-sm min-w-0">
-										<span class="{match.winnerId === match.topPlayerId ? 'text-success font-semibold' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} truncate flex-1 min-w-0">{top?.gamerTag ?? '?'}</span>
-										<span class="text-muted-foreground shrink-0 text-xs">vs</span>
-										<span class="{match.winnerId === match.bottomPlayerId ? 'text-success font-semibold' : match.winnerId ? 'text-muted-foreground' : 'text-foreground'} truncate flex-1 min-w-0 text-right">{bot?.gamerTag ?? '?'}</span>
-									</div>
-									{#if match.winnerId && match.topScore !== undefined}
-										<div class="text-xs text-center text-muted-foreground mt-0.5">{match.topScore} – {match.bottomScore}</div>
-									{/if}
-								</div>
-							{/each}
-						</div>
-						{#if round.byePlayerId}
-							<div class="mt-2 text-xs text-warning">BYE: {getEntrant(round.byePlayerId)?.gamerTag}</div>
-						{/if}
-					</div>
-				{/if}
-			{/if}
 
 			<!-- Bracket views — break out of max-w-3xl to use full width -->
 			{#if tournament.brackets}
