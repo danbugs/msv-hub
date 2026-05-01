@@ -473,13 +473,15 @@
 	<!-- StartGG errors -->
 	{#if tournament?.startggSync?.errors?.length}
 		<div class="mt-3 space-y-1">
-			{#each tournament.startggSync.errors as err}
+			{#each tournament.startggSync.errors as err, i}
 				<div class="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
 					<span class="shrink-0 font-semibold">StartGG error</span>
-					<span class="min-w-0 break-words">{err.message}</span>
+					<span class="min-w-0 break-words flex-1">{err.message}</span>
+					<button onclick={() => tournament!.startggSync!.errors = tournament!.startggSync!.errors.filter((_, idx) => idx !== i)}
+						class="shrink-0 ml-1 hover:text-destructive/70 transition-colors" aria-label="Dismiss error">&times;</button>
 				</div>
 			{/each}
-			<button onclick={clearStartggErrors} class="text-xs text-muted-foreground hover:text-foreground transition-colors">Clear errors</button>
+			<button onclick={clearStartggErrors} class="text-xs text-muted-foreground hover:text-foreground transition-colors">Clear all</button>
 		</div>
 	{/if}
 
@@ -567,7 +569,7 @@
 			{@const totalDone = lr1Done + lr2Done}
 			<div class="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
 				<div class="flex items-center justify-between">
-					<p class="font-medium">Gauntlet — Redemption Progress</p>
+					<p class="font-medium">Macro Default — Redemption Progress</p>
 					{#if totalNeeded > 0}
 						<span class="text-xs text-muted-foreground">{totalDone}/{totalNeeded} eliminations decided</span>
 					{/if}
