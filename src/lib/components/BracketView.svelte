@@ -358,10 +358,6 @@
 			<div class="absolute rounded-lg border border-border overflow-hidden bg-card match-card {called ? 'msv-pulse accent-glow-called' : ''} {ready ? 'match-card-interactive' : ''}"
 				style="left: {x}px; top: {y}px; width: {CARD_W}px; border-left: 3px solid {accent}; {waveInfo && !match.winnerId ? `background: ${waveInfo.color}` : ''}"
 			>
-				{#if waveInfo && !match.winnerId}
-					<span class="absolute -top-1.5 -right-1.5 z-10 rounded-full w-5 h-5 flex items-center justify-center text-[9px] font-bold text-white shadow-sm"
-						style="background: {waveInfo.badgeColor}">{waveInfo.wave}</span>
-				{/if}
 
 				<!-- Top player -->
 				<div class="flex items-center gap-1.5 px-2 py-1.5 border-b border-border/50
@@ -377,6 +373,10 @@
 						<span class="text-xs font-mono tabular-nums {match.winnerId === match.topPlayerId ? 'text-bracket-winner font-bold' : 'text-muted-foreground'} shrink-0">
 							{match.topScore}
 						</span>
+					{/if}
+					{#if waveInfo && !match.winnerId}
+						<span class="shrink-0 rounded-full w-4 h-4 flex items-center justify-center text-[8px] font-bold text-white"
+							style="background: {waveInfo.badgeColor}">{waveInfo.wave}</span>
 					{/if}
 				</div>
 

@@ -145,39 +145,114 @@ function matchesForSpec(
 	return spec.half === 'P1' ? roundMatches.slice(0, mid) : roundMatches.slice(mid);
 }
 
+function assignWave(map: WaveMap, matches: BracketMatch[], waveNum: number): void {
+	const idx = (waveNum - 1) % WAVE_COLORS.length;
+	const info: WaveAssignment = {
+		wave: waveNum,
+		color: WAVE_COLORS[idx],
+		badgeColor: WAVE_BADGE_COLORS[idx],
+		label: `Wave ${waveNum}`,
+	};
+	for (const m of matches) map.set(m.id, info);
+}
+
+// DE round calling order: WR1, WR2+LR1, LR2, WR3+LR3, LR4, WR4+LR5, LR6, ...
+// Pattern: WR_n paired with LR_(2n-3) for n>=2, standalone LR rounds in between.
+function deRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
+	const byRound = new Map<number, BracketMatch[]>();
+	for (const m of matches) {
+		if (m.id.includes('-GFR-')) continue;
+		if (!byRound.has(m.round)) byRound.set(m.round, []);
+		byRound.get(m.round)!.push(m);
+	}
+	for (const ms of byRound.values()) ms.sort((a, b) => a.matchIndex - b.matchIndex);
+
+	const winRounds = [...byRound.keys()].filter((r) => r > 0).sort((a, b) => a - b);
+	const losRounds = [...byRound.keys()].filter((r) => r < 0).sort((a, b) => Math.abs(a) - Math.abs(b));
+
+	const gfRound = resolveGFRound(matches);
+	const groups: BracketMatch[][] = [];
+
+	// WR1 standalone
+	if (byRound.has(winRounds[0])) groups.push(byRound.get(winRounds[0])!);
+
+	let li = 0;
+	for (let wi = 1; wi < winRounds.length; wi++) {
+		const wr = winRounds[wi];
+		if (wr === gfRound) continue;
+		// Pair: WR_n + LR_(odd)
+		const combined = [...(byRound.get(wr) ?? [])];
+		if (li < losRounds.length) combined.push(...(byRound.get(losRounds[li]) ?? []));
+		li++;
+		if (combined.length) groups.push(combined);
+		// Standalone even LR
+		if (li < losRounds.length) {
+			const lr = byRound.get(losRounds[li]);
+			if (lr?.length) groups.push(lr);
+			li++;
+		}
+	}
+	// Remaining losers rounds
+	while (li < losRounds.length) {
+		const lr = byRound.get(losRounds[li]);
+		if (lr?.length) groups.push(lr);
+		li++;
+	}
+	// GF
+	if (byRound.has(gfRound)) groups.push(byRound.get(gfRound)!);
+
+	return groups;
+}
+
 export function computeWaves(
 	main: BracketState,
-	redemption: BracketState | undefined
+	redemption: BracketState | undefined,
+	mode: 'default' | 'gauntlet' = 'default',
+	stationCount = 16
 ): WaveMap {
 	const map: WaveMap = new Map();
-	const table = getWaveTable(main.players.length);
 	const mainMatches = main.matches;
 	const redMatches = redemption?.matches ?? [];
 
-	for (let wi = 0; wi < table.length; wi++) {
-		const wave = wi + 1;
-		const color = WAVE_COLORS[wi % WAVE_COLORS.length];
-		const badgeColor = WAVE_BADGE_COLORS[wi % WAVE_BADGE_COLORS.length];
-		const label = `Wave ${wave}`;
-
-		for (const spec of table[wi]) {
-			const matches = matchesForSpec(spec, mainMatches, redMatches);
-			for (const m of matches) {
-				map.set(m.id, { wave, color, label, badgeColor });
+	if (mode === 'gauntlet') {
+		const table = getWaveTable(main.players.length);
+		for (let wi = 0; wi < table.length; wi++) {
+			const matches: BracketMatch[] = [];
+			for (const spec of table[wi]) {
+				matches.push(...matchesForSpec(spec, mainMatches, redMatches));
 			}
+			assignWave(map, matches, wi + 1);
+		}
+	} else {
+		// Micro Default: both brackets start together, interleave by DE round order
+		const mainGroups = deRoundOrder(mainMatches);
+		const redGroups = deRoundOrder(redMatches);
+		const maxLen = Math.max(mainGroups.length, redGroups.length);
+		let waveNum = 1;
+		let buffer: BracketMatch[] = [];
+
+		for (let i = 0; i < maxLen; i++) {
+			const combined = [...(mainGroups[i] ?? []), ...(redGroups[i] ?? [])];
+			buffer.push(...combined);
+			// Flush when buffer reaches station count or no more matches to combine
+			while (buffer.length >= stationCount) {
+				assignWave(map, buffer.splice(0, stationCount), waveNum++);
+			}
+		}
+		if (buffer.length > 0) {
+			assignWave(map, buffer, waveNum++);
 		}
 	}
 
 	// GFR gets same wave as GF
 	for (const m of [...mainMatches, ...redMatches]) {
 		if (m.id.includes('-GFR-') && !map.has(m.id)) {
-			const lastWave = table.length;
-			map.set(m.id, {
-				wave: lastWave,
-				color: WAVE_COLORS[(lastWave - 1) % WAVE_COLORS.length],
-				label: `Wave ${lastWave}`,
-				badgeColor: WAVE_BADGE_COLORS[(lastWave - 1) % WAVE_BADGE_COLORS.length],
-			});
+			const gfMatch = (m.id.startsWith('main') ? mainMatches : redMatches)
+				.find((g) => g.id.includes('-GF-') && !g.id.includes('-GFR-'));
+			const gfWave = gfMatch ? map.get(gfMatch.id) : undefined;
+			if (gfWave) {
+				map.set(m.id, { ...gfWave });
+			}
 		}
 	}
 

@@ -185,8 +185,13 @@
 	}
 
 	const waveMap = $derived.by(() => {
-		if (!showWaves || tournament?.mode !== 'gauntlet' || !tournament?.brackets?.main) return undefined;
-		return computeWaves(tournament.brackets.main, tournament.brackets.redemption);
+		if (!showWaves || !tournament?.brackets?.main) return undefined;
+		return computeWaves(
+			tournament.brackets.main,
+			tournament.brackets.redemption,
+			tournament.mode ?? 'default',
+			tournament.settings?.numStations ?? 16
+		);
 	});
 
 	const waveSummary = $derived.by(() => {
@@ -505,25 +510,23 @@
 			{/if}
 		</div>
 	{:else}
-		{#if tournament?.mode === 'gauntlet'}
-			<div class="mt-3 flex flex-wrap items-center gap-3">
-				<label class="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-					<input type="checkbox" bind:checked={showWaves}
-						class="rounded border-input bg-background text-primary focus:ring-ring" />
-					Show Waves
-				</label>
-				{#if showWaves && waveSummary.length > 0}
-					<div class="flex flex-wrap gap-1">
-						{#each waveSummary as w}
-							<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
-								style="background: {w.badgeColor}">
-								W{w.wave} <span class="opacity-70">({w.count})</span>
-							</span>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		{/if}
+		<div class="mt-3 flex flex-wrap items-center gap-3">
+			<label class="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+				<input type="checkbox" bind:checked={showWaves}
+					class="rounded border-input bg-background text-primary focus:ring-ring" />
+				Show Waves
+			</label>
+			{#if showWaves && waveSummary.length > 0}
+				<div class="flex flex-wrap gap-1">
+					{#each waveSummary as w}
+						<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
+							style="background: {w.badgeColor}">
+							W{w.wave} <span class="opacity-70">({w.count})</span>
+						</span>
+					{/each}
+				</div>
+			{/if}
+		</div>
 
 		<!-- Both brackets side by side -->
 		<div class="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
