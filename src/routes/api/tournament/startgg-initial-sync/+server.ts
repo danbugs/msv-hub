@@ -16,7 +16,7 @@ import { getActiveTournament, saveTournament } from '$lib/server/store';
 import {
 	gql, TOURNAMENT_QUERY, EVENT_BY_SLUG_QUERY, EVENT_PHASES_QUERY,
 	pushBracketSeeding, pushFinalStandingsSeeding, fetchPhaseGroups,
-	fetchPhaseSeeds, extractPlayerId, fetchAllEntrants
+	fetchAllEntrants
 } from '$lib/server/startgg';
 import { getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 
@@ -58,50 +58,7 @@ async function resolveEventPhase(eventId: number): Promise<{ phaseId: number; pg
 	return { phaseId, pgId: groups[0].id };
 }
 
-// Helper: build a player ID ↔ entrant ID map from phase seeds
-async function buildPlayerEntrantMap(phaseId: number): Promise<Map<number, number>> {
-	const seeds = await fetchPhaseSeeds(phaseId).catch(() => []);
-	const map = new Map<number, number>();
-	for (const seed of seeds) {
-		const playerId = extractPlayerId(seed as Record<string, unknown>);
-		const entrantId = (seed as { entrant?: { id?: number } }).entrant?.id;
-		if (playerId && entrantId) map.set(playerId, Number(entrantId));
-	}
-	return map;
-}
 
-// Helper: update tournament entrant IDs from source event to target event via player ID matching
-async function updateEntrantIds(
-	tournament: { entrants: { startggEntrantId?: number }[] },
-	sourcePhaseId: number,
-	targetPhaseId: number,
-	log: (msg: string) => void
-): Promise<void> {
-	const targetPlayerToEntrant = await buildPlayerEntrantMap(targetPhaseId);
-	if (targetPlayerToEntrant.size === 0) { log('  No target seeds found for entrant ID update'); return; }
-
-	// Build reverse map: source entrant ID → player ID
-	const sourceSeeds = await fetchPhaseSeeds(sourcePhaseId).catch(() => []);
-	const sourceEntrantToPlayer = new Map<number, number>();
-	for (const seed of sourceSeeds) {
-		const playerId = extractPlayerId(seed as Record<string, unknown>);
-		const entrantId = (seed as { entrant?: { id?: number } }).entrant?.id;
-		if (playerId && entrantId) sourceEntrantToPlayer.set(Number(entrantId), playerId);
-	}
-
-	let updated = 0;
-	for (const entrant of tournament.entrants) {
-		if (!entrant.startggEntrantId) continue;
-		const playerId = sourceEntrantToPlayer.get(entrant.startggEntrantId);
-		if (!playerId) continue;
-		const targetEntrantId = targetPlayerToEntrant.get(playerId);
-		if (targetEntrantId && targetEntrantId !== entrant.startggEntrantId) {
-			entrant.startggEntrantId = targetEntrantId;
-			updated++;
-		}
-	}
-	if (updated) log(`  Updated ${updated} entrant IDs`);
-}
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -241,10 +198,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 
 			// Update stored entrant IDs: Swiss IDs → Main bracket IDs
-			if (swissPhaseId) {
-				log('  Updating entrant IDs to Main bracket IDs...');
-				await updateEntrantIds(tournament, swissPhaseId, mainPhaseId, log);
-			}
+			log('  Updating entrant IDs to Main bracket IDs...');
+			await refreshEntrantIds(tournament, mainEventId, log);
 		} else {
 			if (!swissPgId) seedingResult = 'Could not resolve Swiss phase group';
 			else if (!mainPgId) seedingResult = 'Could not resolve Main bracket phase group';
@@ -317,10 +272,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				}
 
 				// Update stored entrant IDs: Main IDs → Swiss IDs
-				if (mainPhaseId) {
-					log('  Updating entrant IDs to Swiss IDs...');
-					await updateEntrantIds(tournament, mainPhaseId, swissPhaseId, log);
-				}
+				log('  Updating entrant IDs to Swiss IDs...');
+				await refreshEntrantIds(tournament, swissEventId, log);
 			}
 		} else {
 			log('  Could not resolve Swiss phase group for seeding push');
