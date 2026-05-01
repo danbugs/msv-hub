@@ -111,17 +111,15 @@ export function computeWaves(
 	const redGroups = deRoundOrder(redMatches);
 	const maxLen = Math.max(mainGroups.length, redGroups.length);
 	let waveNum = 1;
-	let buffer: BracketMatch[] = [];
 
 	for (let i = 0; i < maxLen; i++) {
-		const combined = [...(mainGroups[i] ?? []), ...(redGroups[i] ?? [])];
-		buffer.push(...combined);
-		while (buffer.length >= stationCount) {
-			assignWave(map, buffer.splice(0, stationCount), waveNum++);
+		// Combine same-depth groups from both brackets (independent of each other)
+		const group = [...(mainGroups[i] ?? []), ...(redGroups[i] ?? [])];
+		if (group.length === 0) continue;
+		// Split into chunks of stationCount if the group is too large
+		for (let j = 0; j < group.length; j += stationCount) {
+			assignWave(map, group.slice(j, j + stationCount), waveNum++);
 		}
-	}
-	if (buffer.length > 0) {
-		assignWave(map, buffer, waveNum++);
 	}
 
 	// GFR gets same wave as GF
