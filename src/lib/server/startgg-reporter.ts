@@ -599,10 +599,12 @@ async function _doReportBracketMatch(
  * Does NOT save — caller must merge and save to avoid overwriting concurrent changes.
  */
 export async function flushPendingBracketMatches(
-	tournament: TournamentState
+	tournament: TournamentState,
+	log?: (msg: string) => void
 ): Promise<{ reported: number; failed: number; flushedIds: string[] }> {
 	const sync = ensureSync(tournament);
 	sync.splitConfirmed = true;
+	const _log = log ?? ((msg: string) => console.log(`[flush] ${msg}`));
 
 	// Reload from Redis: the caller's `tournament` was loaded at the start of the
 	// request and is stale. We need fresh match data (winnerId set by concurrent
@@ -616,27 +618,45 @@ export async function flushPendingBracketMatches(
 	];
 
 	if (!latest?.brackets || pendingIds.length === 0) {
+		_log('No pending reports to flush');
 		return { reported: 0, failed: 0, flushedIds: [] };
 	}
 
-	// Use fresh tournament data for reporting (has correct event IDs, entrants,
-	// and match state) but mutate sync on the caller's tournament object so the
-	// caller's merge carries the changes through.
+	const entrantMap = new Map(latest.entrants.map((e) => [e.id, e]));
+	_log(`Flushing ${pendingIds.length} pending report(s)...`);
+
 	let reported = 0;
 	let failed = 0;
 
-	for (const key of pendingIds) {
+	for (let i = 0; i < pendingIds.length; i++) {
+		const key = pendingIds[i];
 		const [bracketName, matchId] = key.split(':') as ['main' | 'redemption', string];
 		const bracket = latest.brackets[bracketName];
-		if (!bracket) continue;
+		if (!bracket) { _log(`  [${i + 1}/${pendingIds.length}] ${key}: bracket not found — skipping`); continue; }
 
 		const match = bracket.matches.find((m) => m.id === matchId);
-		if (!match || !match.winnerId) continue;
+		if (!match || !match.winnerId) {
+			_log(`  [${i + 1}/${pendingIds.length}] ${key}: no winner set — skipping`);
+			continue;
+		}
+
+		const topTag = entrantMap.get(match.topPlayerId ?? '')?.gamerTag ?? match.topPlayerId;
+		const botTag = entrantMap.get(match.bottomPlayerId ?? '')?.gamerTag ?? match.bottomPlayerId;
+		_log(`  [${i + 1}/${pendingIds.length}] Reporting ${topTag} vs ${botTag} (${bracketName})...`);
 
 		const result = await _doReportBracketMatch(latest, bracketName, match, sync, key);
-		if (result.ok && !result.queued) reported++;
-		else if (!result.ok) failed++;
+		if (result.ok && !result.queued) {
+			reported++;
+			_log(`  [${i + 1}/${pendingIds.length}] ✓ Reported`);
+		} else {
+			failed++;
+			_log(`  [${i + 1}/${pendingIds.length}] ✗ ${result.error ?? 'Failed'}${result.queued ? ' (re-queued)' : ''}`);
+		}
+
+		// Brief delay between reports to avoid hammering StartGG
+		if (i < pendingIds.length - 1) await new Promise<void>((r) => setTimeout(r, 800));
 	}
 
+	_log(`Flush complete: ${reported} reported, ${failed} failed`);
 	return { reported, failed, flushedIds: pendingIds };
 }

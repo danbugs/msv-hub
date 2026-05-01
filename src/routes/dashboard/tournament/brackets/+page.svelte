@@ -318,8 +318,12 @@
 		splitResult = null;
 		const res = await fetch('/api/tournament/startgg-sync', { method: 'POST' });
 		const data = await res.json().catch(() => ({}));
-		if (res.ok) splitResult = { reported: data.reported, failed: data.failed };
-		else error = (data as { error?: string }).error ?? 'Failed to confirm split';
+		if (res.ok) {
+			splitResult = { reported: data.reported, failed: data.failed };
+			if (data.logs?.length) console.log('[split-done logs]', data.logs.join('\n'));
+		} else {
+			error = (data as { error?: string }).error ?? 'Failed to confirm split';
+		}
 		splitConfirming = false;
 		await loadTournament();
 	}
@@ -406,7 +410,11 @@
 					const syncData = await syncRes.json().catch(() => ({}));
 					redemptionSyncing = false;
 					if (syncRes.ok) {
-						redemptionSyncResult = `Redemption synced to StartGG (${(syncData as { split?: { redemptionOk?: number } }).split?.redemptionOk ?? 0} players)`;
+						const sd = syncData as { split?: { redemptionOk?: number }; reported?: number; failed?: number; logs?: string[] };
+						const parts = [`Redemption synced (${sd.split?.redemptionOk ?? 0} players)`];
+						if (sd.reported || sd.failed) parts.push(`flushed ${sd.reported ?? 0} report(s)${sd.failed ? `, ${sd.failed} failed` : ''}`);
+						redemptionSyncResult = parts.join(', ');
+						if (sd.logs?.length) console.log('[sync logs]', sd.logs.join('\n'));
 						await loadTournament();
 					} else {
 						redemptionSyncResult = `Sync failed: ${(syncData as { error?: string }).error ?? 'unknown'}`;

@@ -203,7 +203,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Step 3: Flush pending bracket reports
-	const { reported, failed, flushedIds } = await flushPendingBracketMatches(tournament);
+	const { reported, failed, flushedIds } = await flushPendingBracketMatches(tournament, log);
 
 	// Step 4: Optionally announce bracket start to Discord.
 	if (announceChannel) {
