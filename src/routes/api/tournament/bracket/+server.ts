@@ -2,6 +2,8 @@ import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { reportBracketMatch, isGauntletRedemptionReady, generateGauntletRedemption, assignBracketStations } from '$lib/server/swiss';
 import { reportBracketMatch as reportBracketMatchToStartGG } from '$lib/server/startgg-reporter';
+import { gql, EVENT_PHASES_QUERY, pushBracketSeeding, fetchPhaseGroups } from '$lib/server/startgg';
+import { getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 
 /** PATCH — report a bracket match result */
 export const PATCH: RequestHandler = async ({ request, locals }) => {
@@ -87,6 +89,66 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				mainMatches, tournament.entrants, tournament.settings, mainOccupied
 			);
 			redemptionGenerated = true;
+
+			// Push redemption seeding to StartGG
+			const redEventId = tournament.startggRedemptionBracketEventId;
+			const mainEventId = tournament.startggMainBracketEventId;
+			if (redEventId && mainEventId) {
+				(async () => {
+					try {
+						const redPhaseData = await gql<{ event: { phases: { id: number }[] } }>(
+							EVENT_PHASES_QUERY, { eventId: redEventId }
+						);
+						const redPhaseId = redPhaseData?.event?.phases?.[0]?.id;
+						if (!redPhaseId) return;
+						const redGroups = await fetchPhaseGroups(redPhaseId).catch(() => []);
+						const redPgId = redGroups[0]?.id;
+						if (!redPgId) return;
+
+						const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+
+						// Ensure players are in the redemption event
+						const eventSlug = tournament.startggEventSlug;
+						const tournamentSlug = eventSlug?.match(/tournament\/([^/]+)/)?.[1];
+						if (tournamentSlug) {
+							const participants = await getTournamentParticipants(tournamentSlug);
+							const redPlayerIds = new Set(
+								tournament.brackets!.redemption!.players.map((p) => p.entrantId)
+							);
+							for (const p of participants) {
+								if (p.currentEventIds.includes(redEventId)) continue;
+								const matchesRedPlayer = tournament.entrants.some(
+									(e) => redPlayerIds.has(e.id) && e.gamerTag === p.gamerTag
+								);
+								if (!matchesRedPlayer) continue;
+								const targetEvents = [...new Set([...p.currentEventIds, redEventId])];
+								const phaseDests = [{ eventId: redEventId, phaseId: redPhaseId }];
+								await updateParticipantEvents(p.participantId, targetEvents, phaseDests);
+							}
+						}
+
+						// Source PG = Main bracket (where entrant IDs currently live)
+						const mainPhaseData = await gql<{ event: { phases: { id: number }[] } }>(
+							EVENT_PHASES_QUERY, { eventId: mainEventId }
+						);
+						const mainPhaseId = mainPhaseData?.event?.phases?.[0]?.id;
+						if (!mainPhaseId) return;
+						const mainGroups = await fetchPhaseGroups(mainPhaseId).catch(() => []);
+						const mainPgId = mainGroups[0]?.id;
+						if (!mainPgId) return;
+						const rankedEntrantIds = tournament.brackets!.redemption!.players
+							.sort((a, b) => a.seed - b.seed)
+							.map((p) => entrantMap.get(p.entrantId)?.startggEntrantId)
+							.filter((id): id is number => id !== undefined);
+
+						if (rankedEntrantIds.length) {
+							await pushBracketSeeding(redPhaseId, redPgId, rankedEntrantIds, mainPgId);
+						}
+					} catch (e) {
+						console.error('[bracket] Redemption seeding push failed:', e);
+					}
+				})();
+			}
 		}
 	}
 
