@@ -420,29 +420,43 @@ async function _doReportBracketMatch(
 		return { ok: true };
 	}
 
-	// Translate Swiss entrant IDs to bracket entrant IDs via findSetByEntrants
-	// which searches by entrant ID within an event. We need to use bracket-event
-	// entrant IDs, so first translate via the player ID mapping.
-	const swissPgId = tournament.startggPhase1Groups?.[0]?.id;
-	let bracketTopEntrantId = topEntrant.startggEntrantId;
-	let bracketBotEntrantId = botEntrant.startggEntrantId;
-	let bracketWinnerEntrantId = winnerEntrant.startggEntrantId;
+	// Translate stored entrant IDs → bracket entrant IDs.
+	// Stored IDs may be Swiss or Main bracket IDs; the bracket event has its own IDs.
+	if (!_bracketEntrantCache) _bracketEntrantCache = new Map();
+	const cacheKey = `${_bracketName}-${bracketEventId}`;
+	let translation = _bracketEntrantCache.get(cacheKey);
 
-	if (swissPgId) {
-		// Use the cached translation or build it
-		if (!_bracketEntrantCache) {
-			_bracketEntrantCache = new Map();
-		}
-		const cacheKey = `${_bracketName}-${bracketEventId}`;
-		let translation = _bracketEntrantCache.get(cacheKey);
-		if (!translation) {
+	if (!translation) {
+		const swissPgId = tournament.startggPhase1Groups?.[0]?.id;
+		if (swissPgId) {
 			translation = await buildBracketEntrantTranslation(swissPgId, bracketEventId);
-			if (translation.size > 0) _bracketEntrantCache.set(cacheKey, translation);
 		}
-		bracketTopEntrantId = translation.get(topEntrant.startggEntrantId) ?? topEntrant.startggEntrantId;
-		bracketBotEntrantId = translation.get(botEntrant.startggEntrantId) ?? botEntrant.startggEntrantId;
-		bracketWinnerEntrantId = translation.get(winnerEntrant.startggEntrantId) ?? winnerEntrant.startggEntrantId;
+		// Fallback: gamerTag matching (handles gauntlet mode where Swiss PG is empty
+		// and stored IDs are Main bracket IDs, not the target bracket's IDs)
+		if (!translation || translation.size === 0) {
+			translation = new Map();
+			const bracketEntrants = await fetchAllEntrants(bracketEventId, undefined).catch(() => []);
+			type BracketEnt = { id?: number; participants?: { player?: { gamerTag?: string } }[] };
+			const tagToBracketEid = new Map<string, number>();
+			for (const e of bracketEntrants as BracketEnt[]) {
+				const tag = e.participants?.[0]?.player?.gamerTag;
+				if (tag && e.id) tagToBracketEid.set(tag.toLowerCase(), Number(e.id));
+			}
+			for (const [, ent] of entrantMap) {
+				if (!ent.startggEntrantId) continue;
+				const bracketEid = tagToBracketEid.get(ent.gamerTag.toLowerCase());
+				if (bracketEid && bracketEid !== ent.startggEntrantId) {
+					translation.set(ent.startggEntrantId, bracketEid);
+				}
+			}
+			console.log(`[StartGG] Bracket entrant translation (gamerTag fallback): ${translation.size} players mapped`);
+		}
+		if (translation.size > 0) _bracketEntrantCache.set(cacheKey, translation);
 	}
+
+	let bracketTopEntrantId = translation.get(topEntrant.startggEntrantId) ?? topEntrant.startggEntrantId;
+	let bracketBotEntrantId = translation.get(botEntrant.startggEntrantId) ?? botEntrant.startggEntrantId;
+	let bracketWinnerEntrantId = translation.get(winnerEntrant.startggEntrantId) ?? winnerEntrant.startggEntrantId;
 
 	const loserEntrant = winnerEntrant === topEntrant ? botEntrant : topEntrant;
 	const bracketLoserEntrantId = winnerEntrant === topEntrant ? bracketBotEntrantId : bracketTopEntrantId;
