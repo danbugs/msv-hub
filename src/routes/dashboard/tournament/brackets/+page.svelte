@@ -4,8 +4,10 @@
 	import BracketView from '$lib/components/BracketView.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import { computeWaves, getWaveSummary } from '$lib/waves';
 
 	let tournament = $state<TournamentState | null>(null);
+	let showWaves = $state(false);
 	let activeBracket = $state<'main' | 'redemption'>('main');
 	let error = $state('');
 
@@ -181,6 +183,16 @@
 		if (!id) return undefined;
 		return tournament?.entrants.find((e) => e.id === id);
 	}
+
+	const waveMap = $derived.by(() => {
+		if (!showWaves || tournament?.mode !== 'gauntlet' || !tournament?.brackets?.main) return undefined;
+		return computeWaves(tournament.brackets.main, tournament.brackets.redemption);
+	});
+
+	const waveSummary = $derived.by(() => {
+		if (!waveMap) return [];
+		return getWaveSummary(waveMap);
+	});
 
 	function getBracket(): BracketState | undefined {
 		return tournament?.brackets?.[activeBracket];
@@ -493,6 +505,26 @@
 			{/if}
 		</div>
 	{:else}
+		{#if tournament?.mode === 'gauntlet'}
+			<div class="mt-3 flex flex-wrap items-center gap-3">
+				<label class="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+					<input type="checkbox" bind:checked={showWaves}
+						class="rounded border-input bg-background text-primary focus:ring-ring" />
+					Show Waves
+				</label>
+				{#if showWaves && waveSummary.length > 0}
+					<div class="flex flex-wrap gap-1">
+						{#each waveSummary as w}
+							<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
+								style="background: {w.badgeColor}">
+								W{w.wave} <span class="opacity-70">({w.count})</span>
+							</span>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Both brackets side by side -->
 		<div class="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
 			{#each ['main', 'redemption'] as bracketName (bracketName)}
@@ -537,7 +569,8 @@
 								entrants={tournament!.entrants}
 								onReport={(m) => { activeBracket = bracketName as 'main' | 'redemption'; openReport(m); }}
 								onCall={(m) => { activeBracket = bracketName as 'main' | 'redemption'; callMatch(m); }}
-								onStream={(m) => { activeBracket = bracketName as 'main' | 'redemption'; setStreamMatch(m); }} />
+								onStream={(m) => { activeBracket = bracketName as 'main' | 'redemption'; setStreamMatch(m); }}
+								{waveMap} />
 						</div>
 					</section>
 				{/if}

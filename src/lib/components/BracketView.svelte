@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { BracketMatch, BracketState, Entrant } from '$lib/types/tournament';
+	import type { WaveMap } from '$lib/waves';
 
 	interface MatchPos { match: BracketMatch; x: number; y: number; }
 	interface Connector { x1: number; y1: number; mx: number; x2: number; y2: number; }
@@ -15,9 +16,10 @@
 		onCall?: (match: BracketMatch) => void;
 		/** If provided, a stream button appears on ready match cards. */
 		onStream?: (match: BracketMatch) => void;
+		waveMap?: WaveMap;
 	}
 
-	let { bracket, entrants, onReport, onCall, onStream }: Props = $props();
+	let { bracket, entrants, onReport, onCall, onStream, waveMap }: Props = $props();
 
 	let showProjected = $state(false);
 	let now = $state(Date.now());
@@ -351,9 +353,15 @@
 			{@const ready = !match.winnerId && !!match.topPlayerId && !!match.bottomPlayerId}
 			{@const called = ready && !!match.calledAt}
 			{@const accent = called ? 'var(--accent-called)' : match.isStream && ready ? 'var(--accent-stream)' : ready ? 'var(--accent-ready)' : match.winnerId ? 'var(--accent-completed)' : 'var(--accent-waiting)'}
+			{@const waveInfo = waveMap?.get(match.id)}
 
 			<div class="absolute rounded-lg border border-border overflow-hidden bg-card match-card {called ? 'msv-pulse accent-glow-called' : ''} {ready ? 'match-card-interactive' : ''}"
-				style="left: {x}px; top: {y}px; width: {CARD_W}px; border-left: 3px solid {accent}">
+				style="left: {x}px; top: {y}px; width: {CARD_W}px; border-left: 3px solid {accent}; {waveInfo && !match.winnerId ? `background: ${waveInfo.color}` : ''}"
+			>
+				{#if waveInfo && !match.winnerId}
+					<span class="absolute -top-1.5 -right-1.5 z-10 rounded-full w-5 h-5 flex items-center justify-center text-[9px] font-bold text-white shadow-sm"
+						style="background: {waveInfo.badgeColor}">{waveInfo.wave}</span>
+				{/if}
 
 				<!-- Top player -->
 				<div class="flex items-center gap-1.5 px-2 py-1.5 border-b border-border/50
