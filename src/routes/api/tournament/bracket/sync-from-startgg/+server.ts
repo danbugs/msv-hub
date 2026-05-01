@@ -2,7 +2,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { fetchAllSets, fetchAllEntrants, gql, PHASE_GROUP_SEEDS_QUERY } from '$lib/server/startgg';
 import { generateBracket, reportBracketMatch, assignBracketStations } from '$lib/server/swiss';
-import type { BracketMatch } from '$lib/types/tournament';
+import type { BracketMatch, FinalStanding } from '$lib/types/tournament';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type GqlRecord = Record<string, any>;
@@ -17,7 +17,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
-	if (!tournament.finalStandings) return Response.json({ error: 'No final standings' }, { status: 400 });
+
+	const isGauntlet = tournament.mode === 'gauntlet';
+	if (!isGauntlet && !tournament.finalStandings) return Response.json({ error: 'No final standings' }, { status: 400 });
 
 	const body = await request.json().catch(() => ({}));
 	const bracketName = (body as { bracketName?: string }).bracketName as 'main' | 'redemption' | undefined;
@@ -28,44 +30,79 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		: tournament.startggRedemptionBracketEventId;
 	if (!eventId) return Response.json({ error: `No ${bracketName} bracket event linked` }, { status: 400 });
 
-	const swissPgId = tournament.startggPhase1Groups?.[0]?.id;
-	if (!swissPgId) return Response.json({ error: 'No Swiss phase group' }, { status: 400 });
-
-	// Step 1: Build player ID translation (bracket entrant ID → MSV Hub entrant ID)
-	// Swiss seeds: Swiss entrant ID → player ID
-	const swissSeedsData = await gql<{ phaseGroup: { seeds: { nodes: GqlRecord[] } } }>(
-		PHASE_GROUP_SEEDS_QUERY, { phaseGroupId: swissPgId, page: 1, perPage: 64 }, { delay: 0 }
-	).catch(() => null);
-	const swissSeeds = swissSeedsData?.phaseGroup?.seeds?.nodes ?? [];
-	const swissEntrantToPlayer = new Map<number, number>();
-	for (const s of swissSeeds) {
-		const eid = s.entrant?.id;
-		const pid = s.entrant?.participants?.[0]?.player?.id;
-		if (eid && pid) swissEntrantToPlayer.set(Number(eid), Number(pid));
-	}
-
-	// MSV Hub entrant: Swiss entrant ID → MSV Hub ID
-	const swissToMsvHub = new Map<number, string>();
-	for (const e of tournament.entrants) {
-		if (e.startggEntrantId) swissToMsvHub.set(e.startggEntrantId, e.id);
-	}
-
-	// Player ID → MSV Hub ID (via Swiss entrant)
-	const playerToMsvHub = new Map<number, string>();
-	for (const [swissEid, playerId] of swissEntrantToPlayer) {
-		const msvId = swissToMsvHub.get(swissEid);
-		if (msvId) playerToMsvHub.set(playerId, msvId);
-	}
-
-	// Bracket entrants: bracket entrant ID → player ID
-	const bracketEntrants = await fetchAllEntrants(eventId, undefined).catch(() => []);
+	// Build bracket entrant ID → MSV Hub entrant ID translation.
+	// For gauntlet, stored IDs may already be bracket IDs, so match by gamerTag.
+	// For default, map via Swiss PG → player ID → bracket entrant ID.
 	const bracketEntrantToMsvHub = new Map<number, string>();
-	for (const e of bracketEntrants as GqlRecord[]) {
-		const eid = e.id;
-		const pid = e.participants?.[0]?.player?.id;
-		if (eid && pid) {
-			const msvId = playerToMsvHub.get(Number(pid));
-			if (msvId) bracketEntrantToMsvHub.set(Number(eid), msvId);
+	const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+
+	if (isGauntlet) {
+		// Gauntlet: match bracket entrants to MSV Hub entrants by gamerTag
+		const bracketEntrants = await fetchAllEntrants(eventId, undefined).catch(() => []);
+		const tagToMsvId = new Map<string, string>();
+		for (const e of tournament.entrants) {
+			tagToMsvId.set(e.gamerTag.toLowerCase(), e.id);
+		}
+		for (const e of bracketEntrants as GqlRecord[]) {
+			const eid = e.id;
+			const tag = e.participants?.[0]?.player?.gamerTag;
+			if (eid && tag) {
+				const msvId = tagToMsvId.get(String(tag).toLowerCase());
+				if (msvId) bracketEntrantToMsvHub.set(Number(eid), msvId);
+			}
+		}
+	} else {
+		const swissPgId = tournament.startggPhase1Groups?.[0]?.id;
+		if (!swissPgId) return Response.json({ error: 'No Swiss phase group' }, { status: 400 });
+
+		// Swiss seeds: Swiss entrant ID → player ID
+		const swissSeedsData = await gql<{ phaseGroup: { seeds: { nodes: GqlRecord[] } } }>(
+			PHASE_GROUP_SEEDS_QUERY, { phaseGroupId: swissPgId, page: 1, perPage: 64 }, { delay: 0 }
+		).catch(() => null);
+		const swissSeeds = swissSeedsData?.phaseGroup?.seeds?.nodes ?? [];
+		const swissEntrantToPlayer = new Map<number, number>();
+		for (const s of swissSeeds) {
+			const eid = s.entrant?.id;
+			const pid = s.entrant?.participants?.[0]?.player?.id;
+			if (eid && pid) swissEntrantToPlayer.set(Number(eid), Number(pid));
+		}
+
+		// MSV Hub entrant: Swiss entrant ID → MSV Hub ID
+		const swissToMsvHub = new Map<number, string>();
+		for (const e of tournament.entrants) {
+			if (e.startggEntrantId) swissToMsvHub.set(e.startggEntrantId, e.id);
+		}
+
+		// Player ID → MSV Hub ID (via Swiss entrant)
+		const playerToMsvHub = new Map<number, string>();
+		for (const [swissEid, playerId] of swissEntrantToPlayer) {
+			const msvId = swissToMsvHub.get(swissEid);
+			if (msvId) playerToMsvHub.set(playerId, msvId);
+		}
+
+		// Bracket entrants: bracket entrant ID → player ID → MSV Hub ID
+		const bracketEntrants = await fetchAllEntrants(eventId, undefined).catch(() => []);
+		for (const e of bracketEntrants as GqlRecord[]) {
+			const eid = e.id;
+			const pid = e.participants?.[0]?.player?.id;
+			if (eid && pid) {
+				const msvId = playerToMsvHub.get(Number(pid));
+				if (msvId) bracketEntrantToMsvHub.set(Number(eid), msvId);
+			}
+		}
+
+		// Fallback: if Swiss PG was empty (stale IDs), try gamerTag matching
+		if (bracketEntrantToMsvHub.size === 0) {
+			const tagToMsvId = new Map<string, string>();
+			for (const e of tournament.entrants) tagToMsvId.set(e.gamerTag.toLowerCase(), e.id);
+			for (const e of bracketEntrants as GqlRecord[]) {
+				const eid = e.id;
+				const tag = e.participants?.[0]?.player?.gamerTag;
+				if (eid && tag) {
+					const msvId = tagToMsvId.get(String(tag).toLowerCase());
+					if (msvId) bracketEntrantToMsvHub.set(Number(eid), msvId);
+				}
+			}
 		}
 	}
 
@@ -73,10 +110,28 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const sets = await fetchAllSets(eventId, undefined, 0);
 
 	// Step 3: Regenerate a fresh bracket
-	const standings = tournament.finalStandings;
-	const players = bracketName === 'main'
-		? standings.filter((s) => s.bracket === 'main').map((s) => ({ entrantId: s.entrantId, seed: s.rank }))
-		: standings.filter((s) => s.bracket === 'redemption').map((s, i) => ({ entrantId: s.entrantId, seed: i + 1 }));
+	let players: { entrantId: string; seed: number }[];
+	let standings: FinalStanding[];
+
+	if (isGauntlet) {
+		const existingBracket = tournament.brackets?.[bracketName];
+		if (!existingBracket) return Response.json({ error: `No ${bracketName} bracket in tournament` }, { status: 400 });
+		players = existingBracket.players.map((p) => ({ entrantId: p.entrantId, seed: p.seed }));
+		standings = players.map((p) => {
+			const ent = entrantMap.get(p.entrantId);
+			return {
+				rank: p.seed, entrantId: p.entrantId, gamerTag: ent?.gamerTag ?? '',
+				wins: 0, losses: 0, initialSeed: ent?.initialSeed ?? p.seed, totalScore: 0,
+				basePoints: 0, winPoints: 0, lossPoints: 0, cinderellaBonus: 0,
+				expectedWins: 0, winsAboveExpected: 0, bracket: bracketName as 'main' | 'redemption'
+			};
+		});
+	} else {
+		standings = tournament.finalStandings!;
+		players = bracketName === 'main'
+			? standings.filter((s) => s.bracket === 'main').map((s) => ({ entrantId: s.entrantId, seed: s.rank }))
+			: standings.filter((s) => s.bracket === 'redemption').map((s, i) => ({ entrantId: s.entrantId, seed: i + 1 }));
+	}
 
 	if (!tournament.brackets) {
 		return Response.json({ error: 'No brackets' }, { status: 400 });
@@ -89,9 +144,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	debug.push(`Reported sets on StartGG: ${(sets as GqlRecord[]).filter((s) => s.winnerId).length}, bracket matches: ${bracket.matches.length}`);
 
 	// Classify each StartGG set by its bracket side + round.
-	// NOTE: StartGG's `round` field for losers bracket starts at -3 (not -1) in a
-	// 16-player DE, because it numbers rounds continuously. We normalize by SORTING
-	// losers rounds and assigning them sequential MSV round numbers (L1, L2, ...).
 	type Bucket = 'W' | 'L' | 'GF' | 'GFR';
 	function bucketOf(s: GqlRecord): Bucket | null {
 		const text = String(s.fullRoundText ?? '');
@@ -103,7 +155,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return null;
 	}
 
-	// First pass: collect unique StartGG round values per side, sort, build mapping.
 	const wRounds = new Set<number>();
 	const lRounds = new Set<number>();
 	for (const s of sets as GqlRecord[]) {
@@ -112,12 +163,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		if (b === 'W') wRounds.add(r);
 		else if (b === 'L') lRounds.add(Math.abs(r));
 	}
-	const wRoundMap = new Map<number, number>(); // StartGG W round → MSV W round (1-indexed)
+	const wRoundMap = new Map<number, number>();
 	[...wRounds].sort((a, b) => a - b).forEach((r, i) => wRoundMap.set(r, i + 1));
-	const lRoundMap = new Map<number, number>(); // StartGG abs(L round) → MSV L round (1-indexed)
+	const lRoundMap = new Map<number, number>();
 	[...lRounds].sort((a, b) => a - b).forEach((r, i) => lRoundMap.set(r, i + 1));
 
-	// Group sets by bucket+round using normalized MSV round numbers.
 	const setsByKey = new Map<string, GqlRecord[]>();
 	for (const s of sets as GqlRecord[]) {
 		const b = bucketOf(s);
@@ -137,8 +187,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		setsByKey.get(key)!.push(s);
 	}
 
-	// If StartGG has a GFR set but MSV doesn't have a GFR match yet (generateBracket
-	// only creates it when GF top-slot wins), add one so sync can populate it.
 	if (setsByKey.has('GFR') && !bracket.matches.some((m) => m.id.includes('-GFR-'))) {
 		const gfMatch = bracket.matches.find((m) => m.id.includes('-GF-') && !m.id.includes('-GFR-'));
 		if (gfMatch) {
@@ -150,7 +198,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	// Helper: MSV match ID prefix for a bucket/round
 	function msvMatchesFor(key: string): BracketMatch[] {
 		if (key === 'GF') return bracket.matches.filter((m) => m.id.includes('-GF-') && !m.id.includes('-GFR-'));
 		if (key === 'GFR') return bracket.matches.filter((m) => m.id.includes('-GFR-'));
@@ -175,11 +222,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let synced = 0;
 	let unmatched = 0;
 
-	// For each group, sort StartGG sets by identifier, sort MSV matches by matchIndex,
-	// and align 1:1. Directly set player/winner/score data on each MSV match.
 	for (const [key, setsInGroup] of setsByKey) {
 		const msvMatches = msvMatchesFor(key).sort((a, b) => a.matchIndex - b.matchIndex);
-		// Sort StartGG sets by identifier (A, B, ... AA, AB, ...) — lexicographic works for these
 		const sortedSets = [...setsInGroup].sort((a, b) => {
 			const ai = String(a.identifier ?? '');
 			const bi = String(b.identifier ?? '');
@@ -212,7 +256,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				debug.push(`  ${key}[${i}] ${s.identifier}: winner ${msvWinner} not in slots (${msvE1}, ${msvE2})`);
 			}
 
-			// Assign players (StartGG is source of truth). Missing slots → leave undefined.
 			m.topPlayerId = msvE1;
 			m.bottomPlayerId = msvE2;
 			m.startggSetId = String(s.id);
@@ -239,12 +282,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const totalReported = (sets as GqlRecord[]).filter((s) => s.winnerId).length;
 	const notFound = totalReported - synced;
 
-	// Reassign stations after sync so active (unreported) matches get stations
 	const otherBracket = tournament.brackets[bracketName === 'main' ? 'redemption' : 'main'];
 	const otherHasStream = otherBracket?.matches.some((m) => m.isStream && !m.winnerId) ?? false;
 	tournament.brackets[bracketName] = assignBracketStations(bracket, tournament.settings, bracketName, otherHasStream);
 
-	// Clear errors for this bracket
 	if (tournament.startggSync) {
 		tournament.startggSync.errors = tournament.startggSync.errors.filter(
 			(e) => !bracket.matches.some((m: BracketMatch) => m.id === e.matchId)

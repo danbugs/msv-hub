@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
-import { gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, pushBracketSeeding, pushFinalStandingsSeeding, fetchPhaseGroups, fetchPhaseSeeds, extractPlayerId } from '$lib/server/startgg';
+import { gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, pushBracketSeeding, pushFinalStandingsSeeding, fetchPhaseGroups, fetchPhaseSeeds, extractPlayerId, fetchAllEntrants } from '$lib/server/startgg';
 import { restartPhase, addEntrantsToPhase, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 import { generateBracket, assignBracketStations } from '$lib/server/swiss';
 import type { FinalStanding } from '$lib/types/tournament';
@@ -59,6 +59,31 @@ async function updateEntrantIds(
 		}
 	}
 	if (updated) log(`  Updated ${updated} entrant IDs`);
+}
+
+// Helper: refresh stored entrant IDs from a StartGG event by matching gamerTag.
+// After restart+re-add, players get NEW entrant IDs. This syncs them.
+async function refreshEntrantIds(
+	tournament: { entrants: { gamerTag: string; startggEntrantId?: number }[] },
+	eventId: number,
+	log: (msg: string) => void
+): Promise<void> {
+	const entrants = await fetchAllEntrants(eventId).catch(() => []);
+	type EntrantNode = { id?: number; participants?: { player?: { gamerTag?: string } }[] };
+	const tagToId = new Map<string, number>();
+	for (const e of entrants as EntrantNode[]) {
+		const tag = e.participants?.[0]?.player?.gamerTag;
+		if (tag && e.id) tagToId.set(tag.toLowerCase(), Number(e.id));
+	}
+	let refreshed = 0;
+	for (const entrant of tournament.entrants) {
+		const newId = tagToId.get(entrant.gamerTag.toLowerCase());
+		if (newId && newId !== entrant.startggEntrantId) {
+			entrant.startggEntrantId = newId;
+			refreshed++;
+		}
+	}
+	if (refreshed) log(`  Refreshed ${refreshed} stale entrant IDs`);
 }
 
 /**
@@ -181,6 +206,11 @@ export const POST: RequestHandler = async ({ locals }) => {
 			}
 		}
 		log(`  ${isGauntlet ? 'Moved' : 'Added'} ${cleaned} to Swiss${failed > 0 ? `, ${failed} failed` : ''}`);
+
+		// Refresh stored entrant IDs — after restart+re-add, players have NEW IDs
+		await new Promise<void>((r) => setTimeout(r, 2000));
+		log('  Refreshing entrant IDs from Swiss event...');
+		await refreshEntrantIds(tournament, swissEventId, log);
 	}
 
 	// Step 4: Reset MSV Hub tournament state

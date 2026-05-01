@@ -16,9 +16,35 @@ import { getActiveTournament, saveTournament } from '$lib/server/store';
 import {
 	gql, TOURNAMENT_QUERY, EVENT_BY_SLUG_QUERY, EVENT_PHASES_QUERY,
 	pushBracketSeeding, pushFinalStandingsSeeding, fetchPhaseGroups,
-	fetchPhaseSeeds, extractPlayerId
+	fetchPhaseSeeds, extractPlayerId, fetchAllEntrants
 } from '$lib/server/startgg';
 import { getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
+
+// Helper: refresh stored entrant IDs from a StartGG event by matching gamerTag.
+// Stored IDs can be stale if from-event read seeds from a different event (fallback path)
+// or if a reset re-added players with new IDs.
+async function refreshEntrantIds(
+	tournament: { entrants: { gamerTag: string; startggEntrantId?: number }[] },
+	eventId: number,
+	log: (msg: string) => void
+): Promise<void> {
+	const entrants = await fetchAllEntrants(eventId).catch(() => []);
+	type EntrantNode = { id?: number; participants?: { player?: { gamerTag?: string } }[] };
+	const tagToId = new Map<string, number>();
+	for (const e of entrants as EntrantNode[]) {
+		const tag = e.participants?.[0]?.player?.gamerTag;
+		if (tag && e.id) tagToId.set(tag.toLowerCase(), Number(e.id));
+	}
+	let refreshed = 0;
+	for (const entrant of tournament.entrants) {
+		const newId = tagToId.get(entrant.gamerTag.toLowerCase());
+		if (newId && newId !== entrant.startggEntrantId) {
+			entrant.startggEntrantId = newId;
+			refreshed++;
+		}
+	}
+	if (refreshed) log(`  Refreshed ${refreshed} stale entrant IDs`);
+}
 
 // Helper: resolve a phase group ID and phaseId for an event
 async function resolveEventPhase(eventId: number): Promise<{ phaseId: number; pgId: number } | null> {
@@ -143,6 +169,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const participants = await getTournamentParticipants(tournamentSlug);
 	log(`Found ${participants.length} participants`);
+
+	// Refresh stored entrant IDs to current Swiss event IDs.
+	// from-event may have read seeds from a fallback event (Main), leaving
+	// stale IDs that can't be mapped during cross-event seeding push.
+	log('Refreshing entrant IDs from Swiss event...');
+	await refreshEntrantIds(tournament, swissEventId, log);
 
 	let moved = 0;
 	let cleaned = 0;
