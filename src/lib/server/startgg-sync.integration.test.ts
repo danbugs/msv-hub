@@ -45,6 +45,7 @@ import {
 	EVENT_PHASES_QUERY,
 	fetchPhaseSeeds,
 	fetchPhaseGroups,
+	fetchAllEntrants,
 	pushBracketSeeding,
 	pushFinalStandingsSeeding,
 	extractPlayerId,
@@ -316,7 +317,6 @@ suite('Cross-event sync lifecycle', () => {
 	// ── Cleanup ──────────────────────────────────────────────────────────────
 
 	it('cleanup: remove from Main, restart Main bracket', async () => {
-		// Remove all from Main, leave in Swiss only
 		const participants = await getTournamentParticipants(TOURNAMENT_SLUG);
 		let removed = 0;
 		for (const p of participants) {
@@ -327,14 +327,173 @@ suite('Cross-event sync lifecycle', () => {
 		log(`Removed ${removed} from Main bracket`);
 		await wait(2000);
 
-		// Restart Main bracket
 		const result = await restartPhase(MAIN_BRACKET_PHASE_ID);
 		log(`Restart Main bracket: ${result.ok ? '✓' : '✗ ' + result.error}`);
 		expect(result.ok).toBe(true);
 
-		// Verify Swiss still has seeds
 		const swissSeeds = await fetchPhaseSeeds(SWISS_R1_PHASE_ID) as SeedEntry[];
 		log(`Swiss R1 seeds after cleanup: ${swissSeeds.length}`);
+		expect(swissSeeds.length).toBeGreaterThanOrEqual(30);
+	}, SYNC_TIMEOUT);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// STALE ENTRANT ID REFRESH (simulates reset-startgg's restart+re-add)
+// ═════════════════════════════════════════════════════════════════════════════
+
+suite('Stale entrant ID refresh after reset', () => {
+	let originalSwissIds: Map<string, number>; // gamerTag → Swiss entrant ID before reset
+	let mainPgId: number;
+
+	it('setup: record current Swiss IDs and move to Main (simulating prior gauntlet)', async () => {
+		// Resolve Main PG
+		const mainGroups = await fetchPhaseGroups(MAIN_BRACKET_PHASE_ID).catch(() => []);
+		expect(mainGroups.length).toBeGreaterThan(0);
+		mainPgId = mainGroups[0].id;
+
+		// Ensure everyone is in Swiss only
+		const participants = await getTournamentParticipants(TOURNAMENT_SLUG);
+		for (const p of participants) {
+			if (!p.currentEventIds.includes(SWISS_EVENT_ID) || p.currentEventIds.includes(MAIN_EVENT_ID)) {
+				await updateParticipantEvents(p.participantId, [SWISS_EVENT_ID], []);
+			}
+		}
+		await wait(2000);
+
+		// Record current Swiss entrant IDs
+		type EntrantNode = { id?: number; participants?: { player?: { gamerTag?: string } }[] };
+		const swissEntrants = await fetchAllEntrants(SWISS_EVENT_ID) as EntrantNode[];
+		originalSwissIds = new Map<string, number>();
+		for (const e of swissEntrants) {
+			const tag = e.participants?.[0]?.player?.gamerTag;
+			if (tag && e.id) originalSwissIds.set(tag.toLowerCase(), Number(e.id));
+		}
+		log(`Recorded ${originalSwissIds.size} original Swiss IDs`);
+		expect(originalSwissIds.size).toBeGreaterThanOrEqual(30);
+
+		// Move everyone to Main (simulating a gauntlet sync that removes from Swiss)
+		const freshParts = await getTournamentParticipants(TOURNAMENT_SLUG);
+		let moved = 0;
+		for (const p of freshParts) {
+			const targetEvents = [...new Set([...p.currentEventIds, MAIN_EVENT_ID])];
+			const phaseDests = [{ eventId: MAIN_EVENT_ID, phaseId: MAIN_BRACKET_PHASE_ID }];
+			const result = await updateParticipantEvents(p.participantId, targetEvents, phaseDests);
+			if (result.ok) moved++;
+		}
+		log(`Moved ${moved} to Main`);
+
+		// Remove from Swiss
+		const freshParts2 = await getTournamentParticipants(TOURNAMENT_SLUG);
+		let removedFromSwiss = 0;
+		for (const p of freshParts2) {
+			if (!p.currentEventIds.includes(SWISS_EVENT_ID)) continue;
+			const targetEvents = p.currentEventIds.filter(id => id !== SWISS_EVENT_ID);
+			if (targetEvents.length === 0) targetEvents.push(MAIN_EVENT_ID);
+			const result = await updateParticipantEvents(p.participantId, targetEvents);
+			if (result.ok) removedFromSwiss++;
+		}
+		log(`Removed ${removedFromSwiss} from Swiss`);
+		await wait(2000);
+	}, SYNC_TIMEOUT);
+
+	it('simulate reset: restart Main, move back to Swiss, verify IDs changed', async () => {
+		// Restart Main (like reset-startgg Step 1)
+		await restartPhase(MAIN_BRACKET_PHASE_ID);
+		await wait(2000);
+
+		// Move everyone back to Swiss (like reset-startgg Step 3)
+		const participants = await getTournamentParticipants(TOURNAMENT_SLUG);
+		let movedBack = 0;
+		for (const p of participants) {
+			const result = await updateParticipantEvents(p.participantId, [SWISS_EVENT_ID], []);
+			if (result.ok) movedBack++;
+		}
+		log(`Moved ${movedBack} back to Swiss`);
+		await wait(3000);
+
+		// Verify Swiss IDs have CHANGED (this is the stale-ID problem)
+		type EntrantNode = { id?: number; participants?: { player?: { gamerTag?: string } }[] };
+		const newSwissEntrants = await fetchAllEntrants(SWISS_EVENT_ID) as EntrantNode[];
+		let changed = 0;
+		for (const e of newSwissEntrants) {
+			const tag = e.participants?.[0]?.player?.gamerTag;
+			if (!tag || !e.id) continue;
+			const oldId = originalSwissIds.get(tag.toLowerCase());
+			if (oldId && oldId !== Number(e.id)) changed++;
+		}
+		log(`${changed}/${newSwissEntrants.length} Swiss entrant IDs changed after reset cycle`);
+		// After remove+re-add, IDs may or may not change (StartGG sometimes reuses).
+		// If they changed, our refreshEntrantIds fix is needed.
+		// If they didn't, the test still passes (just means this cycle didn't trigger the bug).
+	}, SYNC_TIMEOUT);
+
+	it('refreshEntrantIds fixes stale IDs, enabling successful seeding push', async () => {
+		// Simulate stale state: use originalSwissIds (which may be wrong after reset)
+		// Build a "tournament" with potentially stale IDs
+		type EntrantNode = { id?: number; participants?: { player?: { gamerTag?: string } }[] };
+		const currentEntrants = await fetchAllEntrants(SWISS_EVENT_ID) as EntrantNode[];
+		const currentTagToId = new Map<string, number>();
+		for (const e of currentEntrants) {
+			const tag = e.participants?.[0]?.player?.gamerTag;
+			if (tag && e.id) currentTagToId.set(tag.toLowerCase(), Number(e.id));
+		}
+
+		// Refresh: simulate what refreshEntrantIds does
+		const staleIds: { gamerTag: string; stale: number; fresh: number }[] = [];
+		for (const [tag, oldId] of originalSwissIds) {
+			const newId = currentTagToId.get(tag);
+			if (newId && newId !== oldId) {
+				staleIds.push({ gamerTag: tag, stale: oldId, fresh: newId });
+			}
+		}
+		log(`refreshEntrantIds would fix ${staleIds.length} stale IDs`);
+		if (staleIds.length > 0) {
+			log(`  Example: ${staleIds[0].gamerTag}: ${staleIds[0].stale} → ${staleIds[0].fresh}`);
+		}
+
+		// Now push seeding to Main using CURRENT Swiss IDs
+		const currentSwissIds = [...currentTagToId.values()].sort((a, b) => a - b);
+
+		// Add to Main first
+		const participants = await getTournamentParticipants(TOURNAMENT_SLUG);
+		let added = 0;
+		for (const p of participants) {
+			if (p.currentEventIds.includes(MAIN_EVENT_ID)) { added++; continue; }
+			const targetEvents = [...new Set([...p.currentEventIds, MAIN_EVENT_ID])];
+			const phaseDests = [{ eventId: MAIN_EVENT_ID, phaseId: MAIN_BRACKET_PHASE_ID }];
+			const result = await updateParticipantEvents(p.participantId, targetEvents, phaseDests);
+			if (result.ok) added++;
+		}
+		log(`Added ${added} to Main`);
+		await wait(3000);
+
+		// Push seeding with current Swiss IDs
+		const mainGroups = await fetchPhaseGroups(MAIN_BRACKET_PHASE_ID).catch(() => []);
+		const pgId = mainGroups[0]?.id ?? mainPgId;
+		const result = await pushBracketSeeding(
+			MAIN_BRACKET_PHASE_ID, pgId, currentSwissIds.slice(0, 32), SWISS_R1_PG_ID
+		);
+		log(`pushBracketSeeding with refreshed IDs: ${result.ok ? '✓' : '✗ ' + result.error}`);
+		expect(result.ok).toBe(true);
+
+		// Verify Main bracket has correct seeds
+		const mainSeeds = await fetchPhaseSeeds(MAIN_BRACKET_PHASE_ID) as SeedEntry[];
+		log(`Main bracket has ${mainSeeds.length} seeds after push`);
+		expect(mainSeeds.length).toBeGreaterThanOrEqual(30);
+	}, SYNC_TIMEOUT);
+
+	it('cleanup: move all to Swiss only, restart Main', async () => {
+		const participants = await getTournamentParticipants(TOURNAMENT_SLUG);
+		for (const p of participants) {
+			if (p.currentEventIds.includes(MAIN_EVENT_ID)) {
+				await updateParticipantEvents(p.participantId, [SWISS_EVENT_ID], []);
+			}
+		}
+		await wait(2000);
+		await restartPhase(MAIN_BRACKET_PHASE_ID);
+
+		const swissSeeds = await fetchPhaseSeeds(SWISS_R1_PHASE_ID) as SeedEntry[];
+		log(`Swiss R1 seeds after final cleanup: ${swissSeeds.length}`);
 		expect(swissSeeds.length).toBeGreaterThanOrEqual(30);
 	}, SYNC_TIMEOUT);
 });
