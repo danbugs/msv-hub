@@ -239,15 +239,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				if (!om) continue;
 				// Keep whichever has a winner (prefer fresh = concurrently reported)
 				if (fm.winnerId) continue;
-				if (om.winnerId) freshBracket.matches[i] = om;
+				if (om.winnerId) { freshBracket.matches[i] = om; continue; }
+				// Merge player slots individually to avoid overwriting concurrent advancement
+				if (om.topPlayerId && !fm.topPlayerId) fm.topPlayerId = om.topPlayerId;
+				if (om.bottomPlayerId && !fm.bottomPlayerId) fm.bottomPlayerId = om.bottomPlayerId;
 			}
 		}
-		// Carry over sync state and metadata from our run
+		// Carry over sync state and metadata from our run.
+		// Merge pending IDs: keep ours (post-flush, authoritative for flushed items)
+		// plus any new IDs from fresh (added by concurrent PATCH requests).
 		if (!fresh.startggSync) {
 			fresh.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };
 		} else {
 			fresh.startggSync.splitConfirmed = true;
-			fresh.startggSync.pendingBracketMatchIds = tournament.startggSync?.pendingBracketMatchIds ?? [];
+			const ourPending = new Set(tournament.startggSync?.pendingBracketMatchIds ?? []);
+			for (const id of fresh.startggSync.pendingBracketMatchIds) ourPending.add(id);
+			fresh.startggSync.pendingBracketMatchIds = [...ourPending];
 			fresh.startggSync.errors = tournament.startggSync?.errors ?? [];
 		}
 		fresh.startggMainBracketEventId = tournament.startggMainBracketEventId;

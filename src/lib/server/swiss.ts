@@ -1075,19 +1075,28 @@ export function generateBracket(
 	return settings ? assignBracketStations(state, settings, name as 'main' | 'redemption') : state;
 }
 
+function placeInNextMatch(next: BracketMatch, playerId: string, preferredSlot: 'top' | 'bottom') {
+	// If both empty, use preferred slot. If one occupied, use the free one.
+	if (!next.topPlayerId && !next.bottomPlayerId) {
+		if (preferredSlot === 'top') next.topPlayerId = playerId;
+		else next.bottomPlayerId = playerId;
+	} else if (!next.topPlayerId) {
+		next.topPlayerId = playerId;
+	} else if (!next.bottomPlayerId) {
+		next.bottomPlayerId = playerId;
+	}
+}
+
 function advancePlayer(allMatches: BracketMatch[], completedMatch: BracketMatch) {
 	if (!completedMatch.winnerId) return;
 
-	// Advance winner
 	if (completedMatch.winnerNextMatchId) {
 		const next = allMatches.find((m) => m.id === completedMatch.winnerNextMatchId);
 		if (next) {
-			if (completedMatch.winnerNextSlot === 'top') next.topPlayerId = completedMatch.winnerId;
-			else next.bottomPlayerId = completedMatch.winnerId;
+			placeInNextMatch(next, completedMatch.winnerId, completedMatch.winnerNextSlot ?? 'bottom');
 		}
 	}
 
-	// Drop loser to losers bracket
 	const loserId =
 		completedMatch.topPlayerId === completedMatch.winnerId
 			? completedMatch.bottomPlayerId
@@ -1096,8 +1105,7 @@ function advancePlayer(allMatches: BracketMatch[], completedMatch: BracketMatch)
 	if (loserId && completedMatch.loserNextMatchId) {
 		const next = allMatches.find((m) => m.id === completedMatch.loserNextMatchId);
 		if (next) {
-			if (completedMatch.loserNextSlot === 'top') next.topPlayerId = loserId;
-			else next.bottomPlayerId = loserId;
+			placeInNextMatch(next, loserId, completedMatch.loserNextSlot ?? 'bottom');
 		}
 		completedMatch.loserId = loserId;
 	}
@@ -1118,11 +1126,11 @@ function autoAdvanceByes(allMatches: BracketMatch[]) {
 			const hasBot = !!m.bottomPlayerId;
 			if (hasTop === hasBot) continue; // both filled (real match) or both empty (waiting)
 			const emptySlot: 'top' | 'bottom' = hasTop ? 'bottom' : 'top';
-			const feeder = allMatches.find((f) =>
-				(f.winnerNextMatchId === m.id && f.winnerNextSlot === emptySlot) ||
-				(f.loserNextMatchId === m.id && f.loserNextSlot === emptySlot)
+			const unresolvedFeeder = allMatches.find((f) =>
+				!f.winnerId &&
+				(f.winnerNextMatchId === m.id || f.loserNextMatchId === m.id)
 			);
-			if (!feeder || feeder.winnerId) {
+			if (!unresolvedFeeder) {
 				m.winnerId = m.topPlayerId ?? m.bottomPlayerId;
 				if (m.winnerId) {
 					advancePlayer(allMatches, m);

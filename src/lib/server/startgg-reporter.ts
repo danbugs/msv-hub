@@ -511,8 +511,10 @@ async function _doReportBracketMatch(
 
 	if (!setId) {
 		const msg = `Bracket set not found on StartGG for ${topEntrant.gamerTag} vs ${botEntrant.gamerTag}`;
-		addError(sync, match.id, msg);
-		return { ok: false, error: msg };
+		if (!sync.pendingBracketMatchIds.includes(pendingKey)) {
+			sync.pendingBracketMatchIds.push(pendingKey);
+		}
+		return { ok: false, queued: true, error: msg };
 	}
 
 	const reportExtra = {
@@ -579,7 +581,10 @@ async function _doReportBracketMatch(
 			} catch { /* best effort */ }
 		}
 	} else {
-		addError(sync, match.id, result.error ?? 'Unknown StartGG error');
+		if (!sync.pendingBracketMatchIds.includes(pendingKey)) {
+			sync.pendingBracketMatchIds.push(pendingKey);
+		}
+		return { ok: false, queued: true, error: result.error ?? 'Unknown StartGG error' };
 	}
 
 	return result;
@@ -589,8 +594,8 @@ async function _doReportBracketMatch(
 
 /**
  * Flush all queued bracket match reports after split is confirmed.
- * Sets splitConfirmed=true, processes the queue, saves tournament once at the end.
- * Returns count of successful and failed reports.
+ * Sets splitConfirmed=true, processes the queue.
+ * Does NOT save — caller must merge and save to avoid overwriting concurrent changes.
  */
 export async function flushPendingBracketMatches(
 	tournament: TournamentState
@@ -599,7 +604,6 @@ export async function flushPendingBracketMatches(
 	sync.splitConfirmed = true;
 
 	if (!tournament.brackets || sync.pendingBracketMatchIds.length === 0) {
-		await saveTournament(tournament);
 		return { reported: 0, failed: 0 };
 	}
 
@@ -620,6 +624,5 @@ export async function flushPendingBracketMatches(
 		else if (!result.ok) failed++;
 	}
 
-	await saveTournament(tournament);
 	return { reported, failed };
 }

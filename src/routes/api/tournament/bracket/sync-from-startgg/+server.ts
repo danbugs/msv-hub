@@ -290,6 +290,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		tournament.startggSync.errors = tournament.startggSync.errors.filter(
 			(e) => !bracket.matches.some((m: BracketMatch) => m.id === e.matchId)
 		);
+		const prefix = `${bracketName}:`;
+		tournament.startggSync.pendingBracketMatchIds = tournament.startggSync.pendingBracketMatchIds.filter(
+			(id) => !id.startsWith(prefix)
+		);
 	}
 
 	await saveTournament(tournament);

@@ -181,10 +181,19 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	if (allComplete) tournament.phase = 'completed';
 
-	// Report to StartGG (queued if split not yet confirmed).
+	// Report to StartGG (queued if split not yet confirmed or report fails).
 	const reportedMatch = tournament.brackets[bracketName].matches.find((m) => m.id === matchId)!;
 	const sgResult = await reportBracketMatchToStartGG(tournament, bracketName, reportedMatch).catch(
-		(e) => ({ ok: false, queued: false, error: e instanceof Error ? e.message : String(e) })
+		(e) => {
+			// Thrown errors get queued for retry instead of being lost
+			const sync = tournament.startggSync ?? { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
+			if (!tournament.startggSync) tournament.startggSync = sync;
+			const pendingKey = `${bracketName}:${matchId}`;
+			if (!sync.pendingBracketMatchIds.includes(pendingKey)) {
+				sync.pendingBracketMatchIds.push(pendingKey);
+			}
+			return { ok: false, queued: true, error: e instanceof Error ? e.message : String(e) };
+		}
 	);
 
 	// Concurrency-safe save: reload the latest tournament from Redis and merge our
@@ -209,8 +218,14 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			}
 			// Preserve fresh's winner if it has one (don't overwrite concurrent reports)
 			if (fm.winnerId) continue;
-			// Take our version (may have player advancement placed)
-			freshBracket.matches[i] = om;
+			// Merge player slots individually so concurrent reports advancing
+			// different players into the same downstream match don't overwrite
+			// each other (e.g. WR2 loser drop-in + LR1 winner into same LR2 match).
+			if (om.topPlayerId && !fm.topPlayerId) fm.topPlayerId = om.topPlayerId;
+			if (om.bottomPlayerId && !fm.bottomPlayerId) fm.bottomPlayerId = om.bottomPlayerId;
+			if (om.station !== undefined && fm.station === undefined) fm.station = om.station;
+			if (om.isStream && !fm.isStream) fm.isStream = om.isStream;
+			if (om.calledAt && !fm.calledAt) fm.calledAt = om.calledAt;
 		}
 
 		// Append matches that exist in OUR bracket but not fresh (e.g. newly-created GFR)
@@ -227,6 +242,12 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		if (redemptionGenerated && tournament.brackets.redemption) {
 			fresh.brackets!.redemption = tournament.brackets.redemption;
 		}
+		// Merge pending bracket match IDs (union of fresh + ours)
+		if (tournament.startggSync) {
+			if (!fresh.startggSync) fresh.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
+			const merged = new Set([...fresh.startggSync.pendingBracketMatchIds, ...(tournament.startggSync.pendingBracketMatchIds ?? [])]);
+			fresh.startggSync.pendingBracketMatchIds = [...merged];
+		}
 		await saveTournament(fresh);
 		tournament.brackets[bracketName] = freshBracket;
 	} else {
@@ -237,6 +258,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		bracket: tournament.brackets[bracketName],
 		redemptionBracket: redemptionGenerated ? tournament.brackets.redemption : undefined,
 		tournamentComplete: allComplete,
+		pendingBracketMatchIds: tournament.startggSync?.pendingBracketMatchIds ?? [],
 		startgg: {
 			ok: sgResult.ok,
 			queued: sgResult.queued ?? false,

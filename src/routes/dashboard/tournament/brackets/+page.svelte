@@ -390,10 +390,8 @@
 
 			// Show StartGG reporting status
 			const sg = (data as { startgg?: { ok?: boolean; queued?: boolean; error?: string } }).startgg;
-			if (sg && !sg.ok && sg.error) {
+			if (sg && !sg.ok && !sg.queued && sg.error) {
 				error = `StartGG: ${sg.error}`;
-			} else if (sg?.queued) {
-				error = 'StartGG: report queued (sync not confirmed yet — click "Sync to StartGG" first)';
 			}
 
 			// Auto-sync redemption to StartGG when generated in gauntlet mode
@@ -435,7 +433,10 @@
 	</div>
 
 	{#if error}
-		<div class="mt-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive break-words">{error}</div>
+		<div class="mt-4 flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive break-words">
+			<span class="flex-1">{error}</span>
+			<button onclick={() => error = ''} class="shrink-0 hover:text-destructive/70 transition-colors" aria-label="Dismiss error">&times;</button>
+		</div>
 	{/if}
 
 	<!-- StartGG split confirmation (default mode only — gauntlet has no Swiss→bracket split) -->
@@ -486,6 +487,13 @@
 	{/if}
 
 	<!-- Bracket events are auto-linked during bracket generation. No manual step needed. -->
+
+	<!-- StartGG pending reports -->
+	{#if tournament?.startggSync?.pendingBracketMatchIds?.length}
+		<div class="mt-3 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-xs text-amber-700 dark:text-amber-400">
+			<span class="font-semibold">StartGG:</span> {tournament.startggSync.pendingBracketMatchIds.length} match report{tournament.startggSync.pendingBracketMatchIds.length === 1 ? '' : 's'} pending — will be sent when bracket sync completes.
+		</div>
+	{/if}
 
 	<!-- StartGG errors -->
 	{#if tournament?.startggSync?.errors?.length}

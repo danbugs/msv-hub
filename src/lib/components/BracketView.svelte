@@ -43,6 +43,14 @@
 		return entrants.find((e) => e.id === id);
 	}
 
+	function isReady(match: BracketMatch): boolean {
+		if (match.winnerId || !match.topPlayerId || !match.bottomPlayerId) return false;
+		for (const m of bracket.matches) {
+			if ((m.winnerNextMatchId === match.id || m.loserNextMatchId === match.id) && !m.winnerId) return false;
+		}
+		return true;
+	}
+
 	/** Compute projected players for unplayed matches (higher seed always wins) */
 	const projectedPlayers = $derived.by(() => {
 		if (!showProjected) return new Map<string, { top?: string; bottom?: string }>();
@@ -350,7 +358,7 @@
 			{@const bot = getEntrant(botId)}
 			{@const topIsProjected = !match.topPlayerId && !!proj?.top}
 			{@const botIsProjected = !match.bottomPlayerId && !!proj?.bottom}
-			{@const ready = !match.winnerId && !!match.topPlayerId && !!match.bottomPlayerId}
+			{@const ready = isReady(match)}
 			{@const called = ready && !!match.calledAt}
 			{@const accent = called ? 'var(--accent-called)' : match.isStream && ready ? 'var(--accent-stream)' : ready ? 'var(--accent-ready)' : match.winnerId ? 'var(--accent-completed)' : 'var(--accent-waiting)'}
 			{@const waveInfo = waveMap?.get(match.id)}
