@@ -224,12 +224,44 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await sendMessage(channelId, lines.join('\n')).catch(() => { /* best-effort */ });
 	}
 
-	if (!tournament.startggSync) {
-		tournament.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };
+	// Concurrency-safe save: reload from Redis and merge bracket match results.
+	// The sync takes a long time (many API calls); matches may have been reported
+	// concurrently via the bracket PATCH endpoint. Without merging, we'd overwrite them.
+	const fresh = await getActiveTournament();
+	if (fresh?.brackets) {
+		for (const bn of ['main', 'redemption'] as const) {
+			const ourBracket = tournament.brackets?.[bn];
+			const freshBracket = fresh.brackets[bn];
+			if (!ourBracket || !freshBracket) continue;
+			for (let i = 0; i < freshBracket.matches.length; i++) {
+				const fm = freshBracket.matches[i];
+				const om = ourBracket.matches.find((m) => m.id === fm.id);
+				if (!om) continue;
+				// Keep whichever has a winner (prefer fresh = concurrently reported)
+				if (fm.winnerId) continue;
+				if (om.winnerId) freshBracket.matches[i] = om;
+			}
+		}
+		// Carry over sync state and metadata from our run
+		if (!fresh.startggSync) {
+			fresh.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };
+		} else {
+			fresh.startggSync.splitConfirmed = true;
+			fresh.startggSync.pendingBracketMatchIds = tournament.startggSync?.pendingBracketMatchIds ?? [];
+			fresh.startggSync.errors = tournament.startggSync?.errors ?? [];
+		}
+		fresh.startggMainBracketEventId = tournament.startggMainBracketEventId;
+		fresh.startggRedemptionBracketEventId = tournament.startggRedemptionBracketEventId;
+		fresh.startggPhase1Groups = tournament.startggPhase1Groups;
+		await saveTournament(fresh);
 	} else {
-		tournament.startggSync.splitConfirmed = true;
+		if (!tournament.startggSync) {
+			tournament.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };
+		} else {
+			tournament.startggSync.splitConfirmed = true;
+		}
+		await saveTournament(tournament);
 	}
-	await saveTournament(tournament);
 
 	return Response.json({
 		ok: true,
@@ -238,7 +270,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		reported,
 		failed,
 		logs,
-		errors: tournament.startggSync.errors
+		errors: tournament.startggSync?.errors ?? []
 	});
 };
 
