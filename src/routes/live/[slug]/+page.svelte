@@ -309,7 +309,7 @@
 				<div class="grid grid-cols-1 xl:grid-cols-2 gap-4 w-[calc(100vw-2rem)] relative left-1/2 -translate-x-1/2 px-4 max-w-[100vw]">
 				{#if tournament.mode === 'gauntlet' && !tournament.brackets.redemption}
 					<div class="col-span-full rounded-lg border border-primary/20 bg-primary/5 px-4 py-2 text-xs text-muted-foreground">
-						Gauntlet Mode — Redemption bracket starts once all early eliminates (0-2, 1-2) are decided.
+						Macro Default Mode — Redemption bracket starts once all early eliminates (0-2, 1-2) are decided.
 					</div>
 				{/if}
 				{#each (['main', 'redemption'] as const) as bracketName}

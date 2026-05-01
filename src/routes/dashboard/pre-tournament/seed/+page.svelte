@@ -478,18 +478,18 @@
 				</div>
 				{#if showModeInfo}
 					<div class="mb-3 rounded-lg border border-border bg-card/50 p-3 text-xs text-muted-foreground space-y-2">
-						<p><strong class="text-foreground">Default</strong> — Swiss rounds to seed players, then split into Main + Redemption brackets based on record.</p>
-						<p><strong class="text-foreground">Gauntlet</strong> — All players enter one Main bracket (DE). Players eliminated early with 0-2 or 1-2 records are placed into a Redemption bracket once all early losers are known. Redemption is seeded by bracket performance + initial seed with rematch avoidance.</p>
+						<p><strong class="text-foreground">Micro Default</strong> — Swiss rounds to seed players, then split into Main + Redemption brackets based on record.</p>
+						<p><strong class="text-foreground">Macro Default</strong> — All players enter one Main bracket (DE). Players eliminated early with 0-2 or 1-2 records are placed into a Redemption bracket once all early losers are known. Redemption is seeded by bracket performance + initial seed with rematch avoidance.</p>
 					</div>
 				{/if}
 				<div class="flex gap-2">
 					<button type="button" onclick={() => tournamentMode = 'default'}
 						class="rounded-lg px-4 py-1.5 text-sm font-medium transition-colors {tournamentMode === 'default' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
-						Default
+						Micro Default
 					</button>
 					<button type="button" onclick={() => tournamentMode = 'gauntlet'}
 						class="rounded-lg px-4 py-1.5 text-sm font-medium transition-colors {tournamentMode === 'gauntlet' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
-						Gauntlet
+						Macro Default
 					</button>
 				</div>
 			</div>
@@ -510,7 +510,7 @@
 				{/if}
 				<button onclick={startSwiss} disabled={startingSwiss || !numStations}
 					class="rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-					{startingSwiss ? (syncStatus || 'Creating...') : tournamentMode === 'gauntlet' ? 'Apply & Start Gauntlet →' : 'Apply & Start Swiss →'}
+					{startingSwiss ? (syncStatus || 'Creating...') : tournamentMode === 'gauntlet' ? 'Apply & Start Macro Default →' : 'Apply & Start Swiss →'}
 				</button>
 			</div>
 		</div>
@@ -539,18 +539,18 @@
 					</div>
 					{#if showModeInfo}
 						<div class="mb-3 rounded-lg border border-border bg-card/80 p-3 text-xs text-muted-foreground space-y-2">
-							<p><strong class="text-foreground">Default</strong> — Swiss rounds to seed players, then split into Main + Redemption brackets based on record.</p>
-							<p><strong class="text-foreground">Gauntlet</strong> — All players enter one Main bracket (DE). Players eliminated early with 0-2 or 1-2 records are placed into a Redemption bracket once all early losers are known. Redemption is seeded by bracket performance + initial seed with rematch avoidance.</p>
+							<p><strong class="text-foreground">Micro Default</strong> — Swiss rounds to seed players, then split into Main + Redemption brackets based on record.</p>
+							<p><strong class="text-foreground">Macro Default</strong> — All players enter one Main bracket (DE). Players eliminated early with 0-2 or 1-2 records are placed into a Redemption bracket once all early losers are known. Redemption is seeded by bracket performance + initial seed with rematch avoidance.</p>
 						</div>
 					{/if}
 					<div class="flex gap-2">
 						<button type="button" onclick={() => tournamentMode = 'default'}
 							class="rounded-lg px-3 py-1 text-xs font-medium transition-colors {tournamentMode === 'default' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
-							Default
+							Micro Default
 						</button>
 						<button type="button" onclick={() => tournamentMode = 'gauntlet'}
 							class="rounded-lg px-3 py-1 text-xs font-medium transition-colors {tournamentMode === 'gauntlet' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
-							Gauntlet
+							Macro Default
 						</button>
 					</div>
 				</div>
@@ -576,7 +576,7 @@
 					{/if}
 					<button onclick={startFromEvent} disabled={loadingEvent || !eventUrl.trim()}
 						class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-						{loadingEvent ? (syncStatus || 'Loading…') : tournamentMode === 'gauntlet' ? 'Start Gauntlet →' : 'Start Swiss →'}
+						{loadingEvent ? (syncStatus || 'Loading…') : tournamentMode === 'gauntlet' ? 'Start Macro Default →' : 'Start Swiss →'}
 					</button>
 				</div>
 			</div>
