@@ -764,7 +764,21 @@ export async function pushBracketSeeding(
 	]);
 
 	if (!(bracketSeeds as GqlRecord[]).length) {
-		return { ok: false, error: 'Bracket phase group has no seeds' };
+		// Retry — seeds may not have propagated yet after adding players
+		for (let retry = 0; retry < 5; retry++) {
+			await new Promise<void>((r) => setTimeout(r, 2000));
+			const retrySeeds = await fetchAllPages(PHASE_GROUP_SEEDS_QUERY, { phaseGroupId: bracketPhaseGroupId }, (d) => {
+				const pg = d.phaseGroup as GqlRecord | undefined;
+				return pg?.seeds ?? null;
+			}, undefined, 0).catch(() => [] as GqlRecord[]);
+			if ((retrySeeds as GqlRecord[]).length > 0) {
+				(bracketSeeds as GqlRecord[]).push(...(retrySeeds as GqlRecord[]));
+				break;
+			}
+		}
+		if (!(bracketSeeds as GqlRecord[]).length) {
+			return { ok: false, error: 'Bracket phase group has no seeds' };
+		}
 	}
 
 	// Build Swiss entrantId → playerId map

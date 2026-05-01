@@ -215,6 +215,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 		log(`Added ${moved} to Main, ${failed} failed`);
 
+		// Wait for StartGG to propagate entrants to the bracket phase seeds
+		log('  Waiting for StartGG propagation...');
+		await new Promise<void>((r) => setTimeout(r, 3000));
+
 		// Step 2: Push seeding + update entrant IDs
 		if (mainPhaseId && mainPgId && swissPgId && tournament.brackets?.main) {
 			log(`Step 2: Pushing seeding to Main bracket...`);
@@ -273,6 +277,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			else { failed++; log(`  ✗ ${p.gamerTag}: ${result.error}`); }
 		}
 		log(`Added ${moved} to Swiss, ${failed} failed`);
+
+		// Wait for StartGG to propagate entrants to phase seeds
+		if (moved > 0) {
+			log('  Waiting for StartGG propagation...');
+			await new Promise<void>((r) => setTimeout(r, 3000));
+		}
 
 		// Step 2: Push seeding + update entrant IDs
 		if (swissPgId && swissPhaseId) {

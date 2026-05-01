@@ -462,6 +462,7 @@ async function _doReportBracketMatch(
 
 	// FAST PATH: for matches without per-game character data (early rounds),
 	// use internal REST — same reliable fast path as Swiss reports.
+	// Falls through to GQL path on failure (e.g. bracket not yet started → 404).
 	if (!hasCharData) {
 		const bracketPhaseGroupId = await getBracketPhaseGroupId(bracketEventId);
 		if (bracketPhaseGroupId) {
@@ -480,12 +481,11 @@ async function _doReportBracketMatch(
 				sync.pendingBracketMatchIds = sync.pendingBracketMatchIds.filter((id) => id !== pendingKey);
 				return { ok: true };
 			}
-			addError(sync, match.id, result.error ?? 'Unknown StartGG error');
-			return { ok: false, error: result.error };
+			console.log(`[StartGG] Fast path failed for bracket match: ${result.error} — falling through to GQL`);
 		}
 	}
 
-	// GQL PATH: for top-8/BO5 matches with character data (public API supports character selections)
+	// GQL PATH: handles preview sets, character data, and fast-path fallback
 	let setId = match.startggSetId ?? null;
 	if (!setId) {
 		setId = await findSetByEntrants(
