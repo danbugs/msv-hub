@@ -600,12 +600,13 @@ async function _doReportBracketMatch(
  */
 export async function flushPendingBracketMatches(
 	tournament: TournamentState
-): Promise<{ reported: number; failed: number }> {
+): Promise<{ reported: number; failed: number; flushedIds: string[] }> {
 	const sync = ensureSync(tournament);
 	sync.splitConfirmed = true;
 
-	// Reload from Redis: matches may have been reported concurrently during the
-	// sync (the caller's `tournament` was loaded at the start of the request).
+	// Reload from Redis: the caller's `tournament` was loaded at the start of the
+	// request and is stale. We need fresh match data (winnerId set by concurrent
+	// reports) AND fresh tournament metadata (event IDs, entrants).
 	const latest = await getActiveTournament();
 	const pendingIds = [
 		...new Set([
@@ -615,9 +616,12 @@ export async function flushPendingBracketMatches(
 	];
 
 	if (!latest?.brackets || pendingIds.length === 0) {
-		return { reported: 0, failed: 0 };
+		return { reported: 0, failed: 0, flushedIds: [] };
 	}
 
+	// Use fresh tournament data for reporting (has correct event IDs, entrants,
+	// and match state) but mutate sync on the caller's tournament object so the
+	// caller's merge carries the changes through.
 	let reported = 0;
 	let failed = 0;
 
@@ -629,10 +633,10 @@ export async function flushPendingBracketMatches(
 		const match = bracket.matches.find((m) => m.id === matchId);
 		if (!match || !match.winnerId) continue;
 
-		const result = await _doReportBracketMatch(tournament, bracketName, match, sync, key);
+		const result = await _doReportBracketMatch(latest, bracketName, match, sync, key);
 		if (result.ok && !result.queued) reported++;
 		else if (!result.ok) failed++;
 	}
 
-	return { reported, failed };
+	return { reported, failed, flushedIds: pendingIds };
 }

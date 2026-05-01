@@ -203,7 +203,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Step 3: Flush pending bracket reports
-	const { reported, failed } = await flushPendingBracketMatches(tournament);
+	const { reported, failed, flushedIds } = await flushPendingBracketMatches(tournament);
 
 	// Step 4: Optionally announce bracket start to Discord.
 	if (announceChannel) {
@@ -246,15 +246,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 		// Carry over sync state and metadata from our run.
-		// Merge pending IDs: keep ours (post-flush, authoritative for flushed items)
-		// plus any new IDs from fresh (added by concurrent PATCH requests).
+		// Our pending IDs are authoritative (flush removed successful ones).
+		// Only add IDs from fresh that are genuinely new (added by concurrent
+		// PATCH requests AFTER our flush ran — not ones we already processed).
 		if (!fresh.startggSync) {
 			fresh.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };
 		} else {
 			fresh.startggSync.splitConfirmed = true;
-			const ourPending = new Set(tournament.startggSync?.pendingBracketMatchIds ?? []);
-			for (const id of fresh.startggSync.pendingBracketMatchIds) ourPending.add(id);
-			fresh.startggSync.pendingBracketMatchIds = [...ourPending];
+			const attempted = new Set(flushedIds);
+			const ourPostFlush = tournament.startggSync?.pendingBracketMatchIds ?? [];
+			const result = new Set(ourPostFlush);
+			for (const id of fresh.startggSync.pendingBracketMatchIds) {
+				if (!attempted.has(id)) result.add(id);
+			}
+			fresh.startggSync.pendingBracketMatchIds = [...result];
 			fresh.startggSync.errors = tournament.startggSync?.errors ?? [];
 		}
 		fresh.startggMainBracketEventId = tournament.startggMainBracketEventId;
