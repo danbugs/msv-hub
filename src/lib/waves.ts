@@ -55,8 +55,14 @@ function resolveGFRound(matches: BracketMatch[]): number {
 	return gf?.round ?? Math.max(...matches.map((m) => m.round));
 }
 
-// DE round calling order: WR1, WR2+LR1, LR2, WR3+LR3, LR4, WR4+LR5, LR6, ...
-function deRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
+function getRoundMatches(byRound: Map<number, BracketMatch[]>, round: number): BracketMatch[] {
+	return byRound.get(round) ?? [];
+}
+
+// Micro Default: dependency-based pairing.
+// WR(n) + LR(n-1) can run together since both only need the previous level done.
+// WR1, WR2+LR1, WR3+LR2, WR4+LR3, WR5+LR4, LR5, LR6, ..., GF
+function microRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
 	const byRound = new Map<number, BracketMatch[]>();
 	for (const m of matches) {
 		if (m.id.includes('-GFR-')) continue;
@@ -67,58 +73,131 @@ function deRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
 
 	const winRounds = [...byRound.keys()].filter((r) => r > 0).sort((a, b) => a - b);
 	const losRounds = [...byRound.keys()].filter((r) => r < 0).sort((a, b) => Math.abs(a) - Math.abs(b));
-
 	const gfRound = resolveGFRound(matches);
 	const groups: BracketMatch[][] = [];
 
-	if (byRound.has(winRounds[0])) groups.push(byRound.get(winRounds[0])!);
+	// WR1 standalone
+	if (winRounds.length) groups.push(getRoundMatches(byRound, winRounds[0]));
 
+	// WR(n) + LR(n-1): both become playable after the previous level completes
 	let li = 0;
 	for (let wi = 1; wi < winRounds.length; wi++) {
 		const wr = winRounds[wi];
 		if (wr === gfRound) continue;
-		const combined = [...(byRound.get(wr) ?? [])];
-		if (li < losRounds.length) combined.push(...(byRound.get(losRounds[li]) ?? []));
+		const combined = [...getRoundMatches(byRound, wr)];
+		if (li < losRounds.length) combined.push(...getRoundMatches(byRound, losRounds[li]));
 		li++;
 		if (combined.length) groups.push(combined);
+	}
+
+	// Remaining losers rounds (after winners exhaust)
+	while (li < losRounds.length) {
+		const lr = getRoundMatches(byRound, losRounds[li]);
+		if (lr.length) groups.push(lr);
+		li++;
+	}
+
+	if (byRound.has(gfRound)) groups.push(getRoundMatches(byRound, gfRound));
+	return groups;
+}
+
+// Macro Default: LR2 runs standalone to trigger Redemption ASAP.
+// WR1, WR2+LR1, LR2, WR3+LR3, LR4, WR4+LR5, LR6, ..., GF
+// After LR2 (group index 2), Redemption groups get interleaved.
+function macroRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
+	const byRound = new Map<number, BracketMatch[]>();
+	for (const m of matches) {
+		if (m.id.includes('-GFR-')) continue;
+		if (!byRound.has(m.round)) byRound.set(m.round, []);
+		byRound.get(m.round)!.push(m);
+	}
+	for (const ms of byRound.values()) ms.sort((a, b) => a.matchIndex - b.matchIndex);
+
+	const winRounds = [...byRound.keys()].filter((r) => r > 0).sort((a, b) => a - b);
+	const losRounds = [...byRound.keys()].filter((r) => r < 0).sort((a, b) => Math.abs(a) - Math.abs(b));
+	const gfRound = resolveGFRound(matches);
+	const groups: BracketMatch[][] = [];
+
+	// WR1 standalone
+	if (winRounds.length) groups.push(getRoundMatches(byRound, winRounds[0]));
+
+	// WR2+LR1, then LR2 standalone, then WR3+LR3, LR4, WR4+LR5, LR6, ...
+	let li = 0;
+	for (let wi = 1; wi < winRounds.length; wi++) {
+		const wr = winRounds[wi];
+		if (wr === gfRound) continue;
+		const combined = [...getRoundMatches(byRound, wr)];
+		if (li < losRounds.length) combined.push(...getRoundMatches(byRound, losRounds[li]));
+		li++;
+		if (combined.length) groups.push(combined);
+		// Even LR as standalone (LR2 triggers Redemption, LR4/LR6/etc. are drop-in rounds)
 		if (li < losRounds.length) {
-			const lr = byRound.get(losRounds[li]);
-			if (lr?.length) groups.push(lr);
+			const lr = getRoundMatches(byRound, losRounds[li]);
+			if (lr.length) groups.push(lr);
 			li++;
 		}
 	}
+
 	while (li < losRounds.length) {
-		const lr = byRound.get(losRounds[li]);
-		if (lr?.length) groups.push(lr);
+		const lr = getRoundMatches(byRound, losRounds[li]);
+		if (lr.length) groups.push(lr);
 		li++;
 	}
-	if (byRound.has(gfRound)) groups.push(byRound.get(gfRound)!);
 
+	if (byRound.has(gfRound)) groups.push(getRoundMatches(byRound, gfRound));
 	return groups;
 }
 
 export function computeWaves(
 	main: BracketState,
 	redemption: BracketState | undefined,
-	_mode: 'default' | 'gauntlet' = 'default',
+	mode: 'default' | 'gauntlet' = 'default',
 	stationCount = 16
 ): WaveMap {
 	const map: WaveMap = new Map();
 	const mainMatches = main.matches;
 	const redMatches = redemption?.matches ?? [];
 
-	const mainGroups = deRoundOrder(mainMatches);
-	const redGroups = deRoundOrder(redMatches);
-	const maxLen = Math.max(mainGroups.length, redGroups.length);
-	let waveNum = 1;
+	if (mode === 'gauntlet') {
+		// Macro Default: Main plays early rounds solo, then Redemption interleaves.
+		// Main groups before Redemption: WR1, WR2+LR1, LR2 (indices 0-2).
+		const mainGroups = macroRoundOrder(mainMatches);
+		const redGroups = redMatches.length > 0 ? microRoundOrder(redMatches) : [];
 
-	for (let i = 0; i < maxLen; i++) {
-		// Combine same-depth groups from both brackets (independent of each other)
-		const group = [...(mainGroups[i] ?? []), ...(redGroups[i] ?? [])];
-		if (group.length === 0) continue;
-		// Split into chunks of stationCount if the group is too large
-		for (let j = 0; j < group.length; j += stationCount) {
-			assignWave(map, group.slice(j, j + stationCount), waveNum++);
+		// Main-only early rounds (up through LR2 = index 2)
+		const breakpoint = Math.min(3, mainGroups.length);
+		let waveNum = 1;
+
+		for (let i = 0; i < breakpoint; i++) {
+			const group = mainGroups[i];
+			for (let j = 0; j < group.length; j += stationCount) {
+				assignWave(map, group.slice(j, j + stationCount), waveNum++);
+			}
+		}
+
+		// Interleave remaining Main with Redemption
+		const remainingMain = mainGroups.slice(breakpoint);
+		const maxLen = Math.max(remainingMain.length, redGroups.length);
+		for (let i = 0; i < maxLen; i++) {
+			const group = [...(remainingMain[i] ?? []), ...(redGroups[i] ?? [])];
+			if (group.length === 0) continue;
+			for (let j = 0; j < group.length; j += stationCount) {
+				assignWave(map, group.slice(j, j + stationCount), waveNum++);
+			}
+		}
+	} else {
+		// Micro Default: both brackets start together, zip by dependency depth.
+		const mainGroups = microRoundOrder(mainMatches);
+		const redGroups = redMatches.length > 0 ? microRoundOrder(redMatches) : [];
+		const maxLen = Math.max(mainGroups.length, redGroups.length);
+		let waveNum = 1;
+
+		for (let i = 0; i < maxLen; i++) {
+			const group = [...(mainGroups[i] ?? []), ...(redGroups[i] ?? [])];
+			if (group.length === 0) continue;
+			for (let j = 0; j < group.length; j += stationCount) {
+				assignWave(map, group.slice(j, j + stationCount), waveNum++);
+			}
 		}
 	}
 
