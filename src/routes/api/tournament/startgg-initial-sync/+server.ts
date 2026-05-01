@@ -174,6 +174,42 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
+		// Update startggEntrantId to Main bracket IDs (before removing Swiss seeds)
+		if (mainPhaseId) {
+			const mainSeeds = await fetchPhaseSeeds(mainPhaseId).catch(() => []);
+			const playerToMainEntrant = new Map<number, number>();
+			for (const seed of mainSeeds) {
+				const playerId = extractPlayerId(seed as Record<string, unknown>);
+				const entrantId = (seed as { entrant?: { id?: number } }).entrant?.id;
+				if (playerId && entrantId) playerToMainEntrant.set(playerId, Number(entrantId));
+			}
+			if (playerToMainEntrant.size > 0) {
+				const swissPhaseId2 = tournament.startggPhase1Groups?.[0]?.phaseId ?? tournament.startggPhase1Id;
+				if (swissPhaseId2) {
+					const swissSeeds = await fetchPhaseSeeds(swissPhaseId2).catch(() => []);
+					const swissEntrantToPlayer = new Map<number, number>();
+					for (const seed of swissSeeds) {
+						const playerId = extractPlayerId(seed as Record<string, unknown>);
+						const entrantId = (seed as { entrant?: { id?: number } }).entrant?.id;
+						if (playerId && entrantId) swissEntrantToPlayer.set(Number(entrantId), playerId);
+					}
+					let updated = 0;
+					for (const entrant of tournament.entrants) {
+						if (!entrant.startggEntrantId) continue;
+						const playerId = swissEntrantToPlayer.get(entrant.startggEntrantId);
+						if (playerId) {
+							const mainEntrantId = playerToMainEntrant.get(playerId);
+							if (mainEntrantId && mainEntrantId !== entrant.startggEntrantId) {
+								entrant.startggEntrantId = mainEntrantId;
+								updated++;
+							}
+						}
+					}
+					if (updated) log(`  Updated ${updated} entrant IDs to Main bracket IDs`);
+				}
+			}
+		}
+
 		// Step 3: Remove players from Swiss (now that seeding is pushed)
 		log(`Step 3: Removing players from Swiss...`);
 		let removedFromSwiss = 0;
