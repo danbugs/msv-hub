@@ -595,6 +595,7 @@ async function _doReportBracketMatch(
 /**
  * Flush all queued bracket match reports after split is confirmed.
  * Sets splitConfirmed=true, processes the queue.
+ * Reloads from Redis to pick up matches reported concurrently during the sync.
  * Does NOT save — caller must merge and save to avoid overwriting concurrent changes.
  */
 export async function flushPendingBracketMatches(
@@ -603,17 +604,26 @@ export async function flushPendingBracketMatches(
 	const sync = ensureSync(tournament);
 	sync.splitConfirmed = true;
 
-	if (!tournament.brackets || sync.pendingBracketMatchIds.length === 0) {
+	// Reload from Redis: matches may have been reported concurrently during the
+	// sync (the caller's `tournament` was loaded at the start of the request).
+	const latest = await getActiveTournament();
+	const pendingIds = [
+		...new Set([
+			...sync.pendingBracketMatchIds,
+			...(latest?.startggSync?.pendingBracketMatchIds ?? [])
+		])
+	];
+
+	if (!latest?.brackets || pendingIds.length === 0) {
 		return { reported: 0, failed: 0 };
 	}
 
-	const pending = [...sync.pendingBracketMatchIds];
 	let reported = 0;
 	let failed = 0;
 
-	for (const key of pending) {
+	for (const key of pendingIds) {
 		const [bracketName, matchId] = key.split(':') as ['main' | 'redemption', string];
-		const bracket = tournament.brackets[bracketName];
+		const bracket = latest.brackets[bracketName];
 		if (!bracket) continue;
 
 		const match = bracket.matches.find((m) => m.id === matchId);
