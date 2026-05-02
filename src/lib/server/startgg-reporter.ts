@@ -431,26 +431,27 @@ async function _doReportBracketMatch(
 		if (swissPgId) {
 			translation = await buildBracketEntrantTranslation(swissPgId, bracketEventId);
 		}
-		// Fallback: gamerTag matching (handles gauntlet mode where Swiss PG is empty
-		// and stored IDs are Main bracket IDs, not the target bracket's IDs)
-		if (!translation || translation.size === 0) {
-			translation = new Map();
-			const bracketEntrants = await fetchAllEntrants(bracketEventId, undefined).catch(() => []);
-			type BracketEnt = { id?: number; participants?: { player?: { gamerTag?: string } }[] };
-			const tagToBracketEid = new Map<string, number>();
-			for (const e of bracketEntrants as BracketEnt[]) {
-				const tag = e.participants?.[0]?.player?.gamerTag;
-				if (tag && e.id) tagToBracketEid.set(tag.toLowerCase(), Number(e.id));
-			}
-			for (const [, ent] of entrantMap) {
-				if (!ent.startggEntrantId) continue;
-				const bracketEid = tagToBracketEid.get(ent.gamerTag.toLowerCase());
-				if (bracketEid && bracketEid !== ent.startggEntrantId) {
-					translation.set(ent.startggEntrantId, bracketEid);
-				}
-			}
-			console.log(`[StartGG] Bracket entrant translation (gamerTag fallback): ${translation.size} players mapped`);
+		if (!translation) translation = new Map();
+		// Supplement with gamerTag matching for any players not covered by
+		// the player-ID-based translation (handles partial moves, gauntlet mode, etc.)
+		const bracketEntrants = await fetchAllEntrants(bracketEventId, undefined).catch(() => []);
+		type BracketEnt = { id?: number; participants?: { player?: { gamerTag?: string } }[] };
+		const tagToBracketEid = new Map<string, number>();
+		for (const e of bracketEntrants as BracketEnt[]) {
+			const tag = e.participants?.[0]?.player?.gamerTag;
+			if (tag && e.id) tagToBracketEid.set(tag.toLowerCase(), Number(e.id));
 		}
+		let supplemented = 0;
+		for (const [, ent] of entrantMap) {
+			if (!ent.startggEntrantId) continue;
+			if (translation.has(ent.startggEntrantId)) continue;
+			const bracketEid = tagToBracketEid.get(ent.gamerTag.toLowerCase());
+			if (bracketEid && bracketEid !== ent.startggEntrantId) {
+				translation.set(ent.startggEntrantId, bracketEid);
+				supplemented++;
+			}
+		}
+		if (supplemented > 0) console.log(`[StartGG] Bracket entrant translation: ${supplemented} extra players mapped via gamerTag`);
 		if (translation.size > 0) _bracketEntrantCache.set(cacheKey, translation);
 	}
 
@@ -605,6 +606,10 @@ export async function flushPendingBracketMatches(
 	const sync = ensureSync(tournament);
 	sync.splitConfirmed = true;
 	const _log = log ?? ((msg: string) => console.log(`[flush] ${msg}`));
+
+	// Clear stale entrant translation cache — bracket event entrant IDs may have
+	// changed since the cache was built (e.g., players moved between events).
+	_bracketEntrantCache = null;
 
 	// Reload from Redis: the caller's `tournament` was loaded at the start of the
 	// request and is stale. We need fresh match data (winnerId set by concurrent
