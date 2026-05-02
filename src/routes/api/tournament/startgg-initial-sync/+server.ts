@@ -150,31 +150,49 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	if (isGauntlet) {
-		if (!mainEventId) {
-			await saveTournament(tournament);
-			return Response.json({ error: 'Cannot find main bracket event on StartGG. Create an event with "Main" in the name.' }, { status: 400 });
-		}
+	// Determine target event: Gauntlet targets Main, Default targets Swiss
+	const targetEventId = isGauntlet ? mainEventId : swissEventId;
 
-		const mainPhase = await resolveEventPhase(mainEventId);
+	if (isGauntlet && !mainEventId) {
+		await saveTournament(tournament);
+		return Response.json({ error: 'Cannot find main bracket event on StartGG. Create an event with "Main" in the name.' }, { status: 400 });
+	}
+
+	// Fast path: if all players are already in the target event with no stray
+	// event memberships, skip the expensive per-player API calls entirely.
+	const allInTarget = targetEventId && participants.every((p) => p.currentEventIds.includes(targetEventId));
+	const sourceEventId = isGauntlet ? swissEventId : mainEventId;
+	const noneInSource = !sourceEventId || participants.every((p) => !p.currentEventIds.includes(sourceEventId));
+	const noCleanupNeeded = isGauntlet
+		? participants.every((p) => !p.currentEventIds.includes(swissEventId))
+		: participants.every((p) => p.currentEventIds.length === 1);
+
+	if (allInTarget && noneInSource && noCleanupNeeded) {
+		log('All players already in target event — skipping sync');
+		moved = participants.length;
+		await refreshEntrantIds(tournament, targetEventId!, log);
+	} else if (isGauntlet) {
+		const mainPhase = await resolveEventPhase(mainEventId!);
 		const mainPhaseId = mainPhase?.phaseId;
 		const mainPgId = mainPhase?.pgId;
 
 		// Step 1: Add players to Main bracket (KEEP Swiss for cross-event mapping)
 		log(`Step 1: Adding all players to Main bracket...`);
+		let actuallyMoved = 0;
 		for (const p of participants) {
-			if (p.currentEventIds.includes(mainEventId)) { moved++; continue; }
-			const targetEvents = [...new Set([...p.currentEventIds, mainEventId])];
-			const phaseDests = mainPhaseId ? [{ eventId: mainEventId, phaseId: mainPhaseId }] : [];
+			if (p.currentEventIds.includes(mainEventId!)) { moved++; continue; }
+			const targetEvents = [...new Set([...p.currentEventIds, mainEventId!])];
+			const phaseDests = mainPhaseId ? [{ eventId: mainEventId!, phaseId: mainPhaseId }] : [];
 			const result = await updateParticipantEvents(p.participantId, targetEvents, phaseDests);
-			if (result.ok) { moved++; log(`  ${p.gamerTag} → +Main`); }
+			if (result.ok) { moved++; actuallyMoved++; log(`  ${p.gamerTag} → +Main`); }
 			else { failed++; log(`  ✗ ${p.gamerTag}: ${result.error}`); }
 		}
-		log(`Added ${moved} to Main, ${failed} failed`);
+		log(`Added ${moved} to Main (${actuallyMoved} moved), ${failed} failed`);
 
-		// Wait for StartGG to propagate entrants to the bracket phase seeds
-		log('  Waiting for StartGG propagation...');
-		await new Promise<void>((r) => setTimeout(r, 3000));
+		if (actuallyMoved > 0) {
+			log('  Waiting for StartGG propagation...');
+			await new Promise<void>((r) => setTimeout(r, 3000));
+		}
 
 		// Step 2: Push seeding + update entrant IDs
 		if (mainPhaseId && mainPgId && swissPgId && tournament.brackets?.main) {
@@ -197,9 +215,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				}
 			}
 
-			// Update stored entrant IDs: Swiss IDs → Main bracket IDs
 			log('  Updating entrant IDs to Main bracket IDs...');
-			await refreshEntrantIds(tournament, mainEventId, log);
+			await refreshEntrantIds(tournament, mainEventId!, log);
 		} else {
 			if (!swissPgId) seedingResult = 'Could not resolve Swiss phase group';
 			else if (!mainPgId) seedingResult = 'Could not resolve Main bracket phase group';
@@ -213,7 +230,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		for (const p of freshParticipants) {
 			if (!p.currentEventIds.includes(swissEventId)) continue;
 			const targetEvents = p.currentEventIds.filter((id) => id !== swissEventId);
-			if (targetEvents.length === 0) targetEvents.push(mainEventId);
+			if (targetEvents.length === 0) targetEvents.push(mainEventId!);
 			const result = await updateParticipantEvents(p.participantId, targetEvents);
 			if (result.ok) { removedFromSwiss++; }
 			else { log(`  ✗ Remove Swiss ${p.gamerTag}: ${result.error}`); }
@@ -224,23 +241,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// Step 1: Add players to Swiss (KEEP Main for cross-event mapping)
 		log(`Step 1: Adding all players to Swiss...`);
+		let actuallyMoved = 0;
 		for (const p of participants) {
 			if (p.currentEventIds.includes(swissEventId)) { moved++; continue; }
 			const targetEvents = [...new Set([...p.currentEventIds, swissEventId])];
 			const result = await updateParticipantEvents(p.participantId, targetEvents);
-			if (result.ok) { moved++; log(`  ${p.gamerTag} → +Swiss`); }
+			if (result.ok) { moved++; actuallyMoved++; log(`  ${p.gamerTag} → +Swiss`); }
 			else { failed++; log(`  ✗ ${p.gamerTag}: ${result.error}`); }
 		}
-		log(`Added ${moved} to Swiss, ${failed} failed`);
+		log(`Added ${moved} to Swiss (${actuallyMoved} moved), ${failed} failed`);
 
-		// Wait for StartGG to propagate entrants to phase seeds
-		if (moved > 0) {
+		if (actuallyMoved > 0) {
 			log('  Waiting for StartGG propagation...');
 			await new Promise<void>((r) => setTimeout(r, 3000));
 		}
 
 		// Step 2: Push seeding + update entrant IDs
-		if (swissPgId && swissPhaseId) {
+		if (actuallyMoved > 0 && swissPgId && swissPhaseId) {
 			log('Step 2: Pushing seeding to Swiss...');
 			const rankedEntrantIds = tournament.entrants
 				.sort((a, b) => a.initialSeed - b.initialSeed)
@@ -248,13 +265,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				.filter((id): id is number => id !== undefined);
 
 			if (rankedEntrantIds.length) {
-				// Use cross-event mapping if Main exists (entrant IDs may be from Main)
 				let mainPgId: number | undefined;
-				let mainPhaseId: number | undefined;
 				if (mainEventId) {
 					const mainPhase = await resolveEventPhase(mainEventId);
 					mainPgId = mainPhase?.pgId;
-					mainPhaseId = mainPhase?.phaseId;
 				}
 
 				const result = mainPgId
@@ -271,25 +285,29 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					log(`  ✗ ${seedingResult}`);
 				}
 
-				// Update stored entrant IDs: Main IDs → Swiss IDs
 				log('  Updating entrant IDs to Swiss IDs...');
 				await refreshEntrantIds(tournament, swissEventId, log);
 			}
+		} else if (!actuallyMoved) {
+			log('Seeding already correct — skipping push');
 		} else {
 			log('  Could not resolve Swiss phase group for seeding push');
 		}
 
 		// Step 3: Remove players from non-Swiss events
-		log(`Step 3: Removing players from non-Swiss events...`);
-		const freshParticipants = await getTournamentParticipants(tournamentSlug);
-		for (const p of freshParticipants) {
-			const nonSwiss = p.currentEventIds.filter((id) => id !== swissEventId);
-			if (nonSwiss.length === 0) continue;
-			const result = await updateParticipantEvents(p.participantId, [swissEventId]);
-			if (result.ok) { cleaned++; }
-			else { log(`  ✗ ${p.gamerTag}: ${result.error}`); }
+		const needsCleanup = participants.some((p) => p.currentEventIds.some((id) => id !== swissEventId));
+		if (needsCleanup) {
+			log(`Step 3: Removing players from non-Swiss events...`);
+			const freshParticipants = await getTournamentParticipants(tournamentSlug);
+			for (const p of freshParticipants) {
+				const nonSwiss = p.currentEventIds.filter((id) => id !== swissEventId);
+				if (nonSwiss.length === 0) continue;
+				const result = await updateParticipantEvents(p.participantId, [swissEventId]);
+				if (result.ok) { cleaned++; }
+				else { log(`  ✗ ${p.gamerTag}: ${result.error}`); }
+			}
+			if (cleaned) log(`  Removed ${cleaned} from non-Swiss events`);
 		}
-		if (cleaned) log(`  Removed ${cleaned} from non-Swiss events`);
 	}
 
 	// Mark split as confirmed so match reports go through immediately (not queued)
