@@ -627,7 +627,8 @@ export async function flushPendingBracketMatches(
 
 	let reported = 0;
 	let failed = 0;
-	const cachedPgIds = new Set<string>();
+	// Cache fetchAllEntrants per bracket event (entrants don't change mid-flush)
+	const flushTagMaps = new Map<number, Map<string, number>>();
 
 	for (let i = 0; i < pendingIds.length; i++) {
 		const key = pendingIds[i];
@@ -651,38 +652,60 @@ export async function flushPendingBracketMatches(
 				reported++;
 				_log(`  [${i + 1}/${pendingIds.length}] ✓ Reported`);
 
-				// After first successful report per bracket, fetch real set IDs via
-				// admin REST and cache them on all remaining matches. The first report
-				// triggers preview→real conversion; admin REST returns real IDs instantly.
+				// After each successful report, re-fetch real set IDs via admin REST
+				// and cache them on remaining matches. Re-fetch every time because
+				// dependent-round sets get populated after earlier results are reported.
 				const bracketEventId = bracketName === 'main'
 					? latest.startggMainBracketEventId
 					: latest.startggRedemptionBracketEventId;
-				const pgCacheKey = `${bracketName}-${bracketEventId}`;
-				if (bracketEventId && !cachedPgIds.has(pgCacheKey)) {
-					cachedPgIds.add(pgCacheKey);
+				if (bracketEventId) {
 					const pgId = await getBracketPhaseGroupId(bracketEventId);
 					if (pgId) {
 						const adminSets = await fetchAdminPhaseGroupSets(pgId).catch(() => []);
 						if (adminSets.length > 0) {
+							// Build gamerTag → bracket entrant ID map (cached per event)
+							if (!flushTagMaps.has(bracketEventId)) {
+								type BracketEnt = { id?: number; participants?: { player?: { gamerTag?: string } }[] };
+								const bracketEntrants = await fetchAllEntrants(bracketEventId, undefined).catch(() => []);
+								const tagMap = new Map<string, number>();
+								for (const e of bracketEntrants as BracketEnt[]) {
+									const tag = e.participants?.[0]?.player?.gamerTag;
+									if (tag && e.id) tagMap.set(tag.toLowerCase(), Number(e.id));
+								}
+								flushTagMaps.set(bracketEventId, tagMap);
+							}
+							const tagToBracketEid = flushTagMaps.get(bracketEventId)!;
+
 							let cached = 0;
 							for (const bm of bracket.matches) {
 								if (bm.startggSetId) continue;
-								const topEnt = entrantMap.get(bm.topPlayerId ?? '');
-								const botEnt = entrantMap.get(bm.bottomPlayerId ?? '');
-								if (!topEnt?.startggEntrantId || !botEnt?.startggEntrantId) continue;
-								const te = Number(topEnt.startggEntrantId);
-								const be = Number(botEnt.startggEntrantId);
-								// Need bracket entrant IDs for matching
-								const translation = _bracketEntrantCache?.get(pgCacheKey);
-								const bte = translation?.get(te) ?? te;
-								const bbe = translation?.get(be) ?? be;
-								const as = adminSets.find((s) =>
+								const bmTopTag = entrantMap.get(bm.topPlayerId ?? '')?.gamerTag?.toLowerCase();
+								const bmBotTag = entrantMap.get(bm.bottomPlayerId ?? '')?.gamerTag?.toLowerCase();
+								if (!bmTopTag || !bmBotTag) continue;
+								const bte = tagToBracketEid.get(bmTopTag);
+								const bbe = tagToBracketEid.get(bmBotTag);
+								if (!bte || !bbe) continue;
+								const adminSet = adminSets.find((s) =>
 									(s.entrant1Id === bte && s.entrant2Id === bbe) ||
 									(s.entrant1Id === bbe && s.entrant2Id === bte)
 								);
-								if (as) { bm.startggSetId = String(as.id); cached++; }
+								if (adminSet) { bm.startggSetId = String(adminSet.id); cached++; }
 							}
 							if (cached > 0) _log(`  Cached ${cached} real set IDs for ${bracketName} via admin REST`);
+
+							// Update entrant translation cache so subsequent fast-path calls
+							// use correct bracket entrant IDs (not stale Swiss IDs)
+							const cacheKey = `${bracketName}-${bracketEventId}`;
+							const translation = new Map<number, number>();
+							for (const [, ent] of entrantMap) {
+								if (!ent.startggEntrantId) continue;
+								const bracketEid = tagToBracketEid.get(ent.gamerTag.toLowerCase());
+								if (bracketEid) translation.set(ent.startggEntrantId, bracketEid);
+							}
+							if (translation.size > 0) {
+								if (!_bracketEntrantCache) _bracketEntrantCache = new Map();
+								_bracketEntrantCache.set(cacheKey, translation);
+							}
 						}
 					}
 				}
