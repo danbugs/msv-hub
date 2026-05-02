@@ -42,7 +42,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const logs: string[] = [];
 	const log = (msg: string) => { logs.push(msg); console.log(`[split-done] ${msg}`); };
 
-	const alreadySynced = !!tournament.startggSync?.splitConfirmed;
+	// Step 1: Auto-assign players to bracket events on StartGG
 	const swissEventId = tournament.startggEventId;
 	let mainEventId = tournament.startggMainBracketEventId;
 	let redEventId = tournament.startggRedemptionBracketEventId;
@@ -50,15 +50,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const hasAutoRedemption = allPlayersToMain && !!tournament.brackets.redemption;
 
-	let splitResult = { mainOk: 0, redemptionOk: 0, failed: 0, errors: [] as string[] };
-
-	// Skip expensive steps 1-2 on retry — only re-flush pending reports.
-	if (alreadySynced) {
-		log('Split already confirmed — skipping player assignment and seeding, retrying flush only');
-	}
-
 	// Auto-discover bracket events if not yet linked
-	if (!alreadySynced && eventSlug && (!mainEventId || (!allPlayersToMain && !redEventId) || (hasAutoRedemption && !redEventId))) {
+	if (eventSlug && (!mainEventId || (!allPlayersToMain && !redEventId) || (hasAutoRedemption && !redEventId))) {
 		const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
 		if (tournamentSlug) {
 			const tData = await gql<{ tournament: { events: { id: number; name: string; numEntrants: number }[] } }>(
@@ -83,7 +76,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	if (!alreadySynced && allPlayersToMain) {
+	let splitResult = { mainOk: 0, redemptionOk: 0, failed: 0, errors: [] as string[] };
+
+	if (allPlayersToMain) {
 		// All-to-main modes (gauntlet, experimental1): move ALL players to main bracket event
 		if (swissEventId && mainEventId && eventSlug) {
 			const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
@@ -129,7 +124,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		} else {
 			log('Skipping auto-assign: missing event IDs');
 		}
-	} else if (!alreadySynced) {
+	} else {
 		// Default: split players into main and redemption
 		if (swissEventId && mainEventId && redEventId && eventSlug && tournament.finalStandings) {
 			const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
@@ -154,77 +149,62 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Step 2: Push bracket seeding + trigger conversion
-	if (!alreadySynced) {
-		let swissPgId = tournament.startggPhase1Groups?.[0]?.id;
-		if (!swissPgId && eventSlug) {
-			const swissPhaseData = await gql<{ event: { phases: { id: number }[] } }>(
-				EVENT_PHASES_QUERY, { eventId: swissEventId }
+	let swissPgId = tournament.startggPhase1Groups?.[0]?.id;
+	if (!swissPgId && eventSlug) {
+		const swissPhaseData = await gql<{ event: { phases: { id: number }[] } }>(
+			EVENT_PHASES_QUERY, { eventId: swissEventId }
+		);
+		const swissPhaseId = swissPhaseData?.event?.phases?.[0]?.id;
+		if (swissPhaseId) {
+			const groups = await fetchPhaseGroups(swissPhaseId).catch(() => []);
+			if (groups.length) {
+				swissPgId = groups[0].id;
+				tournament.startggPhase1Groups = groups.map((g) => ({ ...g, phaseId: swissPhaseId, roundNumber: 1 }));
+				log(`Resolved Swiss phase group: ${swissPgId}`);
+			}
+		}
+	}
+	if (!swissPgId) log('WARNING: Could not resolve Swiss phase group — seeding will not be pushed');
+	const bracketEntrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+	for (const [bName, bEventId] of [
+		['main', mainEventId] as const,
+		['redemption', redEventId] as const
+	]) {
+		if (!bEventId || !tournament.brackets || !swissPgId) continue;
+		const bracket = tournament.brackets[bName];
+		if (!bracket) continue;
+		try {
+			const epData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
+				EVENT_PHASES_QUERY, { eventId: bEventId }
 			);
-			const swissPhaseId = swissPhaseData?.event?.phases?.[0]?.id;
-			if (swissPhaseId) {
-				const groups = await fetchPhaseGroups(swissPhaseId).catch(() => []);
-				if (groups.length) {
-					swissPgId = groups[0].id;
-					tournament.startggPhase1Groups = groups.map((g) => ({ ...g, phaseId: swissPhaseId, roundNumber: 1 }));
-					log(`Resolved Swiss phase group: ${swissPgId}`);
+			const bracketPhase = epData?.event?.phases?.[0];
+			if (!bracketPhase) continue;
+			const bGroups = await fetchPhaseGroups(bracketPhase.id).catch(() => []);
+			if (!bGroups.length) continue;
+			const bPgId = bGroups[0].id;
+
+			const rankedSwissEntrantIds = bracket.players
+				.sort((a, b) => a.seed - b.seed)
+				.map((p) => bracketEntrantMap.get(p.entrantId)?.startggEntrantId)
+				.filter((id): id is number => id !== undefined);
+			if (rankedSwissEntrantIds.length) {
+				const result = await pushBracketSeeding(bracketPhase.id, bPgId, rankedSwissEntrantIds, swissPgId)
+					.catch((e) => ({ ok: false as const, error: String(e) }));
+				if (result.ok) {
+					log(`Pushed ${bName} bracket seeding`);
+					// No dummy report needed — preview IDs work for first bracket report.
+					// Real IDs are cached via admin REST after the first report.
+				} else {
+					log(`${bName} bracket seeding failed: ${result.error}`);
 				}
 			}
-		}
-		if (!swissPgId) log('WARNING: Could not resolve Swiss phase group — seeding will not be pushed');
-		const bracketEntrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
-		for (const [bName, bEventId] of [
-			['main', mainEventId] as const,
-			['redemption', redEventId] as const
-		]) {
-			if (!bEventId || !tournament.brackets || !swissPgId) continue;
-			const bracket = tournament.brackets[bName];
-			if (!bracket) continue;
-			try {
-				const epData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
-					EVENT_PHASES_QUERY, { eventId: bEventId }
-				);
-				const bracketPhase = epData?.event?.phases?.[0];
-				if (!bracketPhase) continue;
-				const bGroups = await fetchPhaseGroups(bracketPhase.id).catch(() => []);
-				if (!bGroups.length) continue;
-				const bPgId = bGroups[0].id;
-
-				const rankedSwissEntrantIds = bracket.players
-					.sort((a, b) => a.seed - b.seed)
-					.map((p) => bracketEntrantMap.get(p.entrantId)?.startggEntrantId)
-					.filter((id): id is number => id !== undefined);
-				if (rankedSwissEntrantIds.length) {
-					const result = await pushBracketSeeding(bracketPhase.id, bPgId, rankedSwissEntrantIds, swissPgId)
-						.catch((e) => ({ ok: false as const, error: String(e) }));
-					if (result.ok) {
-						log(`Pushed ${bName} bracket seeding`);
-					} else {
-						log(`${bName} bracket seeding failed: ${result.error}`);
-					}
-				}
-			} catch (e) {
-				log(`${bName} bracket error: ${e}`);
-			}
-		}
-
-		// Merge bracket event IDs and phase groups into Redis before flush — the flush
-		// reloads from Redis and needs the IDs set during steps 1-2 above.
-		const pre = await getActiveTournament();
-		if (pre) {
-			if (tournament.startggMainBracketEventId) pre.startggMainBracketEventId = tournament.startggMainBracketEventId;
-			if (tournament.startggRedemptionBracketEventId) pre.startggRedemptionBracketEventId = tournament.startggRedemptionBracketEventId;
-			if (tournament.startggPhase1Groups) pre.startggPhase1Groups = tournament.startggPhase1Groups;
-			await saveTournament(pre);
+		} catch (e) {
+			log(`${bName} bracket error: ${e}`);
 		}
 	}
 
 	// Step 3: Flush pending bracket reports
-	let reported = 0, failed = 0, flushedIds: string[] = [];
-	try {
-		({ reported, failed, flushedIds } = await flushPendingBracketMatches(tournament, log));
-	} catch (e) {
-		log(`Flush crashed: ${e instanceof Error ? e.message : String(e)}`);
-	}
+	const { reported, failed, flushedIds } = await flushPendingBracketMatches(tournament, log);
 
 	// Step 4: Optionally announce bracket start to Discord.
 	if (announceChannel) {

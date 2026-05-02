@@ -381,6 +381,14 @@ export async function completeSetViaAdminRest(
 	}
 
 	let set = await findSet();
+	// Retry: sets may be temporarily missing during preview→real conversion
+	if (!set) {
+		for (let r = 0; r < 3; r++) {
+			await new Promise<void>((resolve) => setTimeout(resolve, 2000));
+			set = await findSet();
+			if (set) break;
+		}
+	}
 	if (!set) return { ok: false, error: `Set not found for entrants ${e1} vs ${e2} in phase group ${phaseGroupId}` };
 
 	// If already reported, reset first (misreport fix)

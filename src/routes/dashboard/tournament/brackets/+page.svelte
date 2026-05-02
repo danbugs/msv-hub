@@ -502,10 +502,7 @@
 			{#if redemptionSyncing || splitConfirming}
 				<svg class="h-3.5 w-3.5 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
 			{/if}
-			<span class="flex-1"><span class="font-semibold">StartGG:</span> {tournament.startggSync.pendingBracketMatchIds.length} match report{tournament.startggSync.pendingBracketMatchIds.length === 1 ? '' : 's'} pending{#if redemptionSyncing || splitConfirming} — syncing...{:else}{#if tournament.startggSync.splitConfirmed} — retry to flush.{:else} — will be sent when bracket sync completes.{/if}{/if}</span>
-			{#if tournament.startggSync.splitConfirmed && !splitConfirming && !redemptionSyncing}
-				<Button variant="outline" onclick={confirmSplit} size="sm">Retry</Button>
-			{/if}
+			<span><span class="font-semibold">StartGG:</span> {tournament.startggSync.pendingBracketMatchIds.length} match report{tournament.startggSync.pendingBracketMatchIds.length === 1 ? '' : 's'} pending{#if redemptionSyncing || splitConfirming} — syncing...{:else} — will be sent when bracket sync completes.{/if}</span>
 		</div>
 	{/if}
 
