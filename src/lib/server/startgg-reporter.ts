@@ -627,6 +627,7 @@ export async function flushPendingBracketMatches(
 
 	let reported = 0;
 	let failed = 0;
+	const cachedPgIds = new Set<string>();
 
 	for (let i = 0; i < pendingIds.length; i++) {
 		const key = pendingIds[i];
@@ -649,6 +650,42 @@ export async function flushPendingBracketMatches(
 			if (result.ok && !result.queued) {
 				reported++;
 				_log(`  [${i + 1}/${pendingIds.length}] ✓ Reported`);
+
+				// After first successful report per bracket, fetch real set IDs via
+				// admin REST and cache them on all remaining matches. The first report
+				// triggers preview→real conversion; admin REST returns real IDs instantly.
+				const bracketEventId = bracketName === 'main'
+					? latest.startggMainBracketEventId
+					: latest.startggRedemptionBracketEventId;
+				const pgCacheKey = `${bracketName}-${bracketEventId}`;
+				if (bracketEventId && !cachedPgIds.has(pgCacheKey)) {
+					cachedPgIds.add(pgCacheKey);
+					const pgId = await getBracketPhaseGroupId(bracketEventId);
+					if (pgId) {
+						const adminSets = await fetchAdminPhaseGroupSets(pgId).catch(() => []);
+						if (adminSets.length > 0) {
+							let cached = 0;
+							for (const bm of bracket.matches) {
+								if (bm.startggSetId) continue;
+								const topEnt = entrantMap.get(bm.topPlayerId ?? '');
+								const botEnt = entrantMap.get(bm.bottomPlayerId ?? '');
+								if (!topEnt?.startggEntrantId || !botEnt?.startggEntrantId) continue;
+								const te = Number(topEnt.startggEntrantId);
+								const be = Number(botEnt.startggEntrantId);
+								// Need bracket entrant IDs for matching
+								const translation = _bracketEntrantCache?.get(pgCacheKey);
+								const bte = translation?.get(te) ?? te;
+								const bbe = translation?.get(be) ?? be;
+								const as = adminSets.find((s) =>
+									(s.entrant1Id === bte && s.entrant2Id === bbe) ||
+									(s.entrant1Id === bbe && s.entrant2Id === bte)
+								);
+								if (as) { bm.startggSetId = String(as.id); cached++; }
+							}
+							if (cached > 0) _log(`  Cached ${cached} real set IDs for ${bracketName} via admin REST`);
+						}
+					}
+				}
 			} else {
 				failed++;
 				_log(`  [${i + 1}/${pendingIds.length}] ✗ ${result.error ?? 'Failed'}${result.queued ? ' (re-queued)' : ''}`);

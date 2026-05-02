@@ -432,10 +432,10 @@ export async function findSetByEntrants(
 ): Promise<string | null> {
 	let sets = await fetchAllSets(eventId, undefined, 0); // delay:0 — real-time call
 
-	// If 0 sets returned, may be mid preview→real conversion. Short retry.
+	// If 0 sets returned, may be mid preview→real conversion. Retry with back-off.
 	if (sets.length === 0) {
-		for (let retry = 1; retry <= 3; retry++) {
-			await new Promise<void>((r) => setTimeout(r, 2000));
+		for (let retry = 1; retry <= 8; retry++) {
+			await new Promise<void>((r) => setTimeout(r, retry <= 3 ? 2000 : 5000));
 			sets = await fetchAllSets(eventId, undefined, 0);
 			if (sets.length > 0) break;
 		}
