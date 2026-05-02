@@ -658,5 +658,24 @@ export async function flushPendingBracketMatches(
 	}
 
 	_log(`Flush complete: ${reported} reported, ${failed} failed`);
+
+	// Immediately persist updated pending IDs to Redis so they clear even if
+	// the caller times out before its own merge/save. This is a targeted merge:
+	// reload fresh state and only update pendingBracketMatchIds + splitConfirmed.
+	if (reported > 0 || failed > 0) {
+		const postFlush = await getActiveTournament();
+		if (postFlush) {
+			if (!postFlush.startggSync) {
+				postFlush.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };
+			} else {
+				postFlush.startggSync.splitConfirmed = true;
+				postFlush.startggSync.pendingBracketMatchIds =
+					postFlush.startggSync.pendingBracketMatchIds.filter((id) => !pendingIds.includes(id) || sync.pendingBracketMatchIds.includes(id));
+			}
+			await saveTournament(postFlush);
+			_log('Pending IDs persisted to Redis');
+		}
+	}
+
 	return { reported, failed, flushedIds: pendingIds };
 }
