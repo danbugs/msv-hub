@@ -203,9 +203,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	// Persist bracket event IDs and phase groups before flush — the flush reloads
-	// from Redis and needs the IDs set during steps 1-2 above.
-	await saveTournament(tournament);
+	// Merge bracket event IDs and phase groups into Redis before flush — the flush
+	// reloads from Redis and needs the IDs set during steps 1-2 above. We do a
+	// targeted merge instead of a full save to avoid overwriting concurrent reports.
+	{
+		const pre = await getActiveTournament();
+		if (pre) {
+			if (tournament.startggMainBracketEventId) pre.startggMainBracketEventId = tournament.startggMainBracketEventId;
+			if (tournament.startggRedemptionBracketEventId) pre.startggRedemptionBracketEventId = tournament.startggRedemptionBracketEventId;
+			if (tournament.startggPhase1Groups) pre.startggPhase1Groups = tournament.startggPhase1Groups;
+			await saveTournament(pre);
+		}
+	}
 
 	// Step 3: Flush pending bracket reports
 	let reported = 0, failed = 0, flushedIds: string[] = [];
