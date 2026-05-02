@@ -203,8 +203,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
+	// Persist bracket event IDs and phase groups before flush — the flush reloads
+	// from Redis and needs the IDs set during steps 1-2 above.
+	await saveTournament(tournament);
+
 	// Step 3: Flush pending bracket reports
-	const { reported, failed, flushedIds } = await flushPendingBracketMatches(tournament, log);
+	let reported = 0, failed = 0, flushedIds: string[] = [];
+	try {
+		({ reported, failed, flushedIds } = await flushPendingBracketMatches(tournament, log));
+	} catch (e) {
+		log(`Flush crashed: ${e instanceof Error ? e.message : String(e)}`);
+	}
 
 	// Step 4: Optionally announce bracket start to Discord.
 	if (announceChannel) {

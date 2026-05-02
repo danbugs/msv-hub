@@ -644,13 +644,22 @@ export async function flushPendingBracketMatches(
 		const botTag = entrantMap.get(match.bottomPlayerId ?? '')?.gamerTag ?? match.bottomPlayerId;
 		_log(`  [${i + 1}/${pendingIds.length}] Reporting ${topTag} vs ${botTag} (${bracketName})...`);
 
-		const result = await _doReportBracketMatch(latest, bracketName, match, sync, key);
-		if (result.ok && !result.queued) {
-			reported++;
-			_log(`  [${i + 1}/${pendingIds.length}] ✓ Reported`);
-		} else {
+		try {
+			const result = await _doReportBracketMatch(latest, bracketName, match, sync, key);
+			if (result.ok && !result.queued) {
+				reported++;
+				_log(`  [${i + 1}/${pendingIds.length}] ✓ Reported`);
+			} else {
+				failed++;
+				_log(`  [${i + 1}/${pendingIds.length}] ✗ ${result.error ?? 'Failed'}${result.queued ? ' (re-queued)' : ''}`);
+			}
+		} catch (e) {
 			failed++;
-			_log(`  [${i + 1}/${pendingIds.length}] ✗ ${result.error ?? 'Failed'}${result.queued ? ' (re-queued)' : ''}`);
+			const msg = e instanceof Error ? e.message : String(e);
+			_log(`  [${i + 1}/${pendingIds.length}] ✗ Unexpected error: ${msg}`);
+			if (!sync.pendingBracketMatchIds.includes(key)) {
+				sync.pendingBracketMatchIds.push(key);
+			}
 		}
 
 		// Brief delay between reports to avoid hammering StartGG
