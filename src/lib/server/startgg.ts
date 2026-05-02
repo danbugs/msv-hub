@@ -103,6 +103,7 @@ query TournamentEvents($slug: String!) {
     events(filter: { videogameId: [1386] }) {
       id
       name
+      slug
       numEntrants
     }
   }

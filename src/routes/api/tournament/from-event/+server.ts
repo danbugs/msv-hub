@@ -34,12 +34,45 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		.replace(/^https?:\/\/[^/]+\//i, '')
 		.replace(/^\/+|\/+$/g, '');
 
-	// Resolve event ID
-	const eventData = await gql<{ event: { id: number; name: string } }>(EVENT_BY_SLUG_QUERY, { slug });
-	if (!eventData?.event) {
-		return Response.json({ error: `Event not found: ${slug}` }, { status: 404 });
+	const mode = modeParam ?? 'default';
+
+	let resolvedSlug = slug;
+	let eventId: number;
+	let eventName: string;
+
+	if (slug.includes('/event/')) {
+		// Direct event slug provided
+		const eventData = await gql<{ event: { id: number; name: string } }>(EVENT_BY_SLUG_QUERY, { slug });
+		if (!eventData?.event) {
+			return Response.json({ error: `Event not found: ${slug}` }, { status: 404 });
+		}
+		eventId = eventData.event.id;
+		eventName = eventData.event.name;
+	} else {
+		// Tournament-only slug — discover events automatically
+		const tournSlug = slug.match(/tournament\/([^/]+)/)?.[1] ?? slug.replace(/^tournament\//, '');
+		const tData = await gql<{ tournament: { events: { id: number; name: string; slug: string; numEntrants: number }[] } }>(
+			TOURNAMENT_QUERY, { slug: tournSlug }
+		);
+		const events = tData?.tournament?.events ?? [];
+		if (!events.length) {
+			return Response.json({ error: `No events found for tournament: ${tournSlug}` }, { status: 404 });
+		}
+
+		let target: { id: number; name: string; slug: string } | undefined;
+		if (mode === 'gauntlet') {
+			target = events.find((e) => /main/i.test(e.name));
+		} else {
+			target = events.find((e) => /swiss/i.test(e.name));
+		}
+		if (!target) {
+			target = events.find((e) => (e.numEntrants ?? 0) > 0) ?? events[0];
+		}
+
+		eventId = target.id;
+		eventName = target.name;
+		resolvedSlug = target.slug;
 	}
-	const { id: eventId, name: eventName } = eventData.event;
 
 	// Get first phase
 	const phaseData = await gql<{ event: { phases: { id: number; name: string; numSeeds: number }[] } }>(
@@ -60,7 +93,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// If Swiss phase is empty (e.g. after a gauntlet reset moved everyone to Main),
 	// try reading seeds from other events in the same tournament.
 	if (!seeds.length) {
-		const tournSlug = slug.match(/tournament\/([^/]+)/)?.[1];
+		const tournSlug = resolvedSlug.match(/tournament\/([^/]+)/)?.[1];
 		if (tournSlug) {
 			const tData = await gql<{ tournament: { events: { id: number; name: string }[] } }>(
 				TOURNAMENT_QUERY, { slug: tournSlug }
@@ -89,8 +122,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'No seeds found in first phase' }, { status: 404 });
 	}
 
-	const mode = modeParam ?? 'default';
-
 	// Build seedNum → startggEntrantId map
 	const sgSeedToEntrantId = new Map<number, number>();
 	for (const seed of sgSeeds) {
@@ -101,7 +132,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	const tourneySlug = slug.replace(/\//g, '-');
+	const tourneySlug = resolvedSlug.replace(/\//g, '-');
 	const entrants: Entrant[] = seeds.map((s, i) => ({
 		id: `e-${i + 1}`,
 		gamerTag: s.gamerTag,
@@ -126,7 +157,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			phase: 'brackets', entrants, settings,
 			rounds: [], currentRound: 0,
 			brackets: { main: mainBracket },
-			startggEventId: eventId, startggEventSlug: slug,
+			startggEventId: eventId, startggEventSlug: resolvedSlug,
 			createdAt: Date.now(), updatedAt: Date.now()
 		};
 
@@ -181,7 +212,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		rounds: [],
 		currentRound: 0,
 		startggEventId: eventId,
-		startggEventSlug: slug,
+		startggEventSlug: resolvedSlug,
 		startggPhase1Id: phaseId,
 		startggPhase1Groups: allRoundGroups.length ? allRoundGroups : undefined,
 		startggFinalStandingsPhaseId: finalStandingsPhase?.id,

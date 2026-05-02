@@ -525,8 +525,8 @@
 		<div class="pb-2 pt-1 min-w-0 flex-1">
 			<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick Start</p>
 			<div class="rounded-lg border border-border bg-card/50 p-4">
-				<p class="text-sm font-medium text-foreground">Start from existing seeded event</p>
-				<p class="mt-0.5 text-xs text-muted-foreground">Skip Elo seeding — use the current StartGG seedings directly.</p>
+				<p class="text-sm font-medium text-foreground">Start from StartGG tournament</p>
+				<p class="mt-0.5 text-xs text-muted-foreground">Skip Elo seeding — auto-discovers the right event and uses its seedings directly.</p>
 
 				<!-- Mode selector (same state as Step 3) -->
 				<div class="mt-3 mb-3">
@@ -557,9 +557,9 @@
 
 				<div class="flex flex-wrap items-end gap-3">
 					<div class="flex-1 min-w-48">
-						<label for="event-url" class="block text-xs text-muted-foreground">StartGG event URL</label>
+						<label for="event-url" class="block text-xs text-muted-foreground">StartGG tournament URL</label>
 						<input id="event-url" type="text" bind:value={eventUrl}
-							placeholder="tournament/micro-134/event/singles" class={inputClass} />
+							placeholder="start.gg/tournament/micro-134" class={inputClass} />
 					</div>
 					<div>
 						<label for="fe-stations" class="block text-xs text-muted-foreground">Stations</label>
