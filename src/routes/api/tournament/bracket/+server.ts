@@ -244,6 +244,9 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		if (tournament.phase === 'completed') fresh.phase = 'completed';
 		if (redemptionGenerated && tournament.brackets.redemption) {
 			fresh.brackets!.redemption = tournament.brackets.redemption;
+			// Reset splitConfirmed so match reports queue until redemption sync completes
+			if (!fresh.startggSync) fresh.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
+			else fresh.startggSync.splitConfirmed = false;
 		}
 		// Merge pending bracket match IDs (union of fresh + ours)
 		if (tournament.startggSync) {
@@ -254,6 +257,9 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		await saveTournament(fresh);
 		tournament.brackets[bracketName] = freshBracket;
 	} else {
+		if (redemptionGenerated && tournament.startggSync) {
+			tournament.startggSync.splitConfirmed = false;
+		}
 		await saveTournament(tournament);
 	}
 	return Response.json({
