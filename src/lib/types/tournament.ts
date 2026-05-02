@@ -23,7 +23,7 @@ export interface TournamentState {
 	slug: string;
 	name: string;
 	phase: 'swiss' | 'brackets' | 'completed';
-	mode?: 'default' | 'gauntlet';
+	mode?: 'default' | 'gauntlet' | 'experimental1';
 	entrants: Entrant[];
 	settings: TournamentSettings;
 	rounds: SwissRound[];

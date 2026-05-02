@@ -11,7 +11,8 @@ import {
 	assignStations,
 	recommendStreamMatches,
 	calculateFinalStandings,
-	generateBracket
+	generateBracket,
+	assignBracketStations
 } from '$lib/server/swiss';
 import type { SwissRound, SwissMatch } from '$lib/types/tournament';
 
@@ -54,6 +55,14 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (tournament.rounds.filter((r) => r.status === 'completed').length >= tournament.settings.numRounds) {
 		// Generate final standings and brackets
 		const finalStandings = calculateFinalStandings(tournament.entrants, tournament.rounds);
+
+		const isExperimental1 = tournament.mode === 'experimental1';
+
+		// Experimental #1: all players go to main bracket (redemption auto-generated later)
+		if (isExperimental1) {
+			for (const s of finalStandings) s.bracket = 'main';
+		}
+
 		tournament.finalStandings = finalStandings;
 
 		const mainPlayers = finalStandings.filter((s) => s.bracket === 'main').map((s) => ({ entrantId: s.entrantId, seed: s.rank }));
@@ -71,51 +80,54 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			}
 		}
 
-		tournament.brackets = {
-			main: generateBracket('main', mainPlayers, finalStandings, undefined, lastRoundOpponents),
-			redemption: generateBracket('redemption', redemptionPlayers, finalStandings, undefined, lastRoundOpponents)
-		};
+		if (isExperimental1) {
+			// All players in one main bracket, no redemption yet
+			let mainBracket = generateBracket('main', mainPlayers, finalStandings, undefined, lastRoundOpponents);
+			mainBracket = assignBracketStations(mainBracket, tournament.settings);
+			tournament.brackets = { main: mainBracket };
+		} else {
+			tournament.brackets = {
+				main: generateBracket('main', mainPlayers, finalStandings, undefined, lastRoundOpponents),
+				redemption: generateBracket('redemption', redemptionPlayers, finalStandings, undefined, lastRoundOpponents)
+			};
+		}
 		tournament.phase = 'brackets';
 
-		// Assign stations: split non-stream stations evenly between main and redemption.
-		// Stream station (e.g. 16) is separate — assigned to the highest-hype main match.
-		const totalStations = tournament.settings.numStations;
-		const streamStn = tournament.settings.streamStation;
-		// Build pool of all regular stations (excluding stream)
-		const allRegularStations = Array.from({ length: totalStations }, (_, i) => i + 1).filter(s => s !== streamStn);
-		const halfIdx = Math.floor(allRegularStations.length / 2);
-		const mainStations = allRegularStations.slice(0, halfIdx);
-		const redemptionStations = allRegularStations.slice(halfIdx);
+		if (!isExperimental1) {
+			// Assign stations: split non-stream stations evenly between main and redemption.
+			const totalStations = tournament.settings.numStations;
+			const streamStn = tournament.settings.streamStation;
+			const allRegularStations = Array.from({ length: totalStations }, (_, i) => i + 1).filter(s => s !== streamStn);
+			const halfIdx = Math.floor(allRegularStations.length / 2);
+			const mainStations = allRegularStations.slice(0, halfIdx);
+			const redemptionStations = allRegularStations.slice(halfIdx);
 
-		// Find ready matches for each bracket
-		const mainReady = tournament.brackets.main.matches.filter(m => m.topPlayerId && m.bottomPlayerId && !m.winnerId);
-		const redReady = tournament.brackets.redemption?.matches.filter(m => m.topPlayerId && m.bottomPlayerId && !m.winnerId) ?? [];
+			const mainReady = tournament.brackets.main.matches.filter(m => m.topPlayerId && m.bottomPlayerId && !m.winnerId);
+			const redReady = tournament.brackets.redemption?.matches.filter(m => m.topPlayerId && m.bottomPlayerId && !m.winnerId) ?? [];
 
-		// Pick the highest-hype main match for stream (lowest combined seed = best players)
-		const standingsMap = new Map(finalStandings.map(s => [s.entrantId, s]));
-		let bestStreamMatch: typeof mainReady[0] | undefined;
-		let bestHype = Infinity;
-		for (const m of mainReady) {
-			const s1 = standingsMap.get(m.topPlayerId!)?.rank ?? 999;
-			const s2 = standingsMap.get(m.bottomPlayerId!)?.rank ?? 999;
-			const hype = s1 + s2;
-			if (hype < bestHype) { bestHype = hype; bestStreamMatch = m; }
-		}
-		if (bestStreamMatch) {
-			bestStreamMatch.station = streamStn;
-			bestStreamMatch.isStream = true;
-		}
+			const standingsMap = new Map(finalStandings.map(s => [s.entrantId, s]));
+			let bestStreamMatch: typeof mainReady[0] | undefined;
+			let bestHype = Infinity;
+			for (const m of mainReady) {
+				const s1 = standingsMap.get(m.topPlayerId!)?.rank ?? 999;
+				const s2 = standingsMap.get(m.bottomPlayerId!)?.rank ?? 999;
+				const hype = s1 + s2;
+				if (hype < bestHype) { bestHype = hype; bestStreamMatch = m; }
+			}
+			if (bestStreamMatch) {
+				bestStreamMatch.station = streamStn;
+				bestStreamMatch.isStream = true;
+			}
 
-		// Assign remaining main stations
-		let mainIdx = 0;
-		for (const m of mainReady) {
-			if (m.isStream) continue;
-			if (mainIdx < mainStations.length) m.station = mainStations[mainIdx++];
-		}
-		// Assign redemption stations
-		let redIdx = 0;
-		for (const m of redReady) {
-			if (redIdx < redemptionStations.length) m.station = redemptionStations[redIdx++];
+			let mainIdx = 0;
+			for (const m of mainReady) {
+				if (m.isStream) continue;
+				if (mainIdx < mainStations.length) m.station = mainStations[mainIdx++];
+			}
+			let redIdx = 0;
+			for (const m of redReady) {
+				if (redIdx < redemptionStations.length) m.station = redemptionStations[redIdx++];
+			}
 		}
 
 		// Auto-discover and link bracket events from StartGG, then push seeding

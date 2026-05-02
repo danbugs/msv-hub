@@ -75,9 +75,11 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 400 });
 	}
 
-	// Gauntlet mode: auto-generate redemption bracket when all 0-2 / 1-2 players are eliminated
+	// Auto-generate redemption bracket when all 0-2 / 1-2 players are eliminated
+	// (applies to both gauntlet and experimental1 modes)
+	const hasAutoRedemption = tournament.mode === 'gauntlet' || tournament.mode === 'experimental1';
 	let redemptionGenerated = false;
-	if (tournament.mode === 'gauntlet' && bracketName === 'main' && !tournament.brackets.redemption) {
+	if (hasAutoRedemption && bracketName === 'main' && !tournament.brackets.redemption) {
 		const mainMatches = tournament.brackets.main.matches;
 		if (isGauntletRedemptionReady(mainMatches)) {
 			const mainOccupied = new Set(
@@ -152,8 +154,9 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	// Gauntlet: reassign stations on the OTHER bracket when a match frees a station
-	if (tournament.mode === 'gauntlet' && tournament.brackets.redemption) {
+	// Reassign stations on the OTHER bracket when a match frees a station
+	// (applies to both gauntlet and experimental1 modes — they share stations across brackets)
+	if (hasAutoRedemption && tournament.brackets.redemption) {
 		const otherName = bracketName === 'main' ? 'redemption' : 'main';
 		const otherBracket = tournament.brackets[otherName];
 		if (otherBracket) {

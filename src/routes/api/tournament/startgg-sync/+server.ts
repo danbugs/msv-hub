@@ -33,8 +33,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const isGauntlet = tournament.mode === 'gauntlet';
+	const allPlayersToMain = tournament.mode === 'gauntlet' || tournament.mode === 'experimental1';
 
-	if (!isGauntlet && !tournament.finalStandings) {
+	if (!allPlayersToMain && !tournament.finalStandings) {
 		return Response.json({ error: 'No final standings' }, { status: 400 });
 	}
 
@@ -47,10 +48,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let redEventId = tournament.startggRedemptionBracketEventId;
 	const eventSlug = tournament.startggEventSlug;
 
-	const hasGauntletRedemption = isGauntlet && !!tournament.brackets.redemption;
+	const hasAutoRedemption = allPlayersToMain && !!tournament.brackets.redemption;
 
 	// Auto-discover bracket events if not yet linked
-	if (eventSlug && (!mainEventId || (!isGauntlet && !redEventId) || (hasGauntletRedemption && !redEventId))) {
+	if (eventSlug && (!mainEventId || (!allPlayersToMain && !redEventId) || (hasAutoRedemption && !redEventId))) {
 		const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
 		if (tournamentSlug) {
 			const tData = await gql<{ tournament: { events: { id: number; name: string; numEntrants: number }[] } }>(
@@ -77,13 +78,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	let splitResult = { mainOk: 0, redemptionOk: 0, failed: 0, errors: [] as string[] };
 
-	if (isGauntlet) {
-		// Gauntlet: move ALL players to main bracket event
+	if (allPlayersToMain) {
+		// All-to-main modes (gauntlet, experimental1): move ALL players to main bracket event
 		if (swissEventId && mainEventId && eventSlug) {
 			const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
 			if (tournamentSlug) {
 				const allTags = tournament.entrants.map((e) => e.gamerTag);
-				log(`Gauntlet: assigning all ${allTags.length} players to Main bracket...`);
+				log(`Assigning all ${allTags.length} players to Main bracket...`);
 				splitResult = await assignBracketSplit(
 					tournamentSlug, swissEventId, mainEventId,
 					redEventId ?? mainEventId,
@@ -91,7 +92,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				);
 
 				// If redemption bracket exists, add eliminated players to redemption event
-				if (hasGauntletRedemption && redEventId) {
+				if (hasAutoRedemption && redEventId) {
 					const redemptionBracket = tournament.brackets.redemption!;
 					const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
 					const redTags = new Set(
@@ -99,7 +100,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 							.map((p) => entrantMap.get(p.entrantId)?.gamerTag?.toLowerCase())
 							.filter((t): t is string => !!t)
 					);
-					log(`Gauntlet: adding ${redTags.size} eliminated players to Redemption event...`);
+					log(`Adding ${redTags.size} eliminated players to Redemption event...`);
 
 					const redPhaseData = await gql<{ event: { phases: { id: number }[] } }>(
 						EVENT_PHASES_QUERY, { eventId: redEventId }

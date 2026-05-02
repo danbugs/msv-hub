@@ -151,14 +151,14 @@ function macroRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
 export function computeWaves(
 	main: BracketState,
 	redemption: BracketState | undefined,
-	mode: 'default' | 'gauntlet' = 'default',
+	mode: 'default' | 'gauntlet' | 'experimental1' = 'default',
 	stationCount = 16
 ): WaveMap {
 	const map: WaveMap = new Map();
 	const mainMatches = main.matches;
 	const redMatches = redemption?.matches ?? [];
 
-	if (mode === 'gauntlet') {
+	if (mode === 'gauntlet' || mode === 'experimental1') {
 		// Macro Default: Main plays early rounds solo, then Redemption interleaves.
 		// Main groups before Redemption: WR1, WR2+LR1, LR2 (indices 0-2).
 		const mainGroups = macroRoundOrder(mainMatches);

@@ -23,7 +23,7 @@
 	let swissRounds = $state('');  // empty = auto (calculated from player count + stations)
 	let eventUrl = $state('');
 	let loadingEvent = $state(false);
-	let tournamentMode = $state<'default' | 'gauntlet'>('default');
+	let tournamentMode = $state<'default' | 'gauntlet' | 'experimental1'>('default');
 	let showModeInfo = $state(false);
 
 	// Drag state
@@ -191,14 +191,14 @@
 
 	async function startFromEvent() {
 		if (!eventUrl.trim()) return;
-		if (tournamentMode === 'default' && swissRounds !== '' && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
+		if (tournamentMode !== 'gauntlet' && swissRounds !== '' && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
 		loadingEvent = true; error = '';
 		const res = await fetch('/api/tournament/from-event', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				eventSlug: eventUrl.trim(), numStations: Number(numStations), streamStation: 16,
-				numRounds: tournamentMode === 'default' && swissRounds ? Number(swissRounds) : undefined,
+				numRounds: tournamentMode !== 'gauntlet' && swissRounds ? Number(swissRounds) : undefined,
 				mode: tournamentMode
 			})
 		});
@@ -211,7 +211,7 @@
 
 	async function startSwiss() {
 		if (!result) return;
-		if (tournamentMode === 'default' && swissRounds !== '' && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
+		if (tournamentMode !== 'gauntlet' && swissRounds !== '' && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
 		startingSwiss = true; error = '';
 
 		// Step 1: Apply seeding to StartGG
@@ -237,7 +237,7 @@
 				name, slug,
 				entrants: result.entrants.map((e) => ({ gamerTag: e.gamerTag, initialSeed: e.seedNum })),
 				numStations: Number(numStations), streamStation: 16,
-				numRounds: tournamentMode === 'default' && swissRounds ? Number(swissRounds) : undefined,
+				numRounds: tournamentMode !== 'gauntlet' && swissRounds ? Number(swissRounds) : undefined,
 				mode: tournamentMode
 			})
 		});
@@ -480,9 +480,10 @@
 					<div class="mb-3 rounded-lg border border-border bg-card/50 p-3 text-xs text-muted-foreground space-y-2">
 						<p><strong class="text-foreground">Micro Default</strong> — Swiss rounds to seed players, then split into Main + Redemption brackets based on record.</p>
 						<p><strong class="text-foreground">Macro Default</strong> — All players enter one Main bracket (DE). Players eliminated early with 0-2 or 1-2 records are placed into a Redemption bracket once all early losers are known. Redemption is seeded by bracket performance + initial seed with rematch avoidance.</p>
+						<p><strong class="text-foreground">Experimental #1</strong> — 3 Swiss rounds seed all players into one Main bracket (DE). Losers with 0-2 or 1-2 bracket records go to Redemption (like Macro Default). Combines Swiss seeding quality with single-bracket play.</p>
 					</div>
 				{/if}
-				<div class="flex gap-2">
+				<div class="flex gap-2 flex-wrap">
 					<button type="button" onclick={() => tournamentMode = 'default'}
 						class="rounded-lg px-4 py-1.5 text-sm font-medium transition-colors {tournamentMode === 'default' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 						Micro Default
@@ -490,6 +491,10 @@
 					<button type="button" onclick={() => tournamentMode = 'gauntlet'}
 						class="rounded-lg px-4 py-1.5 text-sm font-medium transition-colors {tournamentMode === 'gauntlet' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 						Macro Default
+					</button>
+					<button type="button" onclick={() => tournamentMode = 'experimental1'}
+						class="rounded-lg px-4 py-1.5 text-sm font-medium transition-colors {tournamentMode === 'experimental1' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
+						Experimental #1
 					</button>
 				</div>
 			</div>
@@ -500,7 +505,7 @@
 					<input id="num-stations" type="number" bind:value={numStations} min="1"
 						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground focus:border-ring focus:outline-none" />
 				</div>
-				{#if tournamentMode === 'default'}
+				{#if tournamentMode !== 'gauntlet'}
 					<div>
 						<label for="swiss-rounds" class="block text-xs text-muted-foreground">Swiss rounds</label>
 						<input id="swiss-rounds" type="number" bind:value={swissRounds} min="1" max="5"
@@ -510,7 +515,7 @@
 				{/if}
 				<button onclick={startSwiss} disabled={startingSwiss || !numStations}
 					class="rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-					{startingSwiss ? (syncStatus || 'Creating...') : tournamentMode === 'gauntlet' ? 'Apply & Start Macro Default →' : 'Apply & Start Swiss →'}
+					{startingSwiss ? (syncStatus || 'Creating...') : tournamentMode === 'gauntlet' ? 'Apply & Start Macro Default →' : tournamentMode === 'experimental1' ? 'Apply & Start Experimental #1 →' : 'Apply & Start Swiss →'}
 				</button>
 			</div>
 		</div>
@@ -543,7 +548,7 @@
 							<p><strong class="text-foreground">Macro Default</strong> — All players enter one Main bracket (DE). Players eliminated early with 0-2 or 1-2 records are placed into a Redemption bracket once all early losers are known. Redemption is seeded by bracket performance + initial seed with rematch avoidance.</p>
 						</div>
 					{/if}
-					<div class="flex gap-2">
+					<div class="flex gap-2 flex-wrap">
 						<button type="button" onclick={() => tournamentMode = 'default'}
 							class="rounded-lg px-3 py-1 text-xs font-medium transition-colors {tournamentMode === 'default' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 							Micro Default
@@ -551,6 +556,10 @@
 						<button type="button" onclick={() => tournamentMode = 'gauntlet'}
 							class="rounded-lg px-3 py-1 text-xs font-medium transition-colors {tournamentMode === 'gauntlet' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 							Macro Default
+						</button>
+						<button type="button" onclick={() => tournamentMode = 'experimental1'}
+							class="rounded-lg px-3 py-1 text-xs font-medium transition-colors {tournamentMode === 'experimental1' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
+							Experimental #1
 						</button>
 					</div>
 				</div>
@@ -566,17 +575,17 @@
 						<input id="fe-stations" type="number" bind:value={numStations} min="1"
 							class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground focus:border-ring focus:outline-none" />
 					</div>
-					{#if tournamentMode === 'default'}
+					{#if tournamentMode !== 'gauntlet'}
 						<div>
 							<label for="fe-rounds" class="block text-xs text-muted-foreground">Swiss rounds</label>
 							<input id="fe-rounds" type="number" bind:value={swissRounds} min="1" max="5"
-								placeholder="auto"
+								placeholder={tournamentMode === 'experimental1' ? '3' : 'auto'}
 								class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 						</div>
 					{/if}
 					<button onclick={startFromEvent} disabled={loadingEvent || !eventUrl.trim()}
 						class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-						{loadingEvent ? (syncStatus || 'Loading…') : tournamentMode === 'gauntlet' ? 'Start Macro Default →' : 'Start Swiss →'}
+						{loadingEvent ? (syncStatus || 'Loading…') : tournamentMode === 'gauntlet' ? 'Start Macro Default →' : tournamentMode === 'experimental1' ? 'Start Experimental #1 →' : 'Start Swiss →'}
 					</button>
 				</div>
 			</div>

@@ -398,8 +398,8 @@
 				error = `StartGG: ${sg.error}`;
 			}
 
-			// Auto-sync redemption to StartGG when generated in gauntlet mode
-			if (data.redemptionBracket && tournament?.mode === 'gauntlet') {
+			// Auto-sync redemption to StartGG when generated in auto-redemption modes
+			if (data.redemptionBracket && (tournament?.mode === 'gauntlet' || tournament?.mode === 'experimental1')) {
 				redemptionSyncing = true;
 				redemptionSyncResult = '';
 				fetch('/api/tournament/startgg-sync', {
@@ -447,8 +447,8 @@
 		</div>
 	{/if}
 
-	<!-- StartGG split confirmation (default mode only — gauntlet has no Swiss→bracket split) -->
-	{#if tournament && tournament.mode !== 'gauntlet' && !tournament.startggSync?.splitConfirmed}
+	<!-- StartGG split confirmation (default mode only — gauntlet/experimental1 use "all to main" sync) -->
+	{#if tournament && tournament.mode !== 'gauntlet' && tournament.mode !== 'experimental1' && !tournament.startggSync?.splitConfirmed}
 		<div class="mt-4 rounded-lg border border-warning-border bg-warning-muted px-4 py-3">
 			<p class="text-sm text-warning">
 				<span class="font-semibold">StartGG:</span> Click <strong>Run Bracket Split</strong> to automatically assign players
@@ -474,8 +474,8 @@
 		</div>
 	{/if}
 
-	<!-- Gauntlet: Re-sync players to StartGG (fallback if initial sync missed or failed) -->
-	{#if tournament && tournament.mode === 'gauntlet' && tournament.startggEventSlug && !tournament.startggSync?.splitConfirmed}
+	<!-- Re-sync players to StartGG (fallback if initial sync missed or failed — gauntlet/experimental1) -->
+	{#if tournament && (tournament.mode === 'gauntlet' || tournament.mode === 'experimental1') && tournament.startggEventSlug && !tournament.startggSync?.splitConfirmed}
 		<div class="mt-4 rounded-lg border border-border bg-card/50 px-4 py-3">
 			<div class="flex items-center gap-3">
 				<p class="text-sm text-muted-foreground flex-1">
@@ -614,7 +614,7 @@
 			</div>
 		{/if}
 
-		{#if tournament?.mode === 'gauntlet' && !tournament.brackets?.redemption && tournament.brackets?.main}
+		{#if (tournament?.mode === 'gauntlet' || tournament?.mode === 'experimental1') && !tournament.brackets?.redemption && tournament.brackets?.main}
 			{@const mainMatches = tournament.brackets.main.matches}
 			{@const lr1 = mainMatches.filter((m) => m.round === -1)}
 			{@const lr2 = mainMatches.filter((m) => m.round === -2)}
@@ -624,7 +624,7 @@
 			{@const totalDone = lr1Done + lr2Done}
 			<div class="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
 				<div class="flex items-center justify-between">
-					<p class="font-medium">Macro Default — Redemption Progress</p>
+					<p class="font-medium">{tournament.mode === 'experimental1' ? 'Experimental #1' : 'Macro Default'} — Redemption Progress</p>
 					{#if totalNeeded > 0}
 						<span class="text-xs text-muted-foreground">{totalDone}/{totalNeeded} eliminations decided</span>
 					{/if}

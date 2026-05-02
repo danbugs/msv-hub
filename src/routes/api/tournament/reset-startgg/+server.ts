@@ -140,15 +140,15 @@ export const POST: RequestHandler = async ({ locals }) => {
 
 	// Step 3: Ensure all participants are in Swiss.
 	// For gauntlet: move to Swiss only (step 5 re-adds to Main).
-	// For default: ADD to Swiss but keep Main (step 5 needs Main seeds for cross-event mapping).
+	// For default/experimental1: ADD to Swiss but keep Main (step 5 needs Main seeds for cross-event mapping).
 	if (tournamentSlug && (mainEventId || redEventId)) {
-		const isGauntlet = tournament.mode === 'gauntlet';
-		log(`Step 3: ${isGauntlet ? 'Moving' : 'Adding'} participants to Swiss...`);
+		const isGauntletOnly = tournament.mode === 'gauntlet';
+		log(`Step 3: ${isGauntletOnly ? 'Moving' : 'Adding'} participants to Swiss...`);
 		const participants = await getTournamentParticipants(tournamentSlug);
 		let cleaned = 0;
 		let failed = 0;
 		for (const p of participants) {
-			if (isGauntlet) {
+			if (isGauntletOnly) {
 				const inMain = mainEventId ? p.currentEventIds.includes(mainEventId) : false;
 				const inRed = redEventId ? p.currentEventIds.includes(redEventId) : false;
 				if (!inMain && !inRed) continue;
@@ -161,7 +161,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 				if (result.ok) { cleaned++; } else { failed++; log(`  ✗ ${p.gamerTag}: ${result.error}`); }
 			}
 		}
-		log(`  ${isGauntlet ? 'Moved' : 'Added'} ${cleaned} to Swiss${failed > 0 ? `, ${failed} failed` : ''}`);
+		log(`  ${isGauntletOnly ? 'Moved' : 'Added'} ${cleaned} to Swiss${failed > 0 ? `, ${failed} failed` : ''}`);
 
 		// Refresh stored entrant IDs — after restart+re-add, players have NEW IDs
 		await new Promise<void>((r) => setTimeout(r, 2000));
@@ -192,7 +192,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 	} else {
 		tournament.phase = 'swiss';
 		tournament.brackets = undefined;
-		log('MSV Hub reset to Swiss Round 1');
+		log(`MSV Hub reset to Swiss Round 1${tournament.mode === 'experimental1' ? ' (Experimental #1)' : ''}`);
 	}
 
 	// Step 5: Re-sync players and seeding on StartGG

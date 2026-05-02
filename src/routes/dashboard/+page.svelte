@@ -186,7 +186,7 @@
 										{#if tournament.phase === 'swiss'}
 											Swiss R{tournament.currentRound}/{tournament.settings.numRounds}
 										{:else if tournament.phase === 'brackets'}
-											{tournament.mode === 'gauntlet' ? 'Macro Default' : 'Brackets'}
+											{tournament.mode === 'gauntlet' ? 'Macro Default' : tournament.mode === 'experimental1' ? 'Experimental #1' : 'Brackets'}
 										{:else}
 											Completed
 										{/if}

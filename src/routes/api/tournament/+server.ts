@@ -21,7 +21,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		numStations: number;
 		streamStation?: number;
 		numRounds?: number;
-		mode?: 'default' | 'gauntlet';
+		mode?: 'default' | 'gauntlet' | 'experimental1';
 	};
 
 	if (!name || !slug || !entrants?.length || !numStations) {
@@ -65,7 +65,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json(state);
 	}
 
-	const numRounds = numRoundsOverride ?? calculateRecommendedRounds(entrants.length, numStations);
+	const numRounds = numRoundsOverride ?? (mode === 'experimental1' ? 3 : calculateRecommendedRounds(entrants.length, numStations));
 	if (numRounds === null) {
 		return Response.json({ error: 'Too few stations for this number of players' }, { status: 400 });
 	}
@@ -79,6 +79,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const state: TournamentState = {
 		slug,
 		name,
+		mode: mode !== 'default' ? mode : undefined,
 		phase: 'swiss',
 		entrants: tournamentEntrants,
 		settings: {

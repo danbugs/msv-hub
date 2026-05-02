@@ -19,7 +19,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
 
 	const isGauntlet = tournament.mode === 'gauntlet';
-	if (!isGauntlet && !tournament.finalStandings) return Response.json({ error: 'No final standings' }, { status: 400 });
+	const allPlayersToMain = tournament.mode === 'gauntlet' || tournament.mode === 'experimental1';
+	if (!allPlayersToMain && !tournament.finalStandings) return Response.json({ error: 'No final standings' }, { status: 400 });
 
 	const body = await request.json().catch(() => ({}));
 	const bracketName = (body as { bracketName?: string }).bracketName as 'main' | 'redemption' | undefined;
@@ -36,8 +37,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const bracketEntrantToMsvHub = new Map<number, string>();
 	const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
 
-	if (isGauntlet) {
-		// Gauntlet: match bracket entrants to MSV Hub entrants by gamerTag
+	if (allPlayersToMain) {
+		// All-to-main modes: match bracket entrants to MSV Hub entrants by gamerTag
 		const bracketEntrants = await fetchAllEntrants(eventId, undefined).catch(() => []);
 		const tagToMsvId = new Map<string, string>();
 		for (const e of tournament.entrants) {
@@ -113,7 +114,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let players: { entrantId: string; seed: number }[];
 	let standings: FinalStanding[];
 
-	if (isGauntlet) {
+	if (allPlayersToMain) {
 		const existingBracket = tournament.brackets?.[bracketName];
 		if (!existingBracket) return Response.json({ error: `No ${bracketName} bracket in tournament` }, { status: 400 });
 		players = existingBracket.players.map((p) => ({ entrantId: p.entrantId, seed: p.seed }));
