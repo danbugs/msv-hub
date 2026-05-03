@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { PLAYER_TIERS } from '$lib/types/league';
 
 	let { data } = $props();
 	let chartCanvas = $state<HTMLCanvasElement | null>(null);
@@ -36,12 +37,37 @@
 		const textColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)';
 		const lineColor = isDark ? '#93c5fd' : '#3b82f6';
 
+		const chartW = W - pad.left - pad.right;
+		const chartH = H - pad.top - pad.bottom;
+
+		// In points mode, draw tier boundary lines
+		if (chartMode === 'points') {
+			for (const tier of PLAYER_TIERS) {
+				if (tier.minPoints <= 0) continue;
+				if (tier.minPoints < minVal - range * 0.1 || tier.minPoints > maxVal + range * 0.1) continue;
+				const normalized = (tier.minPoints - minVal) / range;
+				const y = pad.top + (1 - normalized) * chartH;
+				ctx.strokeStyle = tier.color + '40';
+				ctx.lineWidth = 1;
+				ctx.setLineDash([4, 4]);
+				ctx.beginPath();
+				ctx.moveTo(pad.left, y);
+				ctx.lineTo(W - pad.right, y);
+				ctx.stroke();
+				ctx.setLineDash([]);
+				ctx.fillStyle = tier.color + '80';
+				ctx.font = '9px system-ui';
+				ctx.textAlign = 'left';
+				ctx.fillText(tier.name, pad.left + 2, y - 3);
+			}
+		}
+
 		// Grid lines
 		ctx.strokeStyle = gridColor;
 		ctx.lineWidth = 0.5;
 		const gridSteps = 4;
 		for (let i = 0; i <= gridSteps; i++) {
-			const y = pad.top + (i / gridSteps) * (H - pad.top - pad.bottom);
+			const y = pad.top + (i / gridSteps) * chartH;
 			ctx.beginPath();
 			ctx.moveTo(pad.left, y);
 			ctx.lineTo(W - pad.right, y);
@@ -62,9 +88,6 @@
 		ctx.lineJoin = 'round';
 		ctx.beginPath();
 
-		const chartW = W - pad.left - pad.right;
-		const chartH = H - pad.top - pad.bottom;
-
 		for (let i = 0; i < values.length; i++) {
 			const x = pad.left + (i / (values.length - 1)) * chartW;
 			const normalized = (values[i] - minVal) / range;
@@ -76,14 +99,30 @@
 		}
 		ctx.stroke();
 
-		// Dots
-		ctx.fillStyle = lineColor;
+		// Dots + tier-up markers
 		for (let i = 0; i < values.length; i++) {
 			const x = pad.left + (i / (values.length - 1)) * chartW;
 			const normalized = (values[i] - minVal) / range;
 			const y = chartMode === 'rank'
 				? pad.top + normalized * chartH
 				: pad.top + (1 - normalized) * chartH;
+
+			if (chartMode === 'points' && i > 0) {
+				const prevTier = PLAYER_TIERS.find((t) => history[i - 1].points >= t.minPoints);
+				const currTier = PLAYER_TIERS.find((t) => history[i].points >= t.minPoints);
+				if (prevTier && currTier && prevTier.name !== currTier.name) {
+					ctx.fillStyle = currTier.color;
+					ctx.beginPath();
+					ctx.arc(x, y, 5, 0, Math.PI * 2);
+					ctx.fill();
+					ctx.strokeStyle = isDark ? '#1e293b' : '#ffffff';
+					ctx.lineWidth = 1.5;
+					ctx.stroke();
+					continue;
+				}
+			}
+
+			ctx.fillStyle = lineColor;
 			ctx.beginPath();
 			ctx.arc(x, y, 3, 0, Math.PI * 2);
 			ctx.fill();
