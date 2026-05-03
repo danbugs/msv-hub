@@ -1,14 +1,15 @@
 import type { PageServerLoad } from './$types';
-import { getLeagueSeason, getRankings, computeSeasonAwards } from '$lib/server/league-store';
+import { getLeagueSeason, getRankings, computeSeasonAwards, getLeagueConfig } from '$lib/server/league-store';
 import { getPlayerTier, getTournamentTiers } from '$lib/types/league';
 
 export const load: PageServerLoad = async ({ url }) => {
 	const seasonId = parseInt(url.searchParams.get('season') ?? '10', 10);
 	const season = await getLeagueSeason(seasonId);
 
-	if (!season) return { season: null, rankings: [], seasonId };
+	if (!season) return { season: null, rankings: [], seasonId, events: [], awards: [] };
 
-	const rankings = getRankings(season);
+	const config = await getLeagueConfig();
+	const rankings = getRankings(season, config);
 
 	const playerMatchCounts = new Map<string, { wins: number; losses: number; events: Set<string> }>();
 	for (const m of season.matches) {

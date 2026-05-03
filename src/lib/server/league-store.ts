@@ -4,6 +4,27 @@ import type { LeagueSeason, LeaguePlayerStats, LeagueMatch, SeasonAward } from '
 
 const LEAGUE_SEASON_PREFIX = 'league:season:';
 const LEAGUE_MERGES_KEY = 'league:merges';
+const LEAGUE_CONFIG_KEY = 'league:config';
+
+export interface LeagueConfig {
+	minEvents: number;
+	attendanceBonus: number;
+}
+
+const DEFAULT_CONFIG: LeagueConfig = { minEvents: 2, attendanceBonus: 50 };
+
+export async function getLeagueConfig(): Promise<LeagueConfig> {
+	const redis = getRedis();
+	const data = await redis.get<string>(LEAGUE_CONFIG_KEY);
+	if (!data) return DEFAULT_CONFIG;
+	const parsed = typeof data === 'string' ? JSON.parse(data) : data as unknown as Partial<LeagueConfig>;
+	return { ...DEFAULT_CONFIG, ...parsed };
+}
+
+export async function saveLeagueConfig(config: LeagueConfig): Promise<void> {
+	const redis = getRedis();
+	await redis.set(LEAGUE_CONFIG_KEY, JSON.stringify(config));
+}
 
 function getRedis(): Redis {
 	const url = env.UPSTASH_REDIS_REST_URL;
@@ -53,14 +74,34 @@ export async function removeMerge(secondaryId: string): Promise<void> {
 	await saveMergeMap(merges);
 }
 
-export function getRankings(season: LeagueSeason): { playerId: string; gamerTag: string; points: number; rank: number }[] {
-	const players = Object.values(season.players);
-	players.sort((a, b) => b.points - a.points || a.sigma - b.sigma);
+export function getRankings(
+	season: LeagueSeason,
+	config?: { minEvents?: number; attendanceBonus?: number }
+): { playerId: string; gamerTag: string; points: number; rank: number; eventsAttended: number }[] {
+	const bonus = config?.attendanceBonus ?? 0;
+	const minEvents = config?.minEvents ?? 0;
+
+	const eventCounts = new Map<string, number>();
+	for (const evt of season.events) {
+		for (const p of evt.placements) {
+			eventCounts.set(p.playerId, (eventCounts.get(p.playerId) ?? 0) + 1);
+		}
+	}
+
+	const players = Object.values(season.players)
+		.map((p) => {
+			const events = eventCounts.get(p.id) ?? 0;
+			return { ...p, eventsAttended: events, adjustedPoints: p.points + events * bonus };
+		})
+		.filter((p) => p.eventsAttended >= minEvents)
+		.sort((a, b) => b.adjustedPoints - a.adjustedPoints || a.sigma - b.sigma);
+
 	return players.map((p, i) => ({
 		playerId: p.id,
 		gamerTag: p.gamerTag,
-		points: p.points,
-		rank: i + 1
+		points: p.adjustedPoints,
+		rank: i + 1,
+		eventsAttended: p.eventsAttended
 	}));
 }
 

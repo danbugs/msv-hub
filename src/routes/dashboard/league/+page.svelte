@@ -23,18 +23,26 @@
 	let mergePlayer2 = $state<{ id: string; tag: string } | null>(null);
 	let merges = $state<Record<string, string>>({});
 	let mergeError = $state('');
+	let minEvents = $state(2);
+	let attendanceBonus = $state(50);
 
 	const SEASON_ID = 10;
 	const SEASON_START = 125;
 
 	onMount(async () => {
 		loading = true;
-		const [seasonRes, mergeRes] = await Promise.all([
+		const [seasonRes, mergeRes, configRes] = await Promise.all([
 			fetch(`/api/league/season/${SEASON_ID}`),
-			fetch('/api/league/merge')
+			fetch('/api/league/merge'),
+			fetch('/api/league/config')
 		]);
 		if (seasonRes.ok) season = await seasonRes.json();
 		if (mergeRes.ok) merges = await mergeRes.json();
+		if (configRes.ok) {
+			const cfg = await configRes.json();
+			minEvents = cfg.minEvents ?? 2;
+			attendanceBonus = cfg.attendanceBonus ?? 50;
+		}
 		loading = false;
 	});
 
@@ -156,6 +164,14 @@
 		}
 	}
 
+	async function saveConfig() {
+		await fetch('/api/league/config', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ minEvents, attendanceBonus })
+		});
+	}
+
 	function playerTag(id: string): string {
 		if (!season) return id;
 		const r = season.rankings.find((r: { playerId: string }) => r.playerId === id);
@@ -193,6 +209,28 @@
 				<div class="text-sm text-muted-foreground">Matches</div>
 				<div class="text-2xl font-bold text-foreground">{season.totalMatches}</div>
 			</div>
+		</div>
+
+		<!-- Ranking Settings -->
+		<div class="rounded-xl border border-border bg-card p-5 mb-6">
+			<h2 class="text-sm font-bold text-foreground mb-3">Ranking Settings</h2>
+			<div class="flex flex-col sm:flex-row gap-4">
+				<div>
+					<label class="text-xs text-muted-foreground">Min events to qualify</label>
+					<input bind:value={minEvents} type="number" min="0" max="20"
+						onchange={saveConfig}
+						class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
+				</div>
+				<div>
+					<label class="text-xs text-muted-foreground">Attendance bonus (pts/event)</label>
+					<input bind:value={attendanceBonus} type="number" min="0" max="200"
+						onchange={saveConfig}
+						class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
+				</div>
+			</div>
+			<p class="mt-2 text-xs text-muted-foreground">
+				Min events filters the public rankings. Attendance bonus adds points per event attended to reward showing up.
+			</p>
 		</div>
 
 		<div class="mb-6">
