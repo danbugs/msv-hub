@@ -258,7 +258,7 @@
 				<a href="/dashboard/post-tournament"
 					class="block rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary hover:bg-accent">
 					<div class="font-medium text-foreground">Results & Export</div>
-					<div class="mt-0.5 text-sm text-muted-foreground">Graphics, VOD, Braacket upload, StartGG sync</div>
+					<div class="mt-0.5 text-sm text-muted-foreground">Graphics, VOD, league sync, StartGG sync</div>
 				</a>
 			</div>
 		</div>
@@ -271,10 +271,11 @@
 			<div class="pb-2 pt-1 min-w-0 flex-1">
 				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Always On</p>
 				<div class="grid gap-2 sm:grid-cols-2">
-					<div class="rounded-lg border border-dashed border-border bg-card/50 p-4 opacity-60 cursor-default">
-						<div class="font-medium text-muted-foreground">League Overview</div>
-						<div class="mt-0.5 text-sm text-muted-foreground">Season standings, Elo history, weekly recap — coming soon</div>
-					</div>
+					<a href="/dashboard/league"
+						class="block rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary hover:bg-accent">
+						<div class="font-medium text-foreground">League Overview</div>
+						<div class="mt-0.5 text-sm text-muted-foreground">Season standings, TrueSkill rankings, player stats</div>
+					</a>
 					<a href="/dashboard/settings"
 						class="block rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary hover:bg-accent">
 						<div class="font-medium text-foreground">TO Management</div>
