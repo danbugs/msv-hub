@@ -55,6 +55,7 @@ export const PLAYER_TIERS: { name: string; color: string; minPoints: number }[] 
 	{ name: 'Gold', color: '#fbbf24', minPoints: 5500 },
 	{ name: 'Silver', color: '#94a3b8', minPoints: 5000 },
 	{ name: 'Bronze', color: '#d97706', minPoints: 4500 },
+	{ name: 'Copper', color: '#b87333', minPoints: 4000 },
 	{ name: 'Iron', color: '#78716c', minPoints: 0 },
 ];
 
