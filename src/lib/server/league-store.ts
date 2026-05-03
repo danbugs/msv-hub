@@ -5,6 +5,7 @@ import type { LeagueSeason, LeaguePlayerStats, LeagueMatch, SeasonAward } from '
 const LEAGUE_SEASON_PREFIX = 'league:season:';
 const LEAGUE_MERGES_KEY = 'league:merges';
 const LEAGUE_CONFIG_KEY = 'league:config';
+const LEAGUE_SEASONS_INDEX_KEY = 'league:seasons';
 
 export interface LeagueConfig {
 	minEvents: number;
@@ -43,6 +44,20 @@ export async function getLeagueSeason(id: number): Promise<LeagueSeason | null> 
 export async function saveLeagueSeason(season: LeagueSeason): Promise<void> {
 	const redis = getRedis();
 	await redis.set(`${LEAGUE_SEASON_PREFIX}${season.id}`, JSON.stringify(season));
+	const index = await getSeasonIndex();
+	if (!index.find((s) => s.id === season.id)) {
+		index.push({ id: season.id, name: season.name });
+		await redis.set(LEAGUE_SEASONS_INDEX_KEY, JSON.stringify(index));
+	}
+}
+
+export interface SeasonSummary { id: number; name: string }
+
+export async function getSeasonIndex(): Promise<SeasonSummary[]> {
+	const redis = getRedis();
+	const data = await redis.get<string>(LEAGUE_SEASONS_INDEX_KEY);
+	if (!data) return [];
+	return typeof data === 'string' ? JSON.parse(data) : data as unknown as SeasonSummary[];
 }
 
 export type MergeMap = Record<string, string>;
@@ -339,7 +354,7 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 	// Most Improved (linear regression slope of points over events)
 	const improvementScores: { pid: string; slope: number }[] = [];
 	for (const p of players) {
-		if (p.rankHistory.length < MIN_EVENTS) continue;
+		if ((attendance.get(p.id) ?? 0) < MIN_EVENTS) continue;
 		const n = p.rankHistory.length;
 		const xs = p.rankHistory.map((_, i) => i);
 		const ys = p.rankHistory.map((h) => h.points);
@@ -376,7 +391,7 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 	const upComerScores: { pid: string; gain: number }[] = [];
 	for (const p of players) {
 		if (topIds.has(p.id)) continue;
-		if (p.rankHistory.length < MIN_EVENTS) continue;
+		if ((attendance.get(p.id) ?? 0) < MIN_EVENTS) continue;
 		let bestGain = 0;
 		for (let i = 1; i < p.rankHistory.length; i++) {
 			const gain = p.rankHistory[i].points - p.rankHistory[i - 1].points;
@@ -439,24 +454,33 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		entry.p2 = sorted[1];
 		h2h.set(key, entry);
 	}
-	let bestRivalry: { p1: string; p2: string; p1Wins: number; p2Wins: number; total: number } | null = null;
-	for (const entry of h2h.values()) {
-		if (entry.total < 3) continue;
-		const diff = Math.abs(entry.p1Wins - entry.p2Wins);
-		if (!bestRivalry ||
-			diff < Math.abs(bestRivalry.p1Wins - bestRivalry.p2Wins) ||
-			(diff === Math.abs(bestRivalry.p1Wins - bestRivalry.p2Wins) && entry.total > bestRivalry.total))
-			bestRivalry = entry;
-	}
-	if (bestRivalry) {
-		const p1 = season.players[bestRivalry.p1];
-		const p2 = season.players[bestRivalry.p2];
+	const rivalries = [...h2h.values()]
+		.filter((e) => e.total >= 3)
+		.sort((a, b) => {
+			const diffA = Math.abs(a.p1Wins - a.p2Wins);
+			const diffB = Math.abs(b.p1Wins - b.p2Wins);
+			if (diffA !== diffB) return diffA - diffB;
+			return b.total - a.total;
+		});
+	if (rivalries.length > 0) {
+		const best = rivalries[0];
+		const p1 = season.players[best.p1];
+		const p2 = season.players[best.p2];
 		if (p1 && p2) awards.push({
 			title: 'Rivalry of the Season',
 			description: 'Closest head-to-head record with min 3 sets (non-DQ). Ranked by smallest win difference, then total sets as tiebreaker.',
 			playerId: p1.id, playerTag: p1.gamerTag,
 			secondPlayerId: p2.id, secondPlayerTag: p2.gamerTag,
-			value: `${p1.gamerTag} ${bestRivalry.p1Wins}-${bestRivalry.p2Wins} ${p2.gamerTag}`
+			value: `${p1.gamerTag} ${best.p1Wins}-${best.p2Wins} ${p2.gamerTag}`,
+			candidates: rivalries.slice(1, 6).map((r) => {
+				const rp1 = season.players[r.p1];
+				const rp2 = season.players[r.p2];
+				return {
+					playerId: r.p1,
+					playerTag: `${rp1?.gamerTag ?? r.p1} vs ${rp2?.gamerTag ?? r.p2}`,
+					value: `${r.p1Wins}-${r.p2Wins} (${r.total} sets)`
+				};
+			})
 		});
 	}
 
