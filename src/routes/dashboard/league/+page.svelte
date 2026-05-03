@@ -25,19 +25,22 @@
 	let mergeError = $state('');
 	let minEvents = $state(2);
 	let attendanceBonus = $state(50);
+	let awards = $state<{ title: string; description: string; playerId?: string; playerTag?: string; secondPlayerId?: string; secondPlayerTag?: string; value: string }[]>([]);
 
 	const SEASON_ID = 10;
 	const SEASON_START = 125;
 
 	onMount(async () => {
 		loading = true;
-		const [seasonRes, mergeRes, configRes] = await Promise.all([
+		const [seasonRes, mergeRes, configRes, awardsRes] = await Promise.all([
 			fetch(`/api/league/season/${SEASON_ID}`),
 			fetch('/api/league/merge'),
-			fetch('/api/league/config')
+			fetch('/api/league/config'),
+			fetch(`/api/league/awards?season=${SEASON_ID}`)
 		]);
 		if (seasonRes.ok) season = await seasonRes.json();
 		if (mergeRes.ok) merges = await mergeRes.json();
+		if (awardsRes.ok) awards = await awardsRes.json();
 		if (configRes.ok) {
 			const cfg = await configRes.json();
 			minEvents = cfg.minEvents ?? 2;
@@ -133,7 +136,7 @@
 		mergeError = '';
 		if (!mergePlayer1 || !mergePlayer2) { mergeError = 'Select both players'; return; }
 		if (mergePlayer1.id === mergePlayer2.id) { mergeError = 'Cannot merge a player with themselves'; return; }
-		if (!confirm(`Merge "${mergePlayer2.tag}" into "${mergePlayer1.tag}"? All matches from ${mergePlayer2.tag} will be attributed to ${mergePlayer1.tag}. This takes effect on next import.`)) return;
+		if (!confirm(`Merge "${mergePlayer2.tag}" into "${mergePlayer1.tag}"? This will re-import the season with the merge applied.`)) return;
 
 		const res = await fetch('/api/league/merge', {
 			method: 'POST',
@@ -146,6 +149,8 @@
 			mergePlayer2 = null;
 			mergeSearch1 = '';
 			mergeSearch2 = '';
+			const slugs = getAllSeasonSlugs();
+			if (slugs.length > 0) await runImportWithSlugs(slugs);
 		} else {
 			mergeError = (await res.json()).error ?? 'Merge failed';
 		}
@@ -162,6 +167,31 @@
 			delete updated[secondaryId];
 			merges = updated;
 		}
+	}
+
+	async function deleteEvent(slug: string) {
+		if (!confirm(`Delete ${slug} from the season? This will re-process ratings without it.`)) return;
+		importing = true;
+		importLogs = [];
+		error = '';
+		try {
+			const res = await fetch('/api/league/event', {
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ seasonId: SEASON_ID, eventSlug: slug })
+			});
+			const data = await res.json();
+			if (res.ok) {
+				importLogs = data.logs ?? [];
+				const refreshRes = await fetch(`/api/league/season/${SEASON_ID}`);
+				if (refreshRes.ok) season = await refreshRes.json();
+			} else {
+				error = data.error ?? 'Delete failed';
+			}
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Network error';
+		}
+		importing = false;
 	}
 
 	async function saveConfig() {
@@ -211,6 +241,31 @@
 			</div>
 		</div>
 
+		<!-- Season Awards (admin only) -->
+		{#if awards.length > 0}
+			<div class="mb-6">
+				<h2 class="text-sm font-semibold text-muted-foreground mb-2">Season Awards (not yet public)</h2>
+				<div class="grid gap-3 sm:grid-cols-2">
+					{#each awards as award}
+						<div class="rounded-xl border border-border bg-card p-4" title={award.description}>
+							<div class="text-xs text-muted-foreground uppercase tracking-wider">{award.title}</div>
+							<div class="mt-1">
+								{#if award.playerTag}
+									<span class="text-foreground font-bold">{award.playerTag}</span>
+								{/if}
+								{#if award.secondPlayerTag}
+									<span class="text-muted-foreground mx-1">vs</span>
+									<span class="text-foreground font-bold">{award.secondPlayerTag}</span>
+								{/if}
+							</div>
+							<div class="mt-1 text-xs text-muted-foreground">{award.value}</div>
+							<div class="mt-1 text-[10px] text-muted-foreground/60 italic">{award.description}</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
 		<!-- Ranking Settings -->
 		<div class="rounded-xl border border-border bg-card p-5 mb-6">
 			<h2 class="text-sm font-bold text-foreground mb-3">Ranking Settings</h2>
@@ -239,7 +294,11 @@
 				{#each season.events as evt}
 					<div class="flex items-center justify-between rounded-lg bg-card px-3 py-2 text-sm">
 						<span class="text-foreground">{evt.name}</span>
-						<span class="text-muted-foreground">{evt.entrantCount} entrants · {evt.date}</span>
+						<div class="flex items-center gap-3">
+							<span class="text-muted-foreground">{evt.entrantCount} entrants · {evt.date}</span>
+							<button onclick={() => deleteEvent(evt.slug)} disabled={importing}
+								class="text-xs text-destructive hover:text-destructive/80 disabled:opacity-50">Remove</button>
+						</div>
 					</div>
 				{/each}
 			</div>
