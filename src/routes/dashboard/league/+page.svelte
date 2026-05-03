@@ -163,16 +163,24 @@
 
 		const start = parseInt(newSeasonStart, 10);
 		const end = parseInt(newSeasonEnd, 10);
-		if (isNaN(start) || isNaN(end) || end < start) { error = 'Enter valid start and end event numbers'; return; }
+		const hasEvents = !isNaN(start) && !isNaN(end) && end >= start;
+
+		if (!hasEvents && (newSeasonStart || newSeasonEnd)) {
+			error = 'Enter valid start and end event numbers, or leave both blank for an empty season';
+			return;
+		}
 
 		const slugs: string[] = [];
-		for (let i = start; i <= end; i++) slugs.push(`microspacing-vancouver-${i}`);
+		if (hasEvents) {
+			for (let i = start; i <= end; i++) slugs.push(`microspacing-vancouver-${i}`);
+			const macroNums = newSeasonMacros.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+			for (const n of macroNums) slugs.push(`macrospacing-vancouver-${n}`);
+		}
 
-		const macroNums = newSeasonMacros.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
-		for (const n of macroNums) slugs.push(`macrospacing-vancouver-${n}`);
-
-		const macroLabel = macroNums.length ? ` + Macro ${macroNums.join(', ')}` : '';
-		if (!confirm(`Create Season ${newId} (MSV ${start}-${end}${macroLabel}) with ${slugs.length} events?`)) return;
+		const label = hasEvents
+			? `MSV ${start}-${end}${slugs.length > (end - start + 1) ? ` + macros` : ''}, ${slugs.length} events`
+			: 'empty (add events later)';
+		if (!confirm(`Create Season ${newId} (${label})?`)) return;
 
 		currentSeasonId = newId;
 		showCreateSeason = false;
@@ -180,7 +188,27 @@
 		newSeasonStart = '';
 		newSeasonEnd = '';
 		newSeasonMacros = '';
-		await runImportWithSlugs(slugs);
+
+		if (slugs.length > 0) {
+			await runImportWithSlugs(slugs);
+		} else {
+			loading = true;
+			error = '';
+			try {
+				const res = await fetch('/api/league/seasons', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ seasonId: newId, seasonName: `Season ${newId}` })
+				});
+				if (!res.ok) error = (await res.json()).error ?? 'Failed to create season';
+				const seasonsRes = await fetch('/api/league/seasons');
+				if (seasonsRes.ok) seasonsList = (await seasonsRes.json()).sort((a: { id: number }, b: { id: number }) => a.id - b.id);
+				await loadSeason();
+			} catch (e) {
+				error = e instanceof Error ? e.message : 'Network error';
+			}
+			loading = false;
+		}
 	}
 
 	async function fullReimport() {
@@ -344,7 +372,7 @@
 				</button>
 			</div>
 			<p class="mt-2 text-xs text-muted-foreground">
-				Creates the season and imports all events in that range.
+				Leave event numbers blank to create an empty season — you can add events later.
 			</p>
 		</div>
 	{/if}
