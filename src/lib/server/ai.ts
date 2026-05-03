@@ -306,6 +306,7 @@ Player data:
 ${matchupNotes.length > 0 ? '- Matchup notes: ' + matchupNotes.join(' ') : ''}
 
 RULES:
+- ALWAYS use gender-neutral language (they/them/their). NEVER use he/him/his or she/her/hers.
 - Be positive and encouraging. Highlight strengths and storylines.
 - Write like a knowledgeable Smash commentator or analyst.
 - Reference specific data points naturally (rank, characters, rivalries).
