@@ -475,7 +475,7 @@
 	{/if}
 
 	<!-- Re-sync players to StartGG (fallback if initial sync missed or failed — gauntlet/experimental1) -->
-	{#if tournament && (tournament.mode === 'gauntlet' || tournament.mode === 'experimental1') && tournament.startggEventSlug && !tournament.startggSync?.splitConfirmed}
+	{#if tournament && (tournament.mode === 'gauntlet' || tournament.mode === 'experimental1') && tournament.startggEventSlug && !tournament.startggSync?.splitConfirmed && !redemptionSyncing}
 		<div class="mt-4 rounded-lg border border-border bg-card/50 px-4 py-3">
 			<div class="flex items-center gap-3">
 				<p class="text-sm text-muted-foreground flex-1">
