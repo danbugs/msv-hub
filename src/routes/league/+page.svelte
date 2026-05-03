@@ -167,7 +167,8 @@
 								{ name: 'Platinum', color: '#a3e635', req: '6000+ pts' },
 								{ name: 'Gold', color: '#fbbf24', req: '5500+ pts' },
 								{ name: 'Silver', color: '#94a3b8', req: '5000+ pts' },
-								{ name: 'Bronze', color: '#d97706', req: '< 5000 pts' }
+								{ name: 'Bronze', color: '#d97706', req: '4500+ pts' },
+								{ name: 'Iron', color: '#78716c', req: '< 4500 pts' }
 							] as t}
 								<div class="flex items-center justify-between text-xs">
 									<span class="font-bold px-1.5 py-0.5 rounded" style="color: {t.color}; background: {t.color}15;">{t.name}</span>

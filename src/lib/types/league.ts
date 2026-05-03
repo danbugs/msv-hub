@@ -47,13 +47,21 @@ export interface PlayerTier {
 	color: string;
 }
 
+export const PLAYER_TIERS: { name: string; color: string; minPoints: number }[] = [
+	{ name: 'Master', color: '#ef4444', minPoints: 7000 },
+	{ name: 'Diamond', color: '#38bdf8', minPoints: 6500 },
+	{ name: 'Platinum', color: '#a3e635', minPoints: 6000 },
+	{ name: 'Gold', color: '#fbbf24', minPoints: 5500 },
+	{ name: 'Silver', color: '#94a3b8', minPoints: 5000 },
+	{ name: 'Bronze', color: '#d97706', minPoints: 4500 },
+	{ name: 'Iron', color: '#78716c', minPoints: 0 },
+];
+
 export function getPlayerTier(points: number): PlayerTier {
-	if (points >= 7000) return { name: 'Master', color: '#ef4444' };
-	if (points >= 6500) return { name: 'Diamond', color: '#38bdf8' };
-	if (points >= 6000) return { name: 'Platinum', color: '#a3e635' };
-	if (points >= 5500) return { name: 'Gold', color: '#fbbf24' };
-	if (points >= 5000) return { name: 'Silver', color: '#94a3b8' };
-	return { name: 'Bronze', color: '#d97706' };
+	for (const t of PLAYER_TIERS) {
+		if (points >= t.minPoints) return { name: t.name, color: t.color };
+	}
+	return { name: 'Iron', color: '#78716c' };
 }
 
 export interface TournamentTier {
