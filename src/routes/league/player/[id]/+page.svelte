@@ -279,56 +279,59 @@
 			<!-- Matchups -->
 			<div class="rounded-xl border border-border bg-card p-5">
 				<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Matchups</h2>
-				<div class="space-y-2">
-					{#if s.matchups.mostWon}
+				<div class="space-y-3">
+					{#if s.matchups.nemesis}
 						<div class="flex justify-between text-sm">
-							<span class="text-muted-foreground">Most won</span>
-							<span>
-								<span class="text-success font-medium">{s.matchups.mostWon.count}x</span>
-								<span class="text-muted-foreground"> vs </span>
-								<a href="/league/player/{s.matchups.mostWon.playerId}?season={data.seasonId}" class="text-foreground hover:text-primary">{s.matchups.mostWon.tag}</a>
-							</span>
+							<div>
+								<div class="text-foreground font-medium">Nemesis</div>
+								<div class="text-xs text-muted-foreground">Lost {s.matchups.nemesis.losses} sets to</div>
+							</div>
+							<a href="/league/player/{s.matchups.nemesis.playerId}?season={data.seasonId}"
+								class="text-destructive hover:text-destructive/80 font-medium">{s.matchups.nemesis.tag}</a>
 						</div>
 					{/if}
-					{#if s.matchups.mostLost}
+					{#if s.matchups.dominated}
 						<div class="flex justify-between text-sm">
-							<span class="text-muted-foreground">Most lost</span>
-							<span>
-								<span class="text-destructive font-medium">{s.matchups.mostLost.count}x</span>
-								<span class="text-muted-foreground"> vs </span>
-								<a href="/league/player/{s.matchups.mostLost.playerId}?season={data.seasonId}" class="text-foreground hover:text-primary">{s.matchups.mostLost.tag}</a>
-							</span>
+							<div>
+								<div class="text-foreground font-medium">Dominated</div>
+								<div class="text-xs text-muted-foreground">Won {s.matchups.dominated.wins} sets over</div>
+							</div>
+							<a href="/league/player/{s.matchups.dominated.playerId}?season={data.seasonId}"
+								class="text-success hover:text-success/80 font-medium">{s.matchups.dominated.tag}</a>
 						</div>
 					{/if}
-					{#if s.matchups.mostPlayed}
+					{#if s.matchups.rival}
 						<div class="flex justify-between text-sm">
-							<span class="text-muted-foreground">Most played</span>
-							<span>
-								<span class="font-medium text-foreground">{s.matchups.mostPlayed.count}x</span>
-								<span class="text-muted-foreground"> vs </span>
-								<a href="/league/player/{s.matchups.mostPlayed.playerId}?season={data.seasonId}" class="text-foreground hover:text-primary">{s.matchups.mostPlayed.tag}</a>
-							</span>
+							<div>
+								<div class="text-foreground font-medium">Rival</div>
+								<div class="text-xs text-muted-foreground">{s.matchups.rival.wins}-{s.matchups.rival.losses} in {s.matchups.rival.total} sets</div>
+							</div>
+							<a href="/league/player/{s.matchups.rival.playerId}?season={data.seasonId}"
+								class="text-primary hover:text-primary/80 font-medium">{s.matchups.rival.tag}</a>
 						</div>
 					{/if}
-					{#if s.matchups.bestWinRate}
+					{#if s.matchups.gatekeeper}
 						<div class="flex justify-between text-sm">
-							<span class="text-muted-foreground">Best win rate <span class="text-xs">(min 3)</span></span>
-							<span>
-								<span class="text-success font-medium">{s.matchups.bestWinRate.rate}%</span>
-								<span class="text-muted-foreground"> vs </span>
-								<a href="/league/player/{s.matchups.bestWinRate.playerId}?season={data.seasonId}" class="text-foreground hover:text-primary">{s.matchups.bestWinRate.tag}</a>
-							</span>
+							<div>
+								<div class="text-foreground font-medium">Gatekeeper</div>
+								<div class="text-xs text-muted-foreground">{s.matchups.gatekeeper.closeGames} close set{s.matchups.gatekeeper.closeGames > 1 ? 's' : ''}, {s.matchups.gatekeeper.wins}-{s.matchups.gatekeeper.losses}</div>
+							</div>
+							<a href="/league/player/{s.matchups.gatekeeper.playerId}?season={data.seasonId}"
+								class="text-foreground hover:text-primary font-medium">{s.matchups.gatekeeper.tag}</a>
 						</div>
 					{/if}
-					{#if s.matchups.worstWinRate}
+					{#if s.matchups.biggestUpset}
 						<div class="flex justify-between text-sm">
-							<span class="text-muted-foreground">Worst win rate <span class="text-xs">(min 3)</span></span>
-							<span>
-								<span class="text-destructive font-medium">{s.matchups.worstWinRate.rate}%</span>
-								<span class="text-muted-foreground"> vs </span>
-								<a href="/league/player/{s.matchups.worstWinRate.playerId}?season={data.seasonId}" class="text-foreground hover:text-primary">{s.matchups.worstWinRate.tag}</a>
-							</span>
+							<div>
+								<div class="text-foreground font-medium">Biggest Upset</div>
+								<div class="text-xs text-muted-foreground">+{s.matchups.biggestUpset.upsetFactor} pts gap</div>
+							</div>
+							<a href="/league/player/{s.matchups.biggestUpset.playerId}?season={data.seasonId}"
+								class="text-success hover:text-success/80 font-medium">{s.matchups.biggestUpset.tag}</a>
 						</div>
+					{/if}
+					{#if !s.matchups.nemesis && !s.matchups.dominated && !s.matchups.rival && !s.matchups.gatekeeper && !s.matchups.biggestUpset}
+						<div class="text-sm text-muted-foreground">Not enough data yet</div>
 					{/if}
 				</div>
 			</div>

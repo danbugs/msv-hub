@@ -98,11 +98,11 @@ export interface LeaguePlayerStats {
 		top32: number;
 	};
 	matchups: {
-		mostWon: { tag: string; playerId: string; count: number } | null;
-		mostLost: { tag: string; playerId: string; count: number } | null;
-		mostPlayed: { tag: string; playerId: string; count: number } | null;
-		bestWinRate: { tag: string; playerId: string; rate: number; total: number } | null;
-		worstWinRate: { tag: string; playerId: string; rate: number; total: number } | null;
+		nemesis: { tag: string; playerId: string; losses: number } | null;
+		dominated: { tag: string; playerId: string; wins: number } | null;
+		rival: { tag: string; playerId: string; wins: number; losses: number; total: number } | null;
+		gatekeeper: { tag: string; playerId: string; wins: number; losses: number; closeGames: number } | null;
+		biggestUpset: { tag: string; playerId: string; upsetFactor: number; eventSlug: string } | null;
 	};
 	characters: { name: string; iconUrl?: string; count: number }[];
 	recentMatches: LeagueMatch[];

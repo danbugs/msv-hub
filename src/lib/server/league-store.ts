@@ -102,7 +102,7 @@ export function getPlayerStats(season: LeagueSeason, playerId: string): LeaguePl
 		if (pl.placement <= 32) tournamentStats.top32++;
 	}
 
-	const matchups = computeMatchups(playerMatches, playerId);
+	const matchups = computeMatchups(playerMatches, playerId, season);
 	const characters = computeCharacterStats(playerMatches, playerId);
 
 	return {
@@ -124,42 +124,62 @@ export function getPlayerStats(season: LeagueSeason, playerId: string): LeaguePl
 	};
 }
 
-function computeMatchups(matches: LeagueMatch[], playerId: string) {
-	const opponents = new Map<string, { tag: string; wins: number; losses: number; total: number }>();
+function computeMatchups(matches: LeagueMatch[], playerId: string, season: LeagueSeason) {
+	const opponents = new Map<string, { tag: string; wins: number; losses: number; total: number; closeGames: number }>();
 
 	for (const m of matches) {
 		const isP1 = m.player1Id === playerId;
 		const oppId = isP1 ? m.player2Id : m.player1Id;
 		const oppTag = isP1 ? m.player2Tag : m.player1Tag;
 		const won = m.winnerId === playerId;
-		const opp = opponents.get(oppId) ?? { tag: oppTag, wins: 0, losses: 0, total: 0 };
+		const opp = opponents.get(oppId) ?? { tag: oppTag, wins: 0, losses: 0, total: 0, closeGames: 0 };
 		if (won) opp.wins++;
 		else opp.losses++;
 		opp.total++;
 		opp.tag = oppTag;
+		const myScore = isP1 ? m.player1Score : m.player2Score;
+		const oppScore = isP1 ? m.player2Score : m.player1Score;
+		if (Math.abs(myScore - oppScore) === 1 && myScore + oppScore >= 3) opp.closeGames++;
 		opponents.set(oppId, opp);
 	}
 
-	let mostWon: { tag: string; playerId: string; count: number } | null = null;
-	let mostLost: { tag: string; playerId: string; count: number } | null = null;
-	let mostPlayed: { tag: string; playerId: string; count: number } | null = null;
-	let bestWinRate: { tag: string; playerId: string; rate: number; total: number } | null = null;
-	let worstWinRate: { tag: string; playerId: string; rate: number; total: number } | null = null;
-
-	const MIN_MATCHES_FOR_RATE = 3;
+	let nemesis: { tag: string; playerId: string; losses: number } | null = null;
+	let dominated: { tag: string; playerId: string; wins: number } | null = null;
+	let rival: { tag: string; playerId: string; wins: number; losses: number; total: number } | null = null;
+	let gatekeeper: { tag: string; playerId: string; wins: number; losses: number; closeGames: number } | null = null;
 
 	for (const [oppId, opp] of opponents) {
-		if (!mostWon || opp.wins > mostWon.count) mostWon = { tag: opp.tag, playerId: oppId, count: opp.wins };
-		if (!mostLost || opp.losses > mostLost.count) mostLost = { tag: opp.tag, playerId: oppId, count: opp.losses };
-		if (!mostPlayed || opp.total > mostPlayed.count) mostPlayed = { tag: opp.tag, playerId: oppId, count: opp.total };
-		if (opp.total >= MIN_MATCHES_FOR_RATE) {
-			const rate = Math.round((opp.wins / opp.total) * 100);
-			if (!bestWinRate || rate > bestWinRate.rate) bestWinRate = { tag: opp.tag, playerId: oppId, rate, total: opp.total };
-			if (!worstWinRate || rate < worstWinRate.rate) worstWinRate = { tag: opp.tag, playerId: oppId, rate, total: opp.total };
+		if (opp.losses >= 2 && (!nemesis || opp.losses > nemesis.losses))
+			nemesis = { tag: opp.tag, playerId: oppId, losses: opp.losses };
+
+		if (opp.wins >= 2 && (!dominated || opp.wins > dominated.wins))
+			dominated = { tag: opp.tag, playerId: oppId, wins: opp.wins };
+
+		if (opp.total >= 3) {
+			const diff = Math.abs(opp.wins - opp.losses);
+			if (!rival || diff < Math.abs(rival.wins - rival.losses) || (diff === Math.abs(rival.wins - rival.losses) && opp.total > rival.total))
+				rival = { tag: opp.tag, playerId: oppId, wins: opp.wins, losses: opp.losses, total: opp.total };
 		}
+
+		if (opp.losses > opp.wins && opp.closeGames >= 1 && (!gatekeeper || opp.closeGames > gatekeeper.closeGames))
+			gatekeeper = { tag: opp.tag, playerId: oppId, wins: opp.wins, losses: opp.losses, closeGames: opp.closeGames };
 	}
 
-	return { mostWon, mostLost, mostPlayed, bestWinRate, worstWinRate };
+	let biggestUpset: { tag: string; playerId: string; upsetFactor: number; eventSlug: string } | null = null;
+	const playerPoints = season.players[playerId]?.points ?? 5000;
+	for (const m of matches) {
+		if (m.winnerId !== playerId) continue;
+		const isP1 = m.player1Id === playerId;
+		const oppId = isP1 ? m.player2Id : m.player1Id;
+		const oppTag = isP1 ? m.player2Tag : m.player1Tag;
+		const oppPoints = season.players[oppId]?.points ?? 5000;
+		if (oppPoints <= playerPoints) continue;
+		const factor = Math.round(oppPoints - playerPoints);
+		if (!biggestUpset || factor > biggestUpset.upsetFactor)
+			biggestUpset = { tag: oppTag, playerId: oppId, upsetFactor: factor, eventSlug: m.eventSlug };
+	}
+
+	return { nemesis, dominated, rival, gatekeeper, biggestUpset };
 }
 
 function computeCharacterStats(matches: LeagueMatch[], playerId: string): { name: string; iconUrl?: string; count: number }[] {
