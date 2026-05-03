@@ -114,12 +114,18 @@
 
 			{#if data.events?.length}
 				<div class="mt-6">
-					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Events</h2>
+					<div class="flex items-center gap-2 mb-3">
+						<h2 class="text-sm font-bold text-foreground uppercase tracking-wider">Events</h2>
+						<span class="text-[10px] text-muted-foreground" title="Tiers are based on average player rating of attendees. S = top 20% strongest field, A = top 40%, B = top 60%, C = top 80%, D = bottom 20%.">
+							S/A/B/C/D = field strength &#9432;
+						</span>
+					</div>
 					<div class="space-y-1">
 						{#each data.events as evt}
 							<div class="flex items-center justify-between rounded-lg bg-card border border-border px-3 py-2 text-sm">
 								<div class="flex items-center gap-2">
-									<span class="text-xs font-bold w-5 text-center" style="color: {evt.color};">{evt.tier}</span>
+									<span class="text-xs font-bold w-5 text-center" style="color: {evt.color};"
+										title="Tier {evt.tier} — based on average attendee rating">{evt.tier}</span>
 									<span class="text-foreground">{evt.name}</span>
 								</div>
 								<span class="text-xs text-muted-foreground">{evt.entrantCount} entrants · {evt.date}</span>
