@@ -29,9 +29,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'eventSlug and numStations are required' }, { status: 400 });
 	}
 
-	// Normalise: strip URL prefix, trim slashes
+	// Normalise: strip URL prefix, trailing UI pages, trim slashes
 	const slug = eventSlug
 		.replace(/^https?:\/\/[^/]+\//i, '')
+		.replace(/\/(details|brackets|standings|sets|attendees)\b.*$/i, '')
 		.replace(/^\/+|\/+$/g, '');
 
 	const mode = modeParam ?? 'default';
