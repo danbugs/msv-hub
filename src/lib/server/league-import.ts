@@ -165,7 +165,8 @@ export async function importSeason(
 	startDate: string,
 	endDate: string,
 	tournamentSlugs: string[],
-	onProgress?: (msg: string) => void
+	onProgress?: (msg: string) => void,
+	forceRefetch = false
 ): Promise<LeagueSeason> {
 	const log = onProgress ?? console.log;
 
@@ -185,7 +186,7 @@ export async function importSeason(
 	const allMatches: LeagueMatch[] = [];
 
 	for (const slug of tournamentSlugs) {
-		if (existingEventSlugs.has(slug)) {
+		if (!forceRefetch && existingEventSlugs.has(slug)) {
 			log(`Using cached data for ${slug}`);
 			const cachedEvent = existing!.events.find((e) => e.slug === slug)!;
 			events.push(cachedEvent);

@@ -9,10 +9,11 @@ export const POST: RequestHandler = async ({ request }) => {
 		return Response.json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
-	const body = await request.json().catch(() => ({}));
-	const seasonId = (body as Record<string, unknown>).seasonId as number ?? 10;
-	const slugStart = (body as Record<string, unknown>).slugStart as number ?? 125;
-	const slugEnd = (body as Record<string, unknown>).slugEnd as number ?? 137;
+	const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+	const seasonId = body.seasonId as number ?? 10;
+	const slugStart = body.slugStart as number ?? 125;
+	const slugEnd = body.slugEnd as number ?? 137;
+	const forceRefetch = body.forceRefetch as boolean ?? false;
 
 	const slugs: string[] = [];
 	for (let i = slugStart; i <= slugEnd; i++) {
@@ -26,7 +27,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		'2026-02-01',
 		'2026-05-12',
 		slugs,
-		(msg) => logs.push(msg)
+		(msg) => logs.push(msg),
+		forceRefetch
 	);
 
 	return Response.json({
