@@ -35,6 +35,7 @@
 	let newSeasonStart = $state('');
 	let newSeasonEnd = $state('');
 	let newSeasonMacros = $state('');
+	let newSeasonPlanOnly = $state(false);
 	let adminMinEvents = $state(7);
 	let adminPreview = $state<{ playerId: string; gamerTag: string; points: number; rank: number }[]>([]);
 
@@ -168,45 +169,52 @@
 			return;
 		}
 
-		const plannedSlugs: string[] = [];
+		const slugs: string[] = [];
 		if (hasRange) {
-			for (let i = start; i < end; i++) plannedSlugs.push(`microspacing-vancouver-${i}`);
+			for (let i = start; i < end; i++) slugs.push(`microspacing-vancouver-${i}`);
 			const macroNums = newSeasonMacros.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
-			for (const n of macroNums) plannedSlugs.push(`macrospacing-vancouver-${n}`);
+			for (const n of macroNums) slugs.push(`macrospacing-vancouver-${n}`);
 		}
 
+		const action = newSeasonPlanOnly ? 'plan' : 'import';
 		const label = hasRange
-			? `MSV ${start}-${end - 1}${plannedSlugs.length > (end - start) ? ` + macros` : ''}, ${plannedSlugs.length} planned events`
+			? `MSV ${start}-${end - 1}${slugs.length > (end - start) ? ` + macros` : ''}, ${slugs.length} events (${action})`
 			: 'empty (add events later)';
 		if (!confirm(`Create Season ${newId} (${label})?`)) return;
 
 		currentSeasonId = newId;
 		showCreateSeason = false;
+		const planOnly = newSeasonPlanOnly;
 		newSeasonId = '';
 		newSeasonStart = '';
 		newSeasonEnd = '';
 		newSeasonMacros = '';
+		newSeasonPlanOnly = false;
 
-		loading = true;
-		error = '';
-		try {
-			const res = await fetch('/api/league/seasons', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					seasonId: newId,
-					seasonName: `Season ${newId}`,
-					plannedSlugs: plannedSlugs.length > 0 ? plannedSlugs : undefined
-				})
-			});
-			if (!res.ok) { error = (await res.json()).error ?? 'Failed to create season'; }
-			const seasonsRes = await fetch('/api/league/seasons');
-			if (seasonsRes.ok) seasonsList = (await seasonsRes.json()).sort((a: { id: number }, b: { id: number }) => a.id - b.id);
-			await loadSeason();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Network error';
+		if (!planOnly && slugs.length > 0) {
+			await runImportWithSlugs(slugs);
+		} else {
+			loading = true;
+			error = '';
+			try {
+				const res = await fetch('/api/league/seasons', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						seasonId: newId,
+						seasonName: `Season ${newId}`,
+						plannedSlugs: slugs.length > 0 ? slugs : undefined
+					})
+				});
+				if (!res.ok) { error = (await res.json()).error ?? 'Failed to create season'; }
+				const seasonsRes = await fetch('/api/league/seasons');
+				if (seasonsRes.ok) seasonsList = (await seasonsRes.json()).sort((a: { id: number }, b: { id: number }) => a.id - b.id);
+				await loadSeason();
+			} catch (e) {
+				error = e instanceof Error ? e.message : 'Network error';
+			}
+			loading = false;
 		}
-		loading = false;
 	}
 
 	async function fullReimport() {
@@ -366,11 +374,20 @@
 				</div>
 				<button onclick={createSeason} disabled={importing || loading}
 					class="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
-					Create Season
+					{importing ? 'Importing...' : newSeasonPlanOnly ? 'Create Season' : 'Create & Import'}
 				</button>
 			</div>
-			<p class="mt-2 text-xs text-muted-foreground">
-				Events are planned but not imported yet — import them one at a time as they happen. Leave blank for an empty season.
+			<div class="mt-2 flex items-center gap-4">
+				<label class="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+					<input type="checkbox" bind:checked={newSeasonPlanOnly}
+						class="rounded border-input" />
+					Plan only (don't import yet)
+				</label>
+			</div>
+			<p class="mt-1 text-xs text-muted-foreground">
+				{newSeasonPlanOnly
+					? 'Events will be saved as planned — import them one at a time later.'
+					: 'All events will be imported from StartGG immediately. Leave event numbers blank for an empty season.'}
 			</p>
 		</div>
 	{/if}
