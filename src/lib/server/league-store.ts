@@ -132,14 +132,20 @@ function computeMatchups(matches: LeagueMatch[], playerId: string) {
 	return { mostWon, mostLost, mostPlayed, bestWinRate, worstWinRate };
 }
 
-function computeCharacterStats(matches: LeagueMatch[], playerId: string): { name: string; count: number }[] {
-	const charCounts = new Map<string, number>();
+function computeCharacterStats(matches: LeagueMatch[], playerId: string): { name: string; iconUrl?: string; count: number }[] {
+	const charCounts = new Map<string, { count: number; iconUrl?: string }>();
 	for (const m of matches) {
 		const chars = m.player1Id === playerId ? m.player1Characters : m.player2Characters;
 		if (!chars) continue;
-		for (const c of chars) charCounts.set(c, (charCounts.get(c) ?? 0) + 1);
+		for (const c of chars) {
+			const existing = charCounts.get(c.name);
+			charCounts.set(c.name, {
+				count: (existing?.count ?? 0) + 1,
+				iconUrl: existing?.iconUrl ?? c.iconUrl
+			});
+		}
 	}
 	return [...charCounts.entries()]
-		.map(([name, count]) => ({ name, count }))
+		.map(([name, { count, iconUrl }]) => ({ name, iconUrl, count }))
 		.sort((a, b) => b.count - a.count);
 }

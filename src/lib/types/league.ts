@@ -42,6 +42,11 @@ export interface LeagueRankSnapshot {
 	sigma: number;
 }
 
+export interface CharacterSelection {
+	name: string;
+	iconUrl?: string;
+}
+
 export interface LeagueMatch {
 	eventSlug: string;
 	eventNumber: number;
@@ -52,8 +57,8 @@ export interface LeagueMatch {
 	winnerId: string;
 	player1Score: number;
 	player2Score: number;
-	player1Characters?: string[];
-	player2Characters?: string[];
+	player1Characters?: CharacterSelection[];
+	player2Characters?: CharacterSelection[];
 	phase: string;
 	roundLabel: string;
 	date: string;
@@ -85,6 +90,6 @@ export interface LeaguePlayerStats {
 		bestWinRate: { tag: string; playerId: string; rate: number; total: number } | null;
 		worstWinRate: { tag: string; playerId: string; rate: number; total: number } | null;
 	};
-	characters: { name: string; count: number }[];
+	characters: { name: string; iconUrl?: string; count: number }[];
 	recentMatches: LeagueMatch[];
 }

@@ -1,7 +1,7 @@
 import { gql, TOURNAMENT_QUERY } from '$lib/server/startgg';
 import { createRating, rate1v1, ratingToPoints } from '$lib/server/trueskill';
 import { getLeagueSeason, saveLeagueSeason } from '$lib/server/league-store';
-import type { LeagueSeason, LeagueEvent, LeaguePlayer, LeagueMatch, LeaguePlacement } from '$lib/types/league';
+import type { LeagueSeason, LeagueEvent, LeaguePlayer, LeagueMatch, LeaguePlacement, CharacterSelection } from '$lib/types/league';
 import type { Rating } from '$lib/server/trueskill';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,6 +58,11 @@ query LeagueEventSets($eventId: ID!, $page: Int!, $perPage: Int!) {
             entrant { id }
             selectionType
             selectionValue
+            character {
+              id
+              name
+              images(type: "stockIcon") { url }
+            }
           }
         }
       }
@@ -129,14 +134,19 @@ function parseScore(displayScore: string | null, entrant1Name: string): { s1: nu
 	return { s1: rightScore, s2: leftScore };
 }
 
-function extractCharacters(set: GqlRecord, entrantId: number): string[] {
+function extractCharacters(set: GqlRecord, entrantId: number): CharacterSelection[] {
 	const games = (set.games ?? []) as GqlRecord[];
-	const chars: string[] = [];
+	const seen = new Set<string>();
+	const chars: CharacterSelection[] = [];
 	for (const game of games) {
 		for (const sel of (game.selections ?? []) as GqlRecord[]) {
 			if (sel.entrant?.id === entrantId && sel.selectionType === 'CHARACTER') {
-				const name = CHAR_ID_TO_NAME[sel.selectionValue as number];
-				if (name && !chars.includes(name)) chars.push(name);
+				const name = sel.character?.name as string | undefined
+					?? CHAR_ID_TO_NAME[sel.selectionValue as number];
+				if (!name || seen.has(name)) continue;
+				seen.add(name);
+				const iconUrl = (sel.character?.images as GqlRecord[])?.[0]?.url as string | undefined;
+				chars.push({ name, iconUrl });
 			}
 		}
 	}

@@ -135,7 +135,18 @@
 
 			<!-- Player header -->
 			<div class="rounded-xl border border-border bg-card p-5">
-				<h1 class="text-2xl font-bold text-foreground">{s.player.gamerTag}</h1>
+				<div class="flex items-center gap-3">
+					{#if s.characters?.length}
+						<div class="flex -space-x-1">
+							{#each s.characters.slice(0, 3) as char}
+								{#if char.iconUrl}
+									<img src={char.iconUrl} alt={char.name} title={char.name} class="h-8 w-8 object-contain" />
+								{/if}
+							{/each}
+						</div>
+					{/if}
+					<h1 class="text-2xl font-bold text-foreground">{s.player.gamerTag}</h1>
+				</div>
 				{#if s.player.aliases?.length}
 					<div class="mt-1 text-sm text-muted-foreground">
 						aka {s.player.aliases.join(', ')}
@@ -226,7 +237,10 @@
 					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Characters Played</h2>
 					<div class="flex flex-wrap gap-2">
 						{#each s.characters as char}
-							<span class="rounded-full bg-secondary px-3 py-1 text-sm text-foreground">
+							<span class="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm text-foreground">
+								{#if char.iconUrl}
+									<img src={char.iconUrl} alt={char.name} class="h-5 w-5 object-contain" />
+								{/if}
 								{char.name} <span class="text-muted-foreground">×{char.count}</span>
 							</span>
 						{/each}
