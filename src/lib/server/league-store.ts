@@ -215,7 +215,12 @@ export function getPlayerStats(season: LeagueSeason, playerId: string, config?: 
 		});
 	}
 	bestWins.sort((a, b) => a.oppRank - b.oppRank);
-	const topWins = bestWins.slice(0, 5);
+	const seen = new Set<string>();
+	const uniqueWins: typeof bestWins = [];
+	for (const w of bestWins) {
+		if (!seen.has(w.oppId)) { seen.add(w.oppId); uniqueWins.push(w); }
+	}
+	const topWins = uniqueWins.slice(0, 5);
 
 	return {
 		player,
@@ -316,7 +321,7 @@ function computeCharacterStats(matches: LeagueMatch[], playerId: string): { name
 		.sort((a, b) => b.count - a.count);
 }
 
-export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: number): SeasonAward[] {
+export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: number, config?: { minEvents?: number; attendanceBonus?: number }): SeasonAward[] {
 	const awards: SeasonAward[] = [];
 	const players = Object.values(season.players);
 	const MIN_EVENTS = overrideMinEvents ?? Math.max(2, Math.floor(season.events.length * 0.4));
@@ -412,7 +417,7 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 	}
 
 	// Biggest Up and Comer (outside top 17, biggest single-event gain)
-	const rankings = getRankings(season);
+	const rankings = getRankings(season, config);
 	const topIds = new Set(rankings.slice(0, 17).map((r) => r.playerId));
 	const upComerScores: { pid: string; gain: number }[] = [];
 	for (const p of players) {
