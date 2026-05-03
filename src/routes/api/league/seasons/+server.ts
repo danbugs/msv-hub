@@ -7,7 +7,7 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async ({ request }) => {
-	const { seasonId, seasonName, startDate, endDate } = await request.json();
+	const { seasonId, seasonName, startDate, endDate, plannedSlugs } = await request.json();
 	if (!seasonId || !seasonName) {
 		return Response.json({ error: 'Missing seasonId or seasonName' }, { status: 400 });
 	}
@@ -22,7 +22,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		endDate: endDate ?? '',
 		events: [],
 		players: {},
-		matches: []
+		matches: [],
+		plannedSlugs: plannedSlugs ?? undefined
 	});
 	return Response.json({ ok: true, seasonId });
 };

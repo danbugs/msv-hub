@@ -30,6 +30,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			entrantCount: e.entrantCount
 		})),
 		rankings,
-		totalMatches: season.matches.length
+		totalMatches: season.matches.length,
+		plannedSlugs: season.plannedSlugs ?? []
 	});
 };

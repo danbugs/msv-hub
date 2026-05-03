@@ -9,6 +9,7 @@
 		events: { slug: string; name: string; date: string; eventNumber: number; entrantCount: number }[];
 		rankings: { playerId: string; gamerTag: string; points: number; rank: number }[];
 		totalMatches: number;
+		plannedSlugs: string[];
 	}
 
 	let season = $state<SeasonData | null>(null);
@@ -137,23 +138,20 @@
 		return season.events.map((e) => e.slug);
 	}
 
+	async function importSlug(slug: string) {
+		const allSlugs = [...getAllSeasonSlugs(), slug];
+		const unique = [...new Set(allSlugs)];
+		if (!confirm(`Add ${slug} to Season ${getSeasonId()}? This will re-process ratings with the new event included.`)) return;
+		await runImportWithSlugs(unique);
+	}
+
 	async function addEvent() {
 		const input = addEventNumber.trim();
 		if (!input) { error = 'Enter an event slug or number'; return; }
 
-		let newSlug: string;
-		if (/^\d+$/.test(input)) {
-			newSlug = `microspacing-vancouver-${input}`;
-		} else {
-			newSlug = input;
-		}
-
-		const allSlugs = [...getAllSeasonSlugs(), newSlug];
-		const unique = [...new Set(allSlugs)];
-
-		if (!confirm(`Add ${newSlug} to Season ${getSeasonId()}? This will re-process ratings with the new event included.`)) return;
+		const slug = /^\d+$/.test(input) ? `microspacing-vancouver-${input}` : input;
 		addEventNumber = '';
-		await runImportWithSlugs(unique);
+		await importSlug(slug);
 	}
 
 	async function createSeason() {
@@ -163,22 +161,22 @@
 
 		const start = parseInt(newSeasonStart, 10);
 		const end = parseInt(newSeasonEnd, 10);
-		const hasEvents = !isNaN(start) && !isNaN(end) && end >= start;
+		const hasRange = !isNaN(start) && !isNaN(end) && end > start;
 
-		if (!hasEvents && (newSeasonStart || newSeasonEnd)) {
-			error = 'Enter valid start and end event numbers, or leave both blank for an empty season';
+		if (!hasRange && (newSeasonStart || newSeasonEnd)) {
+			error = 'Enter valid start/end event numbers (end is exclusive), or leave both blank';
 			return;
 		}
 
-		const slugs: string[] = [];
-		if (hasEvents) {
-			for (let i = start; i <= end; i++) slugs.push(`microspacing-vancouver-${i}`);
+		const plannedSlugs: string[] = [];
+		if (hasRange) {
+			for (let i = start; i < end; i++) plannedSlugs.push(`microspacing-vancouver-${i}`);
 			const macroNums = newSeasonMacros.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
-			for (const n of macroNums) slugs.push(`macrospacing-vancouver-${n}`);
+			for (const n of macroNums) plannedSlugs.push(`macrospacing-vancouver-${n}`);
 		}
 
-		const label = hasEvents
-			? `MSV ${start}-${end}${slugs.length > (end - start + 1) ? ` + macros` : ''}, ${slugs.length} events`
+		const label = hasRange
+			? `MSV ${start}-${end - 1}${plannedSlugs.length > (end - start) ? ` + macros` : ''}, ${plannedSlugs.length} planned events`
 			: 'empty (add events later)';
 		if (!confirm(`Create Season ${newId} (${label})?`)) return;
 
@@ -189,26 +187,26 @@
 		newSeasonEnd = '';
 		newSeasonMacros = '';
 
-		if (slugs.length > 0) {
-			await runImportWithSlugs(slugs);
-		} else {
-			loading = true;
-			error = '';
-			try {
-				const res = await fetch('/api/league/seasons', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ seasonId: newId, seasonName: `Season ${newId}` })
-				});
-				if (!res.ok) error = (await res.json()).error ?? 'Failed to create season';
-				const seasonsRes = await fetch('/api/league/seasons');
-				if (seasonsRes.ok) seasonsList = (await seasonsRes.json()).sort((a: { id: number }, b: { id: number }) => a.id - b.id);
-				await loadSeason();
-			} catch (e) {
-				error = e instanceof Error ? e.message : 'Network error';
-			}
-			loading = false;
+		loading = true;
+		error = '';
+		try {
+			const res = await fetch('/api/league/seasons', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					seasonId: newId,
+					seasonName: `Season ${newId}`,
+					plannedSlugs: plannedSlugs.length > 0 ? plannedSlugs : undefined
+				})
+			});
+			if (!res.ok) { error = (await res.json()).error ?? 'Failed to create season'; }
+			const seasonsRes = await fetch('/api/league/seasons');
+			if (seasonsRes.ok) seasonsList = (await seasonsRes.json()).sort((a: { id: number }, b: { id: number }) => a.id - b.id);
+			await loadSeason();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Network error';
 		}
+		loading = false;
 	}
 
 	async function fullReimport() {
@@ -357,8 +355,8 @@
 						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
 				</div>
 				<div>
-					<label class="text-xs text-muted-foreground">Last Micro #</label>
-					<input bind:value={newSeasonEnd} type="number" placeholder="125"
+					<label class="text-xs text-muted-foreground">Up to Micro # (excl.)</label>
+					<input bind:value={newSeasonEnd} type="number" placeholder="126"
 						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
 				</div>
 				<div>
@@ -366,13 +364,13 @@
 					<input bind:value={newSeasonMacros} type="text" placeholder="e.g. 6"
 						class="mt-1 w-28 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 				</div>
-				<button onclick={createSeason} disabled={importing}
+				<button onclick={createSeason} disabled={importing || loading}
 					class="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
-					{importing ? 'Creating...' : 'Create & Import'}
+					Create Season
 				</button>
 			</div>
 			<p class="mt-2 text-xs text-muted-foreground">
-				Leave event numbers blank to create an empty season — you can add events later.
+				Events are planned but not imported yet — import them one at a time as they happen. Leave blank for an empty season.
 			</p>
 		</div>
 	{/if}
@@ -506,7 +504,7 @@
 		</div>
 
 		<div class="mb-6">
-			<h2 class="text-sm font-semibold text-muted-foreground mb-2">Events Imported</h2>
+			<h2 class="text-sm font-semibold text-muted-foreground mb-2">Events</h2>
 			<div class="space-y-1">
 				{#each season.events as evt}
 					<div class="flex items-center justify-between rounded-lg bg-card px-3 py-2 text-sm">
@@ -516,6 +514,13 @@
 							<button onclick={() => deleteEvent(evt.slug)} disabled={importing}
 								class="text-xs text-destructive hover:text-destructive/80 disabled:opacity-50">Remove</button>
 						</div>
+					</div>
+				{/each}
+				{#each (season.plannedSlugs ?? []).filter((s) => !season!.events.some((e) => e.slug === s)) as slug}
+					<div class="flex items-center justify-between rounded-lg bg-card/50 border border-dashed border-border px-3 py-2 text-sm">
+						<span class="text-muted-foreground">{slug}</span>
+						<button onclick={() => importSlug(slug)} disabled={importing}
+							class="text-xs text-primary hover:text-primary/80 disabled:opacity-50">Import</button>
 					</div>
 				{/each}
 			</div>

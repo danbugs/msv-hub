@@ -6,6 +6,7 @@ export interface LeagueSeason {
 	events: LeagueEvent[];
 	players: Record<string, LeaguePlayer>;
 	matches: LeagueMatch[];
+	plannedSlugs?: string[];
 }
 
 export interface LeagueEvent {
