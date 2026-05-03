@@ -71,11 +71,20 @@
 								<td class="px-4 py-3 text-muted-foreground font-mono text-xs">{player.rank}</td>
 								<td class="px-4 py-3">
 									<div class="flex items-center gap-2">
+										{#if player.characters?.length}
+											<div class="flex -space-x-1 shrink-0">
+												{#each player.characters as char}
+													{#if char.iconUrl}
+														<img src={char.iconUrl} alt={char.name} title={char.name} class="h-5 w-5 object-contain" />
+													{/if}
+												{/each}
+											</div>
+										{/if}
 										<a href="/league/player/{player.playerId}?season={data.seasonId}"
 											class="text-foreground hover:text-primary font-medium transition-colors">
 											{player.gamerTag}
 										</a>
-										<span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+										<span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded hidden sm:inline"
 											style="color: {player.tierColor}; background: {player.tierColor}15;">
 											{player.tier}
 										</span>
@@ -98,35 +107,6 @@
 					</tbody>
 				</table>
 			</div>
-
-			{#if data.awards?.length}
-				<div class="mt-6">
-					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Season Awards</h2>
-					<div class="grid gap-3 sm:grid-cols-2">
-						{#each data.awards as award}
-							<div class="rounded-xl border border-border bg-card p-4">
-								<div class="text-xs text-muted-foreground uppercase tracking-wider">{award.title}</div>
-								<div class="mt-1">
-									{#if award.playerId}
-										<a href="/league/player/{award.playerId}?season={data.seasonId}"
-											class="text-foreground hover:text-primary font-bold transition-colors">
-											{award.playerTag}
-										</a>
-									{/if}
-									{#if award.secondPlayerId}
-										<span class="text-muted-foreground mx-1">vs</span>
-										<a href="/league/player/{award.secondPlayerId}?season={data.seasonId}"
-											class="text-foreground hover:text-primary font-bold transition-colors">
-											{award.secondPlayerTag}
-										</a>
-									{/if}
-								</div>
-								<div class="mt-1 text-xs text-muted-foreground">{award.value}</div>
-							</div>
-						{/each}
-					</div>
-				</div>
-			{/if}
 
 			{#if data.events?.length}
 				<div class="mt-6">

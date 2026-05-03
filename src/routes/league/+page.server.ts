@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { getLeagueSeason, getRankings, computeSeasonAwards, getLeagueConfig } from '$lib/server/league-store';
+import { getLeagueSeason, getRankings, getLeagueConfig } from '$lib/server/league-store';
 import { getPlayerTier, getTournamentTiers } from '$lib/types/league';
 
 export const load: PageServerLoad = async ({ url }) => {
@@ -22,10 +22,30 @@ export const load: PageServerLoad = async ({ url }) => {
 		}
 	}
 
+	const playerChars = new Map<string, Map<string, { count: number; iconUrl?: string }>>();
+	for (const m of season.matches) {
+		for (const [pid, chars] of [[m.player1Id, m.player1Characters], [m.player2Id, m.player2Characters]] as const) {
+			if (!chars) continue;
+			const charMap = playerChars.get(pid) ?? new Map();
+			for (const c of chars) {
+				const existing = charMap.get(c.name);
+				charMap.set(c.name, { count: (existing?.count ?? 0) + 1, iconUrl: existing?.iconUrl ?? c.iconUrl });
+			}
+			playerChars.set(pid, charMap);
+		}
+	}
+
 	const enrichedRankings = rankings.map((r) => {
 		const stats = playerMatchCounts.get(r.playerId);
 		const player = season.players[r.playerId];
 		const tier = getPlayerTier(r.points);
+		const chars = playerChars.get(r.playerId);
+		const topChars = chars
+			? [...chars.entries()]
+				.sort((a, b) => b[1].count - a[1].count)
+				.slice(0, 2)
+				.map(([name, { iconUrl }]) => ({ name, iconUrl }))
+			: [];
 		return {
 			...r,
 			aliases: player?.aliases ?? [],
@@ -33,7 +53,8 @@ export const load: PageServerLoad = async ({ url }) => {
 			losses: stats?.losses ?? 0,
 			events: stats?.events.size ?? 0,
 			tier: tier.name,
-			tierColor: tier.color
+			tierColor: tier.color,
+			characters: topChars
 		};
 	});
 
@@ -60,8 +81,6 @@ export const load: PageServerLoad = async ({ url }) => {
 		};
 	});
 
-	const awards = computeSeasonAwards(season);
-
 	return {
 		season: {
 			id: season.id,
@@ -72,7 +91,6 @@ export const load: PageServerLoad = async ({ url }) => {
 		},
 		rankings: enrichedRankings,
 		events: eventTiers,
-		awards,
 		seasonId
 	};
 };

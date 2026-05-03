@@ -259,8 +259,8 @@ export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
 	if (mostAttended) {
 		const p = season.players[mostAttended[0]];
 		if (p) awards.push({
-			title: 'Iron Man',
-			description: 'Most events attended',
+			title: 'Most Attended',
+			description: 'Simple count of events the player appeared in.',
 			playerId: p.id, playerTag: p.gamerTag,
 			value: `${mostAttended[1]} events`
 		});
@@ -289,8 +289,8 @@ export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
 	if (consistentPlayer) {
 		const p = season.players[consistentPlayer];
 		if (p) awards.push({
-			title: 'The Rock',
-			description: 'Most consistent performer',
+			title: 'Most Consistent',
+			description: 'Score = avg_percentile - stdev. Rewards both high placement and low variance. Min 40% attendance.',
 			playerId: p.id, playerTag: p.gamerTag,
 			value: `${Math.round(bestConsistency)} consistency score`
 		});
@@ -317,8 +317,8 @@ export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
 	if (improvedPlayer && bestSlope > 0) {
 		const p = season.players[improvedPlayer];
 		if (p) awards.push({
-			title: 'Rising Star',
-			description: 'Most improved rating trend',
+			title: 'Most Improved',
+			description: 'Linear regression slope of TrueSkill points over events. Higher slope = faster improvement. Min 40% attendance.',
 			playerId: p.id, playerTag: p.gamerTag,
 			value: `+${Math.round(bestSlope)} pts/event`
 		});
@@ -339,8 +339,8 @@ export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
 	if (upComer) {
 		const p = season.players[upComer.id];
 		if (p) awards.push({
-			title: 'Up and Comer',
-			description: 'Biggest single-event breakout (outside top 17)',
+			title: 'Biggest Up and Comer',
+			description: 'Biggest single-event rating gain by a player outside the top 17. Captures breakout performances.',
 			playerId: p.id, playerTag: p.gamerTag,
 			value: `+${upComer.gain} pts in one event`
 		});
@@ -362,8 +362,8 @@ export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
 		const w = season.players[biggestUpset.winnerId];
 		const l = season.players[biggestUpset.loserId];
 		if (w && l) awards.push({
-			title: 'Giant Slayer',
-			description: 'Biggest bracket upset of the season',
+			title: 'Biggest Upset',
+			description: 'Largest rating gap win in bracket (non-Swiss, non-DQ). Higher gap = bigger upset.',
 			playerId: w.id, playerTag: w.gamerTag,
 			secondPlayerId: l.id, secondPlayerTag: l.gamerTag,
 			value: `+${biggestUpset.gap} pts gap vs ${l.gamerTag}`
@@ -397,7 +397,7 @@ export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
 		const p2 = season.players[bestRivalry.p2];
 		if (p1 && p2) awards.push({
 			title: 'Rivalry of the Season',
-			description: 'Closest head-to-head record',
+			description: 'Closest head-to-head record with min 3 sets. Ranked by smallest win difference, then total sets as tiebreaker.',
 			playerId: p1.id, playerTag: p1.gamerTag,
 			secondPlayerId: p2.id, secondPlayerTag: p2.gamerTag,
 			value: `${p1.gamerTag} ${bestRivalry.p1Wins}-${bestRivalry.p2Wins} ${p2.gamerTag}`
