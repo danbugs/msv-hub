@@ -267,3 +267,61 @@ Tone: casual discord speak. "boutta", "smt", "lowkey", "u" are fine. corny puns 
 
 	return 'who planning to be up regging they micro?';
 }
+
+export async function generatePlayerBio(stats: {
+	gamerTag: string;
+	rank: number;
+	totalPlayers: number;
+	points: number;
+	tier: string;
+	winRate: number;
+	matchesPlayed: number;
+	tournamentsPlayed: number;
+	characters: string[];
+	nemesis?: string;
+	rival?: string;
+	dominated?: string;
+	tournamentStats: { top1: number; top3: number; top8: number };
+	trend: 'rising' | 'falling' | 'steady';
+}): Promise<string> {
+	const client = getClient();
+
+	const charStr = stats.characters.length > 0 ? stats.characters.join(', ') : 'various characters';
+	const matchupNotes: string[] = [];
+	if (stats.nemesis) matchupNotes.push(`Their nemesis is ${stats.nemesis}.`);
+	if (stats.rival) matchupNotes.push(`Their biggest rival is ${stats.rival}.`);
+	if (stats.dominated) matchupNotes.push(`They've dominated ${stats.dominated}.`);
+
+	const prompt = `Write a 2-3 sentence player bio for a competitive Super Smash Bros. Ultimate player in a local weekly tournament series called Microspacing Vancouver (MSV).
+
+Player data:
+- Tag: ${stats.gamerTag}
+- Rank: #${stats.rank} out of ${stats.totalPlayers}
+- Tier: ${stats.tier}
+- Win rate: ${stats.winRate}%
+- Matches played: ${stats.matchesPlayed} across ${stats.tournamentsPlayed} events
+- Characters: ${charStr}
+- Tournament results: ${stats.tournamentStats.top1} wins, ${stats.tournamentStats.top3} top 3s, ${stats.tournamentStats.top8} top 8s
+- Trend: ${stats.trend}
+${matchupNotes.length > 0 ? '- Matchup notes: ' + matchupNotes.join(' ') : ''}
+
+RULES:
+- Be positive and encouraging. Highlight strengths and storylines.
+- Write like a knowledgeable Smash commentator or analyst.
+- Reference specific data points naturally (rank, characters, rivalries).
+- If they're lower ranked, focus on potential and growth.
+- If they're higher ranked, talk about their dominance or consistency.
+- Keep it hype but genuine. No generic filler.
+- Do NOT use em dashes (—), colons to start lists, or the word "delve".
+- Write exactly 2-3 sentences. No more.`;
+
+	const response = await client.messages.create({
+		model: 'claude-haiku-4-5-20251001',
+		max_tokens: 200,
+		temperature: 0.8,
+		system: 'You are a Smash Bros. tournament analyst writing player bios for a local scene ranking page. Be concise, positive, and specific.',
+		messages: [{ role: 'user', content: prompt }]
+	});
+
+	return response.content[0].type === 'text' ? response.content[0].text.trim() : '';
+}
