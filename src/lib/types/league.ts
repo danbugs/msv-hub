@@ -106,6 +106,12 @@ export interface LeagueMatch {
 	date: string;
 }
 
+export interface AwardCandidate {
+	playerId: string;
+	playerTag: string;
+	value: string;
+}
+
 export interface SeasonAward {
 	title: string;
 	description: string;
@@ -114,6 +120,7 @@ export interface SeasonAward {
 	secondPlayerId?: string;
 	secondPlayerTag?: string;
 	value: string;
+	candidates?: AwardCandidate[];
 }
 
 export interface LeaguePlayerStats {
@@ -144,4 +151,12 @@ export interface LeaguePlayerStats {
 	};
 	characters: { name: string; iconUrl?: string; count: number }[];
 	recentMatches: LeagueMatch[];
+	matchesByEvent: {
+		slug: string;
+		name: string;
+		date: string;
+		eventNumber: number;
+		placement?: number;
+		matches: LeagueMatch[];
+	}[];
 }

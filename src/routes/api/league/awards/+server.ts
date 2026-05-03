@@ -6,5 +6,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	const seasonId = parseInt(url.searchParams.get('season') ?? '10', 10);
 	const season = await getLeagueSeason(seasonId);
 	if (!season) return Response.json({ error: 'Season not found' }, { status: 404 });
-	return Response.json(computeSeasonAwards(season));
+	const minEventsParam = url.searchParams.get('minEvents');
+	const minEvents = minEventsParam ? parseInt(minEventsParam, 10) : undefined;
+	return Response.json(computeSeasonAwards(season, minEvents));
 };
