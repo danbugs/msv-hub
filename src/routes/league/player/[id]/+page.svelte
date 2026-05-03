@@ -136,6 +136,11 @@
 			<!-- Player header -->
 			<div class="rounded-xl border border-border bg-card p-5">
 				<h1 class="text-2xl font-bold text-foreground">{s.player.gamerTag}</h1>
+				{#if s.player.aliases?.length}
+					<div class="mt-1 text-sm text-muted-foreground">
+						aka {s.player.aliases.join(', ')}
+					</div>
+				{/if}
 				<div class="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
 					<div>
 						<div class="text-xs text-muted-foreground">Rank</div>
@@ -214,6 +219,20 @@
 					</div>
 				</div>
 			</div>
+
+			<!-- Characters -->
+			{#if s.characters?.length}
+				<div class="rounded-xl border border-border bg-card p-5">
+					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Characters Played</h2>
+					<div class="flex flex-wrap gap-2">
+						{#each s.characters as char}
+							<span class="rounded-full bg-secondary px-3 py-1 text-sm text-foreground">
+								{char.name} <span class="text-muted-foreground">×{char.count}</span>
+							</span>
+						{/each}
+					</div>
+				</div>
+			{/if}
 
 			<!-- Tournament Statistics -->
 			<div class="rounded-xl border border-border bg-card p-5">

@@ -6,7 +6,10 @@
 	function filteredRankings() {
 		if (!searchQuery.trim()) return data.rankings;
 		const q = searchQuery.toLowerCase();
-		return data.rankings.filter((r: { gamerTag: string }) => r.gamerTag.toLowerCase().includes(q));
+		return data.rankings.filter((r: { gamerTag: string; aliases?: string[] }) =>
+			r.gamerTag.toLowerCase().includes(q) ||
+			(r.aliases ?? []).some((a: string) => a.toLowerCase().includes(q))
+		);
 	}
 </script>
 

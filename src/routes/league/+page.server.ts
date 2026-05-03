@@ -22,8 +22,10 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const enrichedRankings = rankings.map((r) => {
 		const stats = playerMatchCounts.get(r.playerId);
+		const player = season.players[r.playerId];
 		return {
 			...r,
+			aliases: player?.aliases ?? [],
 			wins: stats?.wins ?? 0,
 			losses: stats?.losses ?? 0,
 			events: stats?.events.size ?? 0

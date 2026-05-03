@@ -16,8 +16,10 @@
 	let importing = $state(false);
 	let importLogs = $state<string[]>([]);
 	let error = $state('');
+	let addEventNumber = $state('');
 
 	const SEASON_ID = 10;
+	const SEASON_START = 125;
 
 	onMount(async () => {
 		loading = true;
@@ -26,14 +28,18 @@
 		loading = false;
 	});
 
-	async function runImport() {
-		if (!confirm('Import Season 10 data from StartGG? This fetches all match data for MSV 125-137 and may take a few minutes.')) return;
+	function getNextEventNumber(): number {
+		if (!season?.events.length) return SEASON_START;
+		return Math.max(...season.events.map((e) => e.eventNumber)) + 1;
+	}
+
+	async function runImport(slugStart: number, slugEnd: number) {
 		importing = true;
 		importLogs = [];
 		error = '';
 
 		const slugs = [];
-		for (let i = 125; i <= 137; i++) {
+		for (let i = slugStart; i <= slugEnd; i++) {
 			slugs.push(`microspacing-vancouver-${i}`);
 		}
 
@@ -62,6 +68,44 @@
 			error = e instanceof Error ? e.message : 'Network error';
 		}
 		importing = false;
+	}
+
+	async function addEvent() {
+		const num = parseInt(addEventNumber.trim(), 10);
+		if (isNaN(num) || num < 1) { error = 'Enter a valid event number'; return; }
+
+		const allSlugs: string[] = [];
+		if (season?.events.length) {
+			for (const evt of season.events) {
+				allSlugs.push(evt.slug);
+			}
+		}
+		allSlugs.push(`microspacing-vancouver-${num}`);
+		allSlugs.sort((a, b) => {
+			const na = parseInt(a.match(/(\d+)$/)?.[1] ?? '0', 10);
+			const nb = parseInt(b.match(/(\d+)$/)?.[1] ?? '0', 10);
+			return na - nb;
+		});
+
+		const min = parseInt(allSlugs[0].match(/(\d+)$/)?.[1] ?? '0', 10);
+		const max = parseInt(allSlugs[allSlugs.length - 1].match(/(\d+)$/)?.[1] ?? '0', 10);
+
+		if (!confirm(`Add MSV #${num} to Season 10? This will re-process ratings with the new event included.`)) return;
+		addEventNumber = '';
+		await runImport(min, max);
+	}
+
+	async function fullReimport() {
+		if (!season?.events.length) return;
+		if (!confirm('Re-import all events from StartGG? This re-fetches all match data and may take a few minutes.')) return;
+		const min = Math.min(...season.events.map((e) => e.eventNumber));
+		const max = Math.max(...season.events.map((e) => e.eventNumber));
+		await runImport(min, max);
+	}
+
+	async function initialImport() {
+		if (!confirm('Import Season 10 data from StartGG? This fetches all match data for MSV 125-137 and may take a few minutes.')) return;
+		await runImport(125, 137);
 	}
 </script>
 
@@ -109,16 +153,36 @@
 			</div>
 		</div>
 
-		<button onclick={runImport} disabled={importing}
+		<!-- Add Event -->
+		<div class="rounded-xl border border-border bg-card p-5 mb-4">
+			<h2 class="text-sm font-bold text-foreground mb-3">Add Event</h2>
+			<div class="flex gap-2 items-center">
+				<span class="text-sm text-muted-foreground shrink-0">MSV #</span>
+				<input
+					bind:value={addEventNumber}
+					placeholder={String(getNextEventNumber())}
+					type="number"
+					class="w-24 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
+				<button onclick={addEvent} disabled={importing}
+					class="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
+					{importing ? 'Importing...' : 'Add'}
+				</button>
+			</div>
+			<p class="mt-2 text-xs text-muted-foreground">
+				Only the new event will be fetched from StartGG. Existing events use cached data. Ratings are re-computed with the new event included.
+			</p>
+		</div>
+
+		<button onclick={fullReimport} disabled={importing}
 			class="rounded-lg border border-warning-border bg-warning-muted px-4 py-2 text-sm font-medium text-warning hover:bg-warning-muted/80 transition-colors disabled:opacity-50">
-			{importing ? 'Importing...' : 'Re-import from StartGG'}
+			{importing ? 'Importing...' : 'Re-import all from StartGG'}
 		</button>
 	{:else}
 		<div class="rounded-xl border border-dashed border-border p-8 text-center">
 			<p class="text-muted-foreground mb-4">No league data yet. Import Season 10 from StartGG to get started.</p>
-			<button onclick={runImport} disabled={importing}
+			<button onclick={initialImport} disabled={importing}
 				class="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
-				{importing ? 'Importing...' : 'Import Season 10'}
+				{importing ? 'Importing...' : 'Import Season 10 (MSV 125-137)'}
 			</button>
 		</div>
 	{/if}
