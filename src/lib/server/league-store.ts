@@ -146,6 +146,24 @@ export function getPlayerStats(season: LeagueSeason, playerId: string): LeaguePl
 	const matchups = computeMatchups(playerMatches, playerId, season);
 	const characters = computeCharacterStats(playerMatches, playerId);
 
+	const eventMatchMap = new Map<string, LeagueMatch[]>();
+	for (const m of playerMatches) {
+		const arr = eventMatchMap.get(m.eventSlug) ?? [];
+		arr.push(m);
+		eventMatchMap.set(m.eventSlug, arr);
+	}
+	const matchesByEvent = season.events
+		.filter((evt) => eventMatchMap.has(evt.slug))
+		.map((evt) => ({
+			slug: evt.slug,
+			name: evt.name,
+			date: evt.date,
+			eventNumber: evt.eventNumber,
+			placement: evt.placements.find((p) => p.playerId === playerId)?.placement,
+			matches: eventMatchMap.get(evt.slug)!
+		}))
+		.reverse();
+
 	return {
 		player,
 		rank,
@@ -161,7 +179,8 @@ export function getPlayerStats(season: LeagueSeason, playerId: string): LeaguePl
 		tournamentStats,
 		matchups,
 		characters,
-		recentMatches: [...playerMatches].reverse()
+		recentMatches: [...playerMatches].reverse(),
+		matchesByEvent
 	};
 }
 
@@ -169,6 +188,7 @@ function computeMatchups(matches: LeagueMatch[], playerId: string, season: Leagu
 	const opponents = new Map<string, { tag: string; wins: number; losses: number; total: number; closeGames: number }>();
 
 	for (const m of matches) {
+		if (m.isDQ) continue;
 		const isP1 = m.player1Id === playerId;
 		const oppId = isP1 ? m.player2Id : m.player1Id;
 		const oppTag = isP1 ? m.player2Tag : m.player1Tag;
@@ -178,11 +198,9 @@ function computeMatchups(matches: LeagueMatch[], playerId: string, season: Leagu
 		else opp.losses++;
 		opp.total++;
 		opp.tag = oppTag;
-		if (!m.isDQ) {
-			const myScore = isP1 ? m.player1Score : m.player2Score;
-			const oppScore = isP1 ? m.player2Score : m.player1Score;
-			if (Math.abs(myScore - oppScore) === 1 && myScore + oppScore >= 3) opp.closeGames++;
-		}
+		const myScore = isP1 ? m.player1Score : m.player2Score;
+		const oppScore = isP1 ? m.player2Score : m.player1Score;
+		if (Math.abs(myScore - oppScore) === 1 && myScore + oppScore >= 3) opp.closeGames++;
 		opponents.set(oppId, opp);
 	}
 
@@ -243,10 +261,10 @@ function computeCharacterStats(matches: LeagueMatch[], playerId: string): { name
 		.sort((a, b) => b.count - a.count);
 }
 
-export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
+export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: number): SeasonAward[] {
 	const awards: SeasonAward[] = [];
 	const players = Object.values(season.players);
-	const MIN_EVENTS = Math.max(2, Math.floor(season.events.length * 0.4));
+	const MIN_EVENTS = overrideMinEvents ?? Math.max(2, Math.floor(season.events.length * 0.4));
 
 	// Most Attended
 	const attendance = new Map<string, number>();
@@ -266,7 +284,7 @@ export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
 		});
 	}
 
-	// Most Consistent (avg percentile - stdev, min 40% attendance)
+	// Most Consistent (avg percentile - stdev, min attendance)
 	const playerPercentiles = new Map<string, number[]>();
 	for (const evt of season.events) {
 		const total = evt.placements.length;
@@ -277,28 +295,32 @@ export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
 			playerPercentiles.set(pl.playerId, arr);
 		}
 	}
-	let bestConsistency = -Infinity;
-	let consistentPlayer: string | null = null;
+	const consistencyScores: { pid: string; score: number }[] = [];
 	for (const [pid, pcts] of playerPercentiles) {
 		if (pcts.length < MIN_EVENTS) continue;
 		const avg = pcts.reduce((a, b) => a + b, 0) / pcts.length;
 		const variance = pcts.reduce((s, v) => s + (v - avg) ** 2, 0) / pcts.length;
-		const score = avg - Math.sqrt(variance);
-		if (score > bestConsistency) { bestConsistency = score; consistentPlayer = pid; }
+		consistencyScores.push({ pid, score: avg - Math.sqrt(variance) });
 	}
-	if (consistentPlayer) {
-		const p = season.players[consistentPlayer];
+	consistencyScores.sort((a, b) => b.score - a.score);
+	if (consistencyScores.length > 0) {
+		const top = consistencyScores[0];
+		const p = season.players[top.pid];
 		if (p) awards.push({
 			title: 'Most Consistent',
-			description: 'Score = avg_percentile - stdev. Rewards both high placement and low variance. Min 40% attendance.',
+			description: `Score = avg_percentile - stdev. Rewards both high placement and low variance. Min ${MIN_EVENTS} events.`,
 			playerId: p.id, playerTag: p.gamerTag,
-			value: `${Math.round(bestConsistency)} consistency score`
+			value: `${Math.round(top.score)} consistency score`,
+			candidates: consistencyScores.slice(1, 6).map((c) => ({
+				playerId: c.pid,
+				playerTag: season.players[c.pid]?.gamerTag ?? c.pid,
+				value: `${Math.round(c.score)} score`
+			}))
 		});
 	}
 
 	// Most Improved (linear regression slope of points over events)
-	let bestSlope = -Infinity;
-	let improvedPlayer: string | null = null;
+	const improvementScores: { pid: string; slope: number }[] = [];
 	for (const p of players) {
 		if (p.rankHistory.length < MIN_EVENTS) continue;
 		const n = p.rankHistory.length;
@@ -312,41 +334,57 @@ export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
 			den += (xs[i] - xMean) ** 2;
 		}
 		const slope = den === 0 ? 0 : num / den;
-		if (slope > bestSlope) { bestSlope = slope; improvedPlayer = p.id; }
+		if (slope > 0) improvementScores.push({ pid: p.id, slope });
 	}
-	if (improvedPlayer && bestSlope > 0) {
-		const p = season.players[improvedPlayer];
+	improvementScores.sort((a, b) => b.slope - a.slope);
+	if (improvementScores.length > 0) {
+		const top = improvementScores[0];
+		const p = season.players[top.pid];
 		if (p) awards.push({
 			title: 'Most Improved',
-			description: 'Linear regression slope of TrueSkill points over events. Higher slope = faster improvement. Min 40% attendance.',
+			description: `Linear regression slope of TrueSkill points over events. Higher slope = faster improvement. Min ${MIN_EVENTS} events.`,
 			playerId: p.id, playerTag: p.gamerTag,
-			value: `+${Math.round(bestSlope)} pts/event`
+			value: `+${Math.round(top.slope)} pts/event`,
+			candidates: improvementScores.slice(1, 6).map((c) => ({
+				playerId: c.pid,
+				playerTag: season.players[c.pid]?.gamerTag ?? c.pid,
+				value: `+${Math.round(c.slope)} pts/event`
+			}))
 		});
 	}
 
 	// Biggest Up and Comer (outside top 17, biggest single-event gain)
 	const rankings = getRankings(season);
 	const topIds = new Set(rankings.slice(0, 17).map((r) => r.playerId));
-	let bestGain = 0;
-	let upComer: { id: string; gain: number } | null = null;
+	const upComerScores: { pid: string; gain: number }[] = [];
 	for (const p of players) {
 		if (topIds.has(p.id)) continue;
+		if (p.rankHistory.length < MIN_EVENTS) continue;
+		let bestGain = 0;
 		for (let i = 1; i < p.rankHistory.length; i++) {
 			const gain = p.rankHistory[i].points - p.rankHistory[i - 1].points;
-			if (gain > bestGain) { bestGain = gain; upComer = { id: p.id, gain }; }
+			if (gain > bestGain) bestGain = gain;
 		}
+		if (bestGain > 0) upComerScores.push({ pid: p.id, gain: bestGain });
 	}
-	if (upComer) {
-		const p = season.players[upComer.id];
+	upComerScores.sort((a, b) => b.gain - a.gain);
+	if (upComerScores.length > 0) {
+		const top = upComerScores[0];
+		const p = season.players[top.pid];
 		if (p) awards.push({
 			title: 'Biggest Up and Comer',
-			description: 'Biggest single-event rating gain by a player outside the top 17. Captures breakout performances.',
+			description: `Biggest single-event rating gain by a player outside the top 17. Min ${MIN_EVENTS} events.`,
 			playerId: p.id, playerTag: p.gamerTag,
-			value: `+${upComer.gain} pts in one event`
+			value: `+${top.gain} pts in one event`,
+			candidates: upComerScores.slice(1, 6).map((c) => ({
+				playerId: c.pid,
+				playerTag: season.players[c.pid]?.gamerTag ?? c.pid,
+				value: `+${c.gain} pts`
+			}))
 		});
 	}
 
-	// Biggest Upset (highest points gap win, bracket only)
+	// Biggest Upset (highest points gap win, bracket only, non-DQ)
 	let biggestUpset: { winnerId: string; loserId: string; gap: number; event: string } | null = null;
 	for (const m of season.matches) {
 		if (m.phase === 'swiss' || m.isDQ) continue;
@@ -370,9 +408,10 @@ export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
 		});
 	}
 
-	// Biggest Rivalry (closest h2h, min 3 sets)
+	// Biggest Rivalry (closest h2h, min 3 sets, excluding DQs)
 	const h2h = new Map<string, { p1: string; p2: string; p1Wins: number; p2Wins: number; total: number }>();
 	for (const m of season.matches) {
+		if (m.isDQ) continue;
 		const key = [m.player1Id, m.player2Id].sort().join(':');
 		const entry = h2h.get(key) ?? { p1: m.player1Id, p2: m.player2Id, p1Wins: 0, p2Wins: 0, total: 0 };
 		const sorted = [m.player1Id, m.player2Id].sort();
@@ -397,7 +436,7 @@ export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
 		const p2 = season.players[bestRivalry.p2];
 		if (p1 && p2) awards.push({
 			title: 'Rivalry of the Season',
-			description: 'Closest head-to-head record with min 3 sets. Ranked by smallest win difference, then total sets as tiebreaker.',
+			description: 'Closest head-to-head record with min 3 sets (non-DQ). Ranked by smallest win difference, then total sets as tiebreaker.',
 			playerId: p1.id, playerTag: p1.gamerTag,
 			secondPlayerId: p2.id, secondPlayerTag: p2.gamerTag,
 			value: `${p1.gamerTag} ${bestRivalry.p1Wins}-${bestRivalry.p2Wins} ${p2.gamerTag}`
