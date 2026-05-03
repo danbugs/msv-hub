@@ -99,25 +99,26 @@ interface TournamentData {
 interface TournamentEventInfo {
 	tournamentName: string;
 	startAt: number;
-	eventIds: number[];
+	events: { id: number; name: string }[];
 	numEntrants: number;
 }
 
 async function fetchTournamentEvents(slug: string): Promise<TournamentEventInfo | null> {
 	const data = await gql<{ tournament: TournamentData }>(TOURNAMENT_QUERY, { slug });
 	if (!data?.tournament?.events?.length) return null;
-	const eventIds = data.tournament.events.map((e) => e.id);
+	const events = data.tournament.events.map((e) => ({ id: e.id, name: e.name }));
 	const maxEntrants = Math.max(...data.tournament.events.map((e) => e.numEntrants));
-	return { tournamentName: data.tournament.name, startAt: data.tournament.startAt, eventIds, numEntrants: maxEntrants };
+	return { tournamentName: data.tournament.name, startAt: data.tournament.startAt, events, numEntrants: maxEntrants };
 }
 
-function classifySet(set: GqlRecord): { phase: string; roundLabel: string } {
+function classifySet(set: GqlRecord, isRedemption: boolean): { phase: string; roundLabel: string } {
 	const fullRoundText = (set.fullRoundText ?? '') as string;
 	const bracketType = set.phaseGroup?.bracketType as string | undefined;
 	if (bracketType === 'SWISS') return { phase: 'swiss', roundLabel: fullRoundText || `Round ${Math.abs(set.round ?? 0)}` };
 	const round = (set.round ?? 0) as number;
-	if (round > 0) return { phase: 'winners', roundLabel: fullRoundText || `Winners R${round}` };
-	return { phase: 'losers', roundLabel: fullRoundText || `Losers R${Math.abs(round)}` };
+	const prefix = isRedemption ? 'redemption-' : '';
+	if (round > 0) return { phase: `${prefix}winners`, roundLabel: fullRoundText || `${isRedemption ? 'Redemption ' : ''}Winners R${round}` };
+	return { phase: `${prefix}losers`, roundLabel: fullRoundText || `${isRedemption ? 'Redemption ' : ''}Losers R${Math.abs(round)}` };
 }
 
 function isDQSet(displayScore: string | null): boolean {
@@ -266,16 +267,17 @@ export async function importSeason(
 		const eventNumber = parseInt(slug.match(/(\d+)$/)?.[1] ?? '0', 10);
 		const dateStr = new Date(info.startAt * 1000).toISOString().split('T')[0];
 
-		log(`Fetching sets for ${info.tournamentName} (${info.numEntrants} entrants, ${info.eventIds.length} events)...`);
-		const sets: GqlRecord[] = [];
-		for (const eid of info.eventIds) {
-			const eventSets = await fetchLeagueSets(eid);
-			sets.push(...eventSets);
+		log(`Fetching sets for ${info.tournamentName} (${info.numEntrants} entrants, ${info.events.length} events)...`);
+		const setsWithSource: { set: GqlRecord; isRedemption: boolean }[] = [];
+		for (const evt of info.events) {
+			const isRedemption = /redemption/i.test(evt.name);
+			const eventSets = await fetchLeagueSets(evt.id);
+			for (const s of eventSets) setsWithSource.push({ set: s, isRedemption });
 		}
-		if (!sets.length) { log(`Skipping ${slug} — no sets found`); continue; }
+		if (!setsWithSource.length) { log(`Skipping ${slug} — no sets found`); continue; }
 
 		const entrantMap = new Map<number, { playerId: string; gamerTag: string }>();
-		for (const set of sets) {
+		for (const { set } of setsWithSource) {
 			for (const slot of (set.slots ?? []) as GqlRecord[]) {
 				const entrantId = slot.entrant?.id as number | undefined;
 				const playerId = slot.entrant?.participants?.[0]?.player?.id as number | undefined;
@@ -287,10 +289,10 @@ export async function importSeason(
 			}
 		}
 
-		const completedSets = sets.filter((s) => s.winnerId && s.slots?.length >= 2);
+		const completedSets = setsWithSource.filter(({ set: s }) => s.winnerId && s.slots?.length >= 2);
 		const eventMatches: LeagueMatch[] = [];
 
-		for (const set of completedSets) {
+		for (const { set, isRedemption } of completedSets) {
 			const slots = set.slots as GqlRecord[];
 			const entrant1Id = slots[0]?.entrant?.id as number | undefined;
 			const entrant2Id = slots[1]?.entrant?.id as number | undefined;
@@ -301,7 +303,7 @@ export async function importSeason(
 			const winnerPlayer = entrantMap.get(set.winnerId as number);
 			if (!winnerPlayer) continue;
 
-			const { phase, roundLabel } = classifySet(set);
+			const { phase, roundLabel } = classifySet(set, isRedemption);
 			const dq = isDQSet(set.displayScore as string | null);
 			const { s1, s2 } = parseScore(set.displayScore as string | null, e1.gamerTag);
 			const p1Chars = extractCharacters(set, entrant1Id);
@@ -321,10 +323,11 @@ export async function importSeason(
 		}
 
 		allMatches.push(...eventMatches);
+		const allSets = setsWithSource.map(({ set }) => set);
 		events.push({
 			slug, name: info.tournamentName, date: dateStr,
 			eventNumber, entrantCount: info.numEntrants,
-			placements: derivePlacements(completedSets, entrantMap)
+			placements: derivePlacements(allSets, entrantMap)
 		});
 
 		log(`Processed ${info.tournamentName}: ${eventMatches.length} matches, ${entrantMap.size} players`);
