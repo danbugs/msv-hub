@@ -1,6 +1,6 @@
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
-import type { TournamentState } from '$lib/types/tournament';
+import type { TournamentState, AttendeeStatus } from '$lib/types/tournament';
 import { DEFAULT_MOTIVATIONAL_MESSAGES, DEFAULT_GIF_URLS } from '$lib/defaults';
 
 export { DEFAULT_MOTIVATIONAL_MESSAGES, DEFAULT_GIF_URLS };
@@ -278,9 +278,32 @@ export async function getActiveTournament(): Promise<TournamentState | null> {
 
 export async function deleteTournament(slug: string): Promise<void> {
 	const redis = getRedis();
+	const data = await redis.get<string>(`${KEY_PREFIX}${slug}`);
+	if (data) {
+		const tournament: TournamentState = typeof data === 'string' ? JSON.parse(data) : data as unknown as TournamentState;
+		if (tournament.startggEventId && tournament.attendance?.length) {
+			await stashAttendance(tournament.startggEventId, tournament.attendance);
+		}
+	}
 	await redis.del(`${KEY_PREFIX}${slug}`);
 	const active = await redis.get<string>(ACTIVE_KEY);
 	if (active === slug) await redis.del(ACTIVE_KEY);
+}
+
+const ATTENDANCE_STASH_PREFIX = 'attendance:stash:';
+const ATTENDANCE_STASH_TTL = 60 * 60 * 24; // 24 hours
+
+async function stashAttendance(eventId: number, attendance: AttendeeStatus[]): Promise<void> {
+	const redis = getRedis();
+	await redis.set(`${ATTENDANCE_STASH_PREFIX}${eventId}`, JSON.stringify(attendance), { ex: ATTENDANCE_STASH_TTL });
+}
+
+export async function restoreAttendance(eventId: number): Promise<AttendeeStatus[] | null> {
+	const redis = getRedis();
+	const data = await redis.get<string>(`${ATTENDANCE_STASH_PREFIX}${eventId}`);
+	if (!data) return null;
+	await redis.del(`${ATTENDANCE_STASH_PREFIX}${eventId}`);
+	return typeof data === 'string' ? JSON.parse(data) : data as unknown as AttendeeStatus[];
 }
 
 // ---------------------------------------------------------------------------

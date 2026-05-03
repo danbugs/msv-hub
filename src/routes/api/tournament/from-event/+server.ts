@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { saveTournament } from '$lib/server/store';
+import { saveTournament, restoreAttendance } from '$lib/server/store';
 import { calculateRecommendedRounds, generateBracket, assignBracketStations } from '$lib/server/swiss';
 import {
 	gql,
@@ -161,6 +161,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			createdAt: Date.now(), updatedAt: Date.now()
 		};
 
+		const stashedAttendance = await restoreAttendance(eventId);
+		if (stashedAttendance) {
+			const entrantTags = new Set(entrants.map((e) => e.gamerTag.toLowerCase()));
+			state.attendance = stashedAttendance.filter((a) => entrantTags.has(a.gamerTag.toLowerCase()));
+		}
+
 		await saveTournament(state);
 		return Response.json(state);
 	}
@@ -221,6 +227,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		createdAt: Date.now(),
 		updatedAt: Date.now()
 	};
+
+	const stashedAttendance = await restoreAttendance(eventId);
+	if (stashedAttendance) {
+		const entrantTags = new Set(entrants.map((e) => e.gamerTag.toLowerCase()));
+		state.attendance = stashedAttendance.filter((a) => entrantTags.has(a.gamerTag.toLowerCase()));
+	}
 
 	await saveTournament(state);
 	return Response.json(state);
