@@ -1,11 +1,129 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { PLAYER_TIERS } from '$lib/types/league';
 
 	let { data } = $props();
+	let chartCanvas = $state<HTMLCanvasElement | null>(null);
 	let bio = $state<string | null>(null);
 	let bioLoading = $state(false);
 
+	function drawChart() {
+		if (!chartCanvas || !data.stats) return;
+		const history = data.stats.player.rankHistory;
+		if (history.length < 2) return;
+
+		const ctx = chartCanvas.getContext('2d');
+		if (!ctx) return;
+
+		const dpr = window.devicePixelRatio || 1;
+		const rect = chartCanvas.getBoundingClientRect();
+		chartCanvas.width = rect.width * dpr;
+		chartCanvas.height = rect.height * dpr;
+		ctx.scale(dpr, dpr);
+		const W = rect.width;
+		const H = rect.height;
+		ctx.clearRect(0, 0, W, H);
+
+		const values = history.map((h) => h.points);
+		const minVal = Math.min(...values);
+		const maxVal = Math.max(...values);
+		const range = maxVal - minVal || 1;
+		const pad = { top: 24, bottom: 24, left: 40, right: 16 };
+
+		const isDark = document.documentElement.classList.contains('dark');
+		const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+		const textColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)';
+		const lineColor = isDark ? '#93c5fd' : '#3b82f6';
+
+		const chartW = W - pad.left - pad.right;
+		const chartH = H - pad.top - pad.bottom;
+
+		for (const tier of PLAYER_TIERS) {
+			if (tier.minPoints <= 0) continue;
+			if (tier.minPoints < minVal - range * 0.1 || tier.minPoints > maxVal + range * 0.1) continue;
+			const normalized = (tier.minPoints - minVal) / range;
+			const y = pad.top + (1 - normalized) * chartH;
+			ctx.strokeStyle = tier.color + '40';
+			ctx.lineWidth = 1;
+			ctx.setLineDash([4, 4]);
+			ctx.beginPath();
+			ctx.moveTo(pad.left, y);
+			ctx.lineTo(W - pad.right, y);
+			ctx.stroke();
+			ctx.setLineDash([]);
+			ctx.fillStyle = tier.color + '80';
+			ctx.font = '9px system-ui';
+			ctx.textAlign = 'left';
+			ctx.fillText(tier.name, pad.left + 2, y - 3);
+		}
+
+		ctx.strokeStyle = gridColor;
+		ctx.lineWidth = 0.5;
+		for (let i = 0; i <= 4; i++) {
+			const y = pad.top + (i / 4) * chartH;
+			ctx.beginPath();
+			ctx.moveTo(pad.left, y);
+			ctx.lineTo(W - pad.right, y);
+			ctx.stroke();
+			ctx.fillStyle = textColor;
+			ctx.font = '10px system-ui';
+			ctx.textAlign = 'right';
+			ctx.fillText(String(Math.round(maxVal - (i / 4) * range)), pad.left - 6, y + 3);
+		}
+
+		ctx.strokeStyle = lineColor;
+		ctx.lineWidth = 2;
+		ctx.lineJoin = 'round';
+		ctx.beginPath();
+		for (let i = 0; i < values.length; i++) {
+			const x = pad.left + (i / (values.length - 1)) * chartW;
+			const y = pad.top + (1 - (values[i] - minVal) / range) * chartH;
+			if (i === 0) ctx.moveTo(x, y);
+			else ctx.lineTo(x, y);
+		}
+		ctx.stroke();
+
+		for (let i = 0; i < values.length; i++) {
+			const x = pad.left + (i / (values.length - 1)) * chartW;
+			const y = pad.top + (1 - (values[i] - minVal) / range) * chartH;
+
+			if (i > 0) {
+				const prevTier = PLAYER_TIERS.find((t) => history[i - 1].points >= t.minPoints);
+				const currTier = PLAYER_TIERS.find((t) => history[i].points >= t.minPoints);
+				if (prevTier && currTier && prevTier.name !== currTier.name) {
+					ctx.fillStyle = currTier.color;
+					ctx.beginPath();
+					ctx.arc(x, y, 5, 0, Math.PI * 2);
+					ctx.fill();
+					ctx.strokeStyle = isDark ? '#1e293b' : '#ffffff';
+					ctx.lineWidth = 1.5;
+					ctx.stroke();
+					continue;
+				}
+			}
+
+			ctx.fillStyle = lineColor;
+			ctx.beginPath();
+			ctx.arc(x, y, 3, 0, Math.PI * 2);
+			ctx.fill();
+		}
+
+		ctx.fillStyle = textColor;
+		ctx.font = '9px system-ui';
+		ctx.textAlign = 'center';
+		const step = Math.max(1, Math.floor(history.length / 6));
+		for (let i = 0; i < history.length; i += step) {
+			const x = pad.left + (i / (values.length - 1)) * chartW;
+			ctx.fillText(`#${history[i].eventNumber}`, x, H - 4);
+		}
+		if (history.length > 1) {
+			const lastX = pad.left + chartW;
+			ctx.fillText(`#${history[history.length - 1].eventNumber}`, lastX, H - 4);
+		}
+	}
+
 	onMount(() => {
+		drawChart();
 		if (data.stats) {
 			bioLoading = true;
 			fetch(`/api/league/bio?season=${data.seasonId}&playerId=${data.stats.player.id}`)
@@ -92,7 +210,7 @@
 					</div>
 				</div>
 				<div class="mt-2 text-xs text-muted-foreground">
-					{data.seasonName} · TrueSkill · {data.seasonStart} to {data.seasonEnd}
+					{data.seasonName} · TrueSkill{#if data.seasonStart} · {data.seasonStart} to {data.seasonEnd}{/if}
 				</div>
 				{#if bio}
 					<p class="mt-3 text-sm text-muted-foreground italic">{bio}</p>
@@ -100,6 +218,14 @@
 					<div class="mt-3 h-4 w-3/4 rounded bg-secondary animate-pulse"></div>
 				{/if}
 			</div>
+
+			<!-- Points History Chart -->
+			{#if s.player.rankHistory.length >= 2}
+				<div class="rounded-xl border border-border bg-card p-5">
+					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Points History</h2>
+					<canvas bind:this={chartCanvas} class="w-full" style="height: 180px;"></canvas>
+				</div>
+			{/if}
 
 			<!-- Match Statistics -->
 			<div class="rounded-xl border border-border bg-card p-5">

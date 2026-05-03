@@ -29,7 +29,7 @@
 					<h1 class="text-xl font-bold text-primary">MSV League</h1>
 					{#if data.season}
 						<p class="text-sm text-muted-foreground">
-							{data.season.name} · {data.season.startDate} to {data.season.endDate}
+							{data.season.name}{#if data.season.startDate} · {data.season.startDate} to {data.season.endDate}{/if}
 						</p>
 					{/if}
 				</div>
