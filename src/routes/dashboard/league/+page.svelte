@@ -27,19 +27,37 @@
 	let attendanceBonus = $state(50);
 	let awards = $state<{ title: string; description: string; playerId?: string; playerTag?: string; secondPlayerId?: string; secondPlayerTag?: string; value: string; candidates?: { playerId: string; playerTag: string; value: string }[] }[]>([]);
 	let awardsMinEvents = $state('');
+	let seasonsList = $state<{ id: number; name: string }[]>([]);
+	let currentSeasonId = $state(10);
+	let showCreateSeason = $state(false);
+	let newSeasonStart = $state('');
+	let newSeasonEnd = $state('');
+	let adminMinEvents = $state(7);
+	let adminPreview = $state<{ playerId: string; gamerTag: string; points: number; rank: number }[]>([]);
 
-	const SEASON_ID = 10;
-	const SEASON_START = 125;
+	function getSeasonId() { return currentSeasonId; }
 
 	onMount(async () => {
 		loading = true;
+		const seasonsRes = await fetch('/api/league/seasons');
+		if (seasonsRes.ok) {
+			seasonsList = await seasonsRes.json();
+			if (seasonsList.length > 0) currentSeasonId = seasonsList[seasonsList.length - 1].id;
+		}
+		await loadSeason();
+		loading = false;
+	});
+
+	async function loadSeason() {
+		const sid = getSeasonId();
 		const [seasonRes, mergeRes, configRes, awardsRes] = await Promise.all([
-			fetch(`/api/league/season/${SEASON_ID}`),
+			fetch(`/api/league/season/${sid}`),
 			fetch('/api/league/merge'),
 			fetch('/api/league/config'),
-			fetch(`/api/league/awards?season=${SEASON_ID}`)
+			fetch(`/api/league/awards?season=${sid}`)
 		]);
 		if (seasonRes.ok) season = await seasonRes.json();
+		else season = null;
 		if (mergeRes.ok) merges = await mergeRes.json();
 		if (awardsRes.ok) awards = await awardsRes.json();
 		if (configRes.ok) {
@@ -47,15 +65,16 @@
 			minEvents = cfg.minEvents ?? 2;
 			attendanceBonus = cfg.attendanceBonus ?? 50;
 		}
-		loading = false;
-	});
+		adminPreview = [];
+	}
 
 	function getNextEventNumber(): number {
-		if (!season?.events.length) return SEASON_START;
+		if (!season?.events.length) return 1;
 		return Math.max(...season.events.map((e) => e.eventNumber)) + 1;
 	}
 
 	async function runImportWithSlugs(slugs: string[], forceRefetch = false) {
+		const sid = getSeasonId();
 		importing = true;
 		importLogs = [];
 		error = '';
@@ -65,10 +84,10 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					seasonId: SEASON_ID,
-					seasonName: `Season ${SEASON_ID}`,
-					startDate: '2026-02-01',
-					endDate: '2026-05-12',
+					seasonId: sid,
+					seasonName: `Season ${sid}`,
+					startDate: '',
+					endDate: '',
 					tournamentSlugs: slugs,
 					forceRefetch
 				})
@@ -78,10 +97,12 @@
 			if (res.ok) {
 				importLogs = data.logs ?? [];
 				const [refreshRes] = await Promise.all([
-					fetch(`/api/league/season/${SEASON_ID}`),
+					fetch(`/api/league/season/${sid}`),
 					fetchAwards(awardsMinEvents || undefined)
 				]);
 				if (refreshRes.ok) season = await refreshRes.json();
+				const seasonsRes = await fetch('/api/league/seasons');
+				if (seasonsRes.ok) seasonsList = await seasonsRes.json();
 			} else {
 				error = data.error ?? 'Import failed';
 			}
@@ -92,11 +113,21 @@
 	}
 
 	async function fetchAwards(minEventsOverride?: string) {
-		const params = new URLSearchParams({ season: String(SEASON_ID) });
+		const sid = getSeasonId();
+		const params = new URLSearchParams({ season: String(sid) });
 		if (minEventsOverride) params.set('minEvents', minEventsOverride);
 		const res = await fetch(`/api/league/awards?${params}`);
 		if (res.ok) awards = await res.json();
 		return res;
+	}
+
+	async function fetchAdminPreview() {
+		const sid = getSeasonId();
+		const res = await fetch(`/api/league/season/${sid}?minEvents=${adminMinEvents}`);
+		if (res.ok) {
+			const data = await res.json();
+			adminPreview = data.rankings ?? [];
+		}
 	}
 
 	function getAllSeasonSlugs(): string[] {
@@ -118,9 +149,27 @@
 		const allSlugs = [...getAllSeasonSlugs(), newSlug];
 		const unique = [...new Set(allSlugs)];
 
-		if (!confirm(`Add ${newSlug} to Season 10? This will re-process ratings with the new event included.`)) return;
+		if (!confirm(`Add ${newSlug} to Season ${getSeasonId()}? This will re-process ratings with the new event included.`)) return;
 		addEventNumber = '';
 		await runImportWithSlugs(unique);
+	}
+
+	async function createSeason() {
+		const start = parseInt(newSeasonStart, 10);
+		const end = parseInt(newSeasonEnd, 10);
+		if (isNaN(start) || isNaN(end) || end < start) { error = 'Enter valid start and end event numbers'; return; }
+
+		const newId = seasonsList.length > 0 ? Math.max(...seasonsList.map((s) => s.id)) + 1 : 1;
+		const slugs = [];
+		for (let i = start; i <= end; i++) slugs.push(`microspacing-vancouver-${i}`);
+
+		if (!confirm(`Create Season ${newId} (MSV ${start}-${end}) with ${slugs.length} events?`)) return;
+
+		currentSeasonId = newId;
+		showCreateSeason = false;
+		newSeasonStart = '';
+		newSeasonEnd = '';
+		await runImportWithSlugs(slugs);
 	}
 
 	async function fullReimport() {
@@ -130,10 +179,7 @@
 	}
 
 	async function initialImport() {
-		if (!confirm('Import Season 10 data from StartGG? This fetches all match data for MSV 125-137 and may take a few minutes.')) return;
-		const slugs = [];
-		for (let i = 125; i <= 137; i++) slugs.push(`microspacing-vancouver-${i}`);
-		await runImportWithSlugs(slugs);
+		showCreateSeason = true;
 	}
 
 	function searchPlayers(query: string): { id: string; tag: string }[] {
@@ -149,7 +195,7 @@
 		mergeError = '';
 		if (!mergePlayer1 || !mergePlayer2) { mergeError = 'Select both players'; return; }
 		if (mergePlayer1.id === mergePlayer2.id) { mergeError = 'Cannot merge a player with themselves'; return; }
-		if (!confirm(`Merge "${mergePlayer2.tag}" into "${mergePlayer1.tag}"? This will re-import the season with the merge applied.`)) return;
+		if (!confirm(`Merge "${mergePlayer2.tag}" into "${mergePlayer1.tag}"? This applies across all seasons and will re-import the current season.`)) return;
 
 		const res = await fetch('/api/league/merge', {
 			method: 'POST',
@@ -184,6 +230,7 @@
 
 	async function deleteEvent(slug: string) {
 		if (!confirm(`Delete ${slug} from the season? This will re-process ratings without it.`)) return;
+		const sid = getSeasonId();
 		importing = true;
 		importLogs = [];
 		error = '';
@@ -191,13 +238,13 @@
 			const res = await fetch('/api/league/event', {
 				method: 'DELETE',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ seasonId: SEASON_ID, eventSlug: slug })
+				body: JSON.stringify({ seasonId: sid, eventSlug: slug })
 			});
 			const data = await res.json();
 			if (res.ok) {
 				importLogs = data.logs ?? [];
 				const [refreshRes] = await Promise.all([
-					fetch(`/api/league/season/${SEASON_ID}`),
+					fetch(`/api/league/season/${sid}`),
 					fetchAwards(awardsMinEvents || undefined)
 				]);
 				if (refreshRes.ok) season = await refreshRes.json();
@@ -229,13 +276,57 @@
 	<div class="flex items-center justify-between mb-6">
 		<div>
 			<h1 class="text-2xl font-bold text-foreground">League Management</h1>
-			<p class="mt-1 text-muted-foreground">Season 10 — TrueSkill Rankings</p>
+			<div class="mt-1 flex items-center gap-2">
+				{#if seasonsList.length > 1}
+					<select bind:value={currentSeasonId}
+						onchange={() => { loading = true; loadSeason().then(() => { loading = false; }); }}
+						class="rounded-lg border border-input bg-secondary px-2 py-1 text-sm text-foreground focus:border-ring focus:outline-none">
+						{#each seasonsList as s}
+							<option value={s.id}>{s.name}</option>
+						{/each}
+					</select>
+				{:else}
+					<span class="text-muted-foreground">Season {currentSeasonId}</span>
+				{/if}
+				<span class="text-muted-foreground">— TrueSkill Rankings</span>
+			</div>
 		</div>
-		<a href="/league" target="_blank"
-			class="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors">
-			Public View ↗
-		</a>
+		<div class="flex items-center gap-2">
+			<button onclick={() => showCreateSeason = !showCreateSeason}
+				class="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+				+ New Season
+			</button>
+			<a href="/league?season={currentSeasonId}" target="_blank"
+				class="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+				Public View ↗
+			</a>
+		</div>
 	</div>
+
+	{#if showCreateSeason}
+		<div class="rounded-xl border border-border bg-card p-5 mb-6">
+			<h2 class="text-sm font-bold text-foreground mb-3">Create New Season</h2>
+			<div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+				<div>
+					<label class="text-xs text-muted-foreground">First Micro #</label>
+					<input bind:value={newSeasonStart} type="number" placeholder="140"
+						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
+				</div>
+				<div>
+					<label class="text-xs text-muted-foreground">Last Micro #</label>
+					<input bind:value={newSeasonEnd} type="number" placeholder="154"
+						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
+				</div>
+				<button onclick={createSeason} disabled={importing}
+					class="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
+					{importing ? 'Creating...' : 'Create & Import'}
+				</button>
+			</div>
+			<p class="mt-2 text-xs text-muted-foreground">
+				Creates Season {seasonsList.length > 0 ? Math.max(...seasonsList.map((s) => s.id)) + 1 : 1} and imports all microspacing events in that range. You can add macros or other slugs after.
+			</p>
+		</div>
+	{/if}
 
 	{#if loading}
 		<div class="rounded-lg border border-border bg-card p-8 text-center animate-pulse">
@@ -322,6 +413,47 @@
 			<p class="mt-2 text-xs text-muted-foreground">
 				Min events filters the public rankings. Attendance bonus adds points per event attended to reward showing up.
 			</p>
+		</div>
+
+		<!-- Admin Ranking Preview (not public) -->
+		<div class="rounded-xl border border-border bg-card p-5 mb-6">
+			<div class="flex items-center justify-between mb-3">
+				<h2 class="text-sm font-bold text-foreground">Ranking Preview (admin only)</h2>
+				<div class="flex items-center gap-2">
+					<label class="text-xs text-muted-foreground">Min events:</label>
+					<input bind:value={adminMinEvents} type="number" min="1" max="20"
+						class="w-14 rounded border border-input bg-secondary px-1.5 py-0.5 text-xs text-foreground focus:border-ring focus:outline-none" />
+					<button onclick={fetchAdminPreview}
+						class="rounded bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+						Preview
+					</button>
+				</div>
+			</div>
+			{#if adminPreview.length > 0}
+				<div class="max-h-[400px] overflow-y-auto">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="text-left text-xs text-muted-foreground">
+								<th class="px-2 py-1 w-10">#</th>
+								<th class="px-2 py-1">Player</th>
+								<th class="px-2 py-1 text-right">Points</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each adminPreview as p}
+								<tr class="border-t border-border">
+									<td class="px-2 py-1 text-muted-foreground font-mono text-xs">{p.rank}</td>
+									<td class="px-2 py-1 text-foreground">{p.gamerTag}</td>
+									<td class="px-2 py-1 text-right font-mono text-foreground">{p.points}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+				<p class="mt-2 text-xs text-muted-foreground">{adminPreview.length} players with {adminMinEvents}+ events. This does not affect the public view.</p>
+			{:else}
+				<p class="text-xs text-muted-foreground">Click Preview to see rankings with custom min events filter.</p>
+			{/if}
 		</div>
 
 		<div class="mb-6">
@@ -427,10 +559,10 @@
 		</button>
 	{:else}
 		<div class="rounded-xl border border-dashed border-border p-8 text-center">
-			<p class="text-muted-foreground mb-4">No league data yet. Import Season 10 from StartGG to get started.</p>
-			<button onclick={initialImport} disabled={importing}
-				class="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
-				{importing ? 'Importing...' : 'Import Season 10 (MSV 125-137)'}
+			<p class="text-muted-foreground mb-4">No league data for this season. Create a new season or switch to an existing one.</p>
+			<button onclick={() => showCreateSeason = true}
+				class="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+				Create Season
 			</button>
 		</div>
 	{/if}
