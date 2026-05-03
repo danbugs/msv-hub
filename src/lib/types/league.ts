@@ -26,6 +26,7 @@ export interface LeaguePlacement {
 export interface LeaguePlayer {
 	id: string;
 	gamerTag: string;
+	aliases: string[];
 	mu: number;
 	sigma: number;
 	points: number;
@@ -51,6 +52,8 @@ export interface LeagueMatch {
 	winnerId: string;
 	player1Score: number;
 	player2Score: number;
+	player1Characters?: string[];
+	player2Characters?: string[];
 	phase: string;
 	roundLabel: string;
 	date: string;
@@ -82,5 +85,6 @@ export interface LeaguePlayerStats {
 		bestWinRate: { tag: string; playerId: string; rate: number; total: number } | null;
 		worstWinRate: { tag: string; playerId: string; rate: number; total: number } | null;
 	};
+	characters: { name: string; count: number }[];
 	recentMatches: LeagueMatch[];
 }

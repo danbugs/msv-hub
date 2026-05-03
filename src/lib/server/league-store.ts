@@ -73,6 +73,7 @@ export function getPlayerStats(season: LeagueSeason, playerId: string): LeaguePl
 	}
 
 	const matchups = computeMatchups(playerMatches, playerId);
+	const characters = computeCharacterStats(playerMatches, playerId);
 
 	return {
 		player,
@@ -88,6 +89,7 @@ export function getPlayerStats(season: LeagueSeason, playerId: string): LeaguePl
 		tournamentsPlayed,
 		tournamentStats,
 		matchups,
+		characters,
 		recentMatches: [...playerMatches].reverse()
 	};
 }
@@ -128,4 +130,16 @@ function computeMatchups(matches: LeagueMatch[], playerId: string) {
 	}
 
 	return { mostWon, mostLost, mostPlayed, bestWinRate, worstWinRate };
+}
+
+function computeCharacterStats(matches: LeagueMatch[], playerId: string): { name: string; count: number }[] {
+	const charCounts = new Map<string, number>();
+	for (const m of matches) {
+		const chars = m.player1Id === playerId ? m.player1Characters : m.player2Characters;
+		if (!chars) continue;
+		for (const c of chars) charCounts.set(c, (charCounts.get(c) ?? 0) + 1);
+	}
+	return [...charCounts.entries()]
+		.map(([name, count]) => ({ name, count }))
+		.sort((a, b) => b.count - a.count);
 }
