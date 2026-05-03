@@ -361,7 +361,7 @@
 							class="w-14 rounded border border-input bg-secondary px-1.5 py-0.5 text-xs text-foreground focus:border-ring focus:outline-none" />
 					</div>
 				</div>
-				<div class="grid gap-3 sm:grid-cols-2">
+				<div class="grid gap-3 sm:grid-cols-2 items-start">
 					{#each awards as award}
 						<div class="rounded-xl border border-border bg-card p-4" title={award.description}>
 							<div class="text-xs text-muted-foreground uppercase tracking-wider">{award.title}</div>
