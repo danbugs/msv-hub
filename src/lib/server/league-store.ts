@@ -3,6 +3,7 @@ import { env } from '$env/dynamic/private';
 import type { LeagueSeason, LeaguePlayerStats, LeagueMatch } from '$lib/types/league';
 
 const LEAGUE_SEASON_PREFIX = 'league:season:';
+const LEAGUE_MERGES_KEY = 'league:merges';
 
 function getRedis(): Redis {
 	const url = env.UPSTASH_REDIS_REST_URL;
@@ -21,6 +22,35 @@ export async function getLeagueSeason(id: number): Promise<LeagueSeason | null> 
 export async function saveLeagueSeason(season: LeagueSeason): Promise<void> {
 	const redis = getRedis();
 	await redis.set(`${LEAGUE_SEASON_PREFIX}${season.id}`, JSON.stringify(season));
+}
+
+export type MergeMap = Record<string, string>;
+
+export async function getMergeMap(): Promise<MergeMap> {
+	const redis = getRedis();
+	const data = await redis.get<string>(LEAGUE_MERGES_KEY);
+	if (!data) return {};
+	return typeof data === 'string' ? JSON.parse(data) : data as unknown as MergeMap;
+}
+
+export async function saveMergeMap(merges: MergeMap): Promise<void> {
+	const redis = getRedis();
+	await redis.set(LEAGUE_MERGES_KEY, JSON.stringify(merges));
+}
+
+export async function addMerge(secondaryId: string, primaryId: string): Promise<void> {
+	const merges = await getMergeMap();
+	merges[secondaryId] = primaryId;
+	for (const [k, v] of Object.entries(merges)) {
+		if (v === secondaryId) merges[k] = primaryId;
+	}
+	await saveMergeMap(merges);
+}
+
+export async function removeMerge(secondaryId: string): Promise<void> {
+	const merges = await getMergeMap();
+	delete merges[secondaryId];
+	await saveMergeMap(merges);
 }
 
 export function getRankings(season: LeagueSeason): { playerId: string; gamerTag: string; points: number; rank: number }[] {

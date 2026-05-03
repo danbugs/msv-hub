@@ -1,6 +1,7 @@
 import { gql, TOURNAMENT_QUERY } from '$lib/server/startgg';
 import { createRating, rate1v1, ratingToPoints } from '$lib/server/trueskill';
-import { getLeagueSeason, saveLeagueSeason } from '$lib/server/league-store';
+import { getLeagueSeason, saveLeagueSeason, getMergeMap } from '$lib/server/league-store';
+import type { MergeMap } from '$lib/server/league-store';
 import type { LeagueSeason, LeagueEvent, LeaguePlayer, LeagueMatch, LeaguePlacement, CharacterSelection } from '$lib/types/league';
 import type { Rating } from '$lib/server/trueskill';
 
@@ -177,6 +178,42 @@ function derivePlacements(sets: GqlRecord[], entrantMap: Map<number, { playerId:
 	return entries.map((e, i) => ({ playerId: e.playerId, gamerTag: e.gamerTag, placement: i + 1 }));
 }
 
+function applyMerges(
+	matches: LeagueMatch[],
+	events: LeagueEvent[],
+	allTags: Map<string, Set<string>>,
+	mergeMap: MergeMap
+) {
+	const resolve = (id: string): string => mergeMap[id] ?? id;
+
+	for (const m of matches) {
+		m.player1Id = resolve(m.player1Id);
+		m.player2Id = resolve(m.player2Id);
+		m.winnerId = resolve(m.winnerId);
+	}
+
+	for (const evt of events) {
+		const merged = new Map<string, LeaguePlacement>();
+		for (const p of evt.placements) {
+			const resolvedId = resolve(p.playerId);
+			if (!merged.has(resolvedId) || p.placement < merged.get(resolvedId)!.placement) {
+				merged.set(resolvedId, { ...p, playerId: resolvedId });
+			}
+		}
+		evt.placements = [...merged.values()].sort((a, b) => a.placement - b.placement);
+	}
+
+	for (const [secondaryId, primaryId] of Object.entries(mergeMap)) {
+		const secondaryTags = allTags.get(secondaryId);
+		if (secondaryTags) {
+			const primaryTags = allTags.get(primaryId) ?? new Set();
+			for (const t of secondaryTags) primaryTags.add(t);
+			allTags.set(primaryId, primaryTags);
+			allTags.delete(secondaryId);
+		}
+	}
+}
+
 export async function importSeason(
 	seasonId: number,
 	seasonName: string,
@@ -284,6 +321,12 @@ export async function importSeason(
 		});
 
 		log(`Processed ${info.tournamentName}: ${eventMatches.length} matches, ${entrantMap.size} players`);
+	}
+
+	const mergeMap = await getMergeMap();
+	if (Object.keys(mergeMap).length > 0) {
+		applyMerges(allMatches, events, allTags, mergeMap);
+		log(`Applied ${Object.keys(mergeMap).length} player merge(s)`);
 	}
 
 	const players = new Map<string, LeaguePlayer>();
