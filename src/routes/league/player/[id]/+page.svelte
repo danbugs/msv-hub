@@ -4,6 +4,8 @@
 	let { data } = $props();
 	let chartCanvas = $state<HTMLCanvasElement | null>(null);
 	let chartMode = $state<'rank' | 'points'>('rank');
+	let bio = $state<string | null>(null);
+	let bioLoading = $state(false);
 
 	function drawChart() {
 		if (!chartCanvas || !data.stats) return;
@@ -104,6 +106,13 @@
 
 	onMount(() => {
 		drawChart();
+		if (data.stats) {
+			bioLoading = true;
+			fetch(`/api/league/bio?season=${data.seasonId}&playerId=${data.stats.player.id}`)
+				.then((r) => r.ok ? r.json() : null)
+				.then((d) => { if (d?.bio) bio = d.bio; })
+				.finally(() => { bioLoading = false; });
+		}
 	});
 
 	$effect(() => {
@@ -190,6 +199,11 @@
 				<div class="mt-2 text-xs text-muted-foreground">
 					{data.seasonName} · TrueSkill · {data.seasonStart} to {data.seasonEnd}
 				</div>
+				{#if bio}
+					<p class="mt-3 text-sm text-muted-foreground italic">{bio}</p>
+				{:else if bioLoading}
+					<div class="mt-3 h-4 w-3/4 rounded bg-secondary animate-pulse"></div>
+				{/if}
 			</div>
 
 			<!-- Ranking History Chart -->
