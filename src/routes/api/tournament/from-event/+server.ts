@@ -162,11 +162,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			createdAt: Date.now(), updatedAt: Date.now()
 		};
 
-		const stashedAttendance = await restoreAttendance(eventId);
-		if (stashedAttendance) {
-			const entrantTags = new Set(entrants.map((e) => e.gamerTag.toLowerCase()));
-			state.attendance = stashedAttendance.filter((a) => entrantTags.has(a.gamerTag.toLowerCase()));
-		}
+		const stashedAttendance = await restoreAttendance(eventId, entrants.map((e) => e.gamerTag));
+		if (stashedAttendance) state.attendance = stashedAttendance;
 
 		await saveTournament(state);
 		return Response.json(state);
@@ -229,11 +226,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		updatedAt: Date.now()
 	};
 
-	const stashedAttendance = await restoreAttendance(eventId);
-	if (stashedAttendance) {
-		const entrantTags = new Set(entrants.map((e) => e.gamerTag.toLowerCase()));
-		state.attendance = stashedAttendance.filter((a) => entrantTags.has(a.gamerTag.toLowerCase()));
-	}
+	const stashedAttendance = await restoreAttendance(eventId, entrants.map((e) => e.gamerTag));
+	if (stashedAttendance) state.attendance = stashedAttendance;
 
 	await saveTournament(state);
 	return Response.json(state);

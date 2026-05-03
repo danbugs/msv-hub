@@ -298,12 +298,18 @@ async function stashAttendance(eventId: number, attendance: AttendeeStatus[]): P
 	await redis.set(`${ATTENDANCE_STASH_PREFIX}${eventId}`, JSON.stringify(attendance), { ex: ATTENDANCE_STASH_TTL });
 }
 
-export async function restoreAttendance(eventId: number): Promise<AttendeeStatus[] | null> {
+export async function restoreAttendance(eventId: number, entrantTags: string[]): Promise<AttendeeStatus[] | null> {
 	const redis = getRedis();
 	const data = await redis.get<string>(`${ATTENDANCE_STASH_PREFIX}${eventId}`);
 	if (!data) return null;
 	await redis.del(`${ATTENDANCE_STASH_PREFIX}${eventId}`);
-	return typeof data === 'string' ? JSON.parse(data) : data as unknown as AttendeeStatus[];
+	const stashed: AttendeeStatus[] = typeof data === 'string' ? JSON.parse(data) : data as unknown as AttendeeStatus[];
+	const stashedByTag = new Map(stashed.map((a) => [a.gamerTag.toLowerCase(), a]));
+	return entrantTags.map((tag) => {
+		const existing = stashedByTag.get(tag.toLowerCase());
+		if (existing) return existing;
+		return { gamerTag: tag, pledgedSetup: false };
+	});
 }
 
 // ---------------------------------------------------------------------------

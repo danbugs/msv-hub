@@ -90,11 +90,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	if (!tournament.attendance?.length && swissEventId) {
-		const stashed = await restoreAttendance(swissEventId);
-		if (stashed) {
-			const entrantTags = new Set(tournament.entrants.map((e) => e.gamerTag.toLowerCase()));
-			tournament.attendance = stashed.filter((a) => entrantTags.has(a.gamerTag.toLowerCase()));
-		}
+		const stashed = await restoreAttendance(swissEventId, tournament.entrants.map((e) => e.gamerTag));
+		if (stashed) tournament.attendance = stashed;
 	}
 
 	const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
