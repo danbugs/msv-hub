@@ -112,11 +112,11 @@ function parseScore(displayScore: string | null, entrant1Name: string): { s1: nu
 	const parts = displayScore.split(' - ');
 	if (parts.length !== 2) return { s1: 0, s2: 0 };
 	const leftMatch = parts[0].trim().match(/^(.+?)\s+(\d+)$/);
-	const rightMatch = parts[1].trim().match(/^(\d+)\s*$/);
+	const rightMatch = parts[1].trim().match(/^(.+?)\s+(\d+)$/);
 	if (!leftMatch || !rightMatch) return { s1: 0, s2: 0 };
 	const leftName = leftMatch[1].trim();
 	const leftScore = parseInt(leftMatch[2], 10);
-	const rightScore = parseInt(rightMatch[1], 10);
+	const rightScore = parseInt(rightMatch[2], 10);
 	if (leftName.toLowerCase().includes(entrant1Name.toLowerCase().slice(0, 6))) return { s1: leftScore, s2: rightScore };
 	return { s1: rightScore, s2: leftScore };
 }
