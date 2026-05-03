@@ -155,6 +155,48 @@
 				{/if}
 			</div>
 
+			<!-- Tier Legends -->
+			<div class="mt-6 rounded-xl border border-border bg-card p-4">
+				<div class="grid gap-4 sm:grid-cols-2">
+					<div>
+						<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Player Tiers</div>
+						<div class="space-y-1">
+							{#each [
+								{ name: 'Master', color: '#ef4444', req: '7000+ pts' },
+								{ name: 'Diamond', color: '#38bdf8', req: '6500+ pts' },
+								{ name: 'Platinum', color: '#a3e635', req: '6000+ pts' },
+								{ name: 'Gold', color: '#fbbf24', req: '5500+ pts' },
+								{ name: 'Silver', color: '#94a3b8', req: '5000+ pts' },
+								{ name: 'Bronze', color: '#d97706', req: '< 5000 pts' }
+							] as t}
+								<div class="flex items-center justify-between text-xs">
+									<span class="font-bold px-1.5 py-0.5 rounded" style="color: {t.color}; background: {t.color}15;">{t.name}</span>
+									<span class="text-muted-foreground">{t.req}</span>
+								</div>
+							{/each}
+						</div>
+					</div>
+					<div>
+						<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Tournament Tiers</div>
+						<div class="space-y-1">
+							{#each [
+								{ tier: 'S', color: '#ef4444', desc: 'Top 20% strongest field' },
+								{ tier: 'A', color: '#f87171', desc: 'Top 40%' },
+								{ tier: 'B', color: '#fbbf24', desc: 'Top 60%' },
+								{ tier: 'C', color: '#a3e635', desc: 'Top 80%' },
+								{ tier: 'D', color: '#94a3b8', desc: 'Bottom 20%' }
+							] as t}
+								<div class="flex items-center justify-between text-xs">
+									<span class="font-bold w-5 text-center" style="color: {t.color};">{t.tier}</span>
+									<span class="text-muted-foreground">{t.desc}</span>
+								</div>
+							{/each}
+						</div>
+						<p class="mt-1.5 text-[10px] text-muted-foreground/60">Based on average TrueSkill rating of attendees</p>
+					</div>
+				</div>
+			</div>
+
 			<div class="mt-4 text-center text-xs text-muted-foreground">
 				Powered by TrueSkill — Rankings updated after each event
 			</div>
