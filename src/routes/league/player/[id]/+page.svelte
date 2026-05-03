@@ -46,8 +46,8 @@
 			ctx.stroke();
 
 			const label = chartMode === 'rank'
-				? Math.round(maxVal - (i / gridSteps) * range)
-				: Math.round(minVal + (i / gridSteps) * range);
+				? Math.round(minVal + (i / gridSteps) * range)
+				: Math.round(maxVal - (i / gridSteps) * range);
 			ctx.fillStyle = `oklch(${mutedColor})`;
 			ctx.font = '10px system-ui';
 			ctx.textAlign = 'right';
@@ -240,26 +240,19 @@
 					Tournament Statistics ({s.tournamentsPlayed})
 				</h2>
 				<div class="space-y-2">
-					<div class="flex justify-between text-sm">
-						<span class="text-muted-foreground">Top 1</span>
-						<span class="font-medium text-foreground">{s.tournamentStats.top1}</span>
-					</div>
-					<div class="flex justify-between text-sm">
-						<span class="text-muted-foreground">Top 3</span>
-						<span class="font-medium text-foreground">{s.tournamentStats.top3}</span>
-					</div>
-					<div class="flex justify-between text-sm">
-						<span class="text-muted-foreground">Top 8</span>
-						<span class="font-medium text-foreground">{s.tournamentStats.top8}</span>
-					</div>
-					<div class="flex justify-between text-sm">
-						<span class="text-muted-foreground">Top 16</span>
-						<span class="font-medium text-foreground">{s.tournamentStats.top16}</span>
-					</div>
-					<div class="flex justify-between text-sm">
-						<span class="text-muted-foreground">Top 32</span>
-						<span class="font-medium text-foreground">{s.tournamentStats.top32}</span>
-					</div>
+					{#each [
+						{ label: '1st', count: s.tournamentStats.top1 },
+						{ label: 'Top 3', count: s.tournamentStats.top3 - s.tournamentStats.top1 },
+						{ label: 'Top 8', count: s.tournamentStats.top8 - s.tournamentStats.top3 },
+						{ label: 'Top 16', count: s.tournamentStats.top16 - s.tournamentStats.top8 },
+						{ label: 'Top 32', count: s.tournamentStats.top32 - s.tournamentStats.top16 },
+						{ label: '32+', count: s.tournamentsPlayed - s.tournamentStats.top32 }
+					].filter(p => p.count > 0) as p}
+						<div class="flex justify-between text-sm">
+							<span class="text-muted-foreground">{p.label}</span>
+							<span class="font-medium text-foreground">{p.count}</span>
+						</div>
+					{/each}
 				</div>
 			</div>
 
