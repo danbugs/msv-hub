@@ -32,6 +32,7 @@
 	let showCreateSeason = $state(false);
 	let newSeasonStart = $state('');
 	let newSeasonEnd = $state('');
+	let newSeasonMacros = $state('');
 	let adminMinEvents = $state(7);
 	let adminPreview = $state<{ playerId: string; gamerTag: string; points: number; rank: number }[]>([]);
 
@@ -160,15 +161,20 @@
 		if (isNaN(start) || isNaN(end) || end < start) { error = 'Enter valid start and end event numbers'; return; }
 
 		const newId = seasonsList.length > 0 ? Math.max(...seasonsList.map((s) => s.id)) + 1 : 1;
-		const slugs = [];
+		const slugs: string[] = [];
 		for (let i = start; i <= end; i++) slugs.push(`microspacing-vancouver-${i}`);
 
-		if (!confirm(`Create Season ${newId} (MSV ${start}-${end}) with ${slugs.length} events?`)) return;
+		const macroNums = newSeasonMacros.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+		for (const n of macroNums) slugs.push(`macrospacing-vancouver-${n}`);
+
+		const macroLabel = macroNums.length ? ` + Macro ${macroNums.join(', ')}` : '';
+		if (!confirm(`Create Season ${newId} (MSV ${start}-${end}${macroLabel}) with ${slugs.length} events?`)) return;
 
 		currentSeasonId = newId;
 		showCreateSeason = false;
 		newSeasonStart = '';
 		newSeasonEnd = '';
+		newSeasonMacros = '';
 		await runImportWithSlugs(slugs);
 	}
 
@@ -306,16 +312,21 @@
 	{#if showCreateSeason}
 		<div class="rounded-xl border border-border bg-card p-5 mb-6">
 			<h2 class="text-sm font-bold text-foreground mb-3">Create New Season</h2>
-			<div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+			<div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end flex-wrap">
 				<div>
 					<label class="text-xs text-muted-foreground">First Micro #</label>
-					<input bind:value={newSeasonStart} type="number" placeholder="140"
+					<input bind:value={newSeasonStart} type="number" placeholder="112"
 						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
 				</div>
 				<div>
 					<label class="text-xs text-muted-foreground">Last Micro #</label>
-					<input bind:value={newSeasonEnd} type="number" placeholder="154"
+					<input bind:value={newSeasonEnd} type="number" placeholder="125"
 						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
+				</div>
+				<div>
+					<label class="text-xs text-muted-foreground">Macros (optional)</label>
+					<input bind:value={newSeasonMacros} type="text" placeholder="e.g. 6"
+						class="mt-1 w-28 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 				</div>
 				<button onclick={createSeason} disabled={importing}
 					class="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
@@ -323,7 +334,7 @@
 				</button>
 			</div>
 			<p class="mt-2 text-xs text-muted-foreground">
-				Creates Season {seasonsList.length > 0 ? Math.max(...seasonsList.map((s) => s.id)) + 1 : 1} and imports all microspacing events in that range. You can add macros or other slugs after.
+				Creates Season {seasonsList.length > 0 ? Math.max(...seasonsList.map((s) => s.id)) + 1 : 1} and imports all events in that range.
 			</p>
 		</div>
 	{/if}
