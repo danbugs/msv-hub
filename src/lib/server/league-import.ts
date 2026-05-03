@@ -90,11 +90,19 @@ interface TournamentData {
 	events: { id: number; name: string; slug: string; numEntrants: number }[];
 }
 
-async function fetchTournamentEvent(slug: string): Promise<{ tournamentName: string; startAt: number; eventId: number; numEntrants: number } | null> {
+interface TournamentEventInfo {
+	tournamentName: string;
+	startAt: number;
+	eventIds: number[];
+	numEntrants: number;
+}
+
+async function fetchTournamentEvents(slug: string): Promise<TournamentEventInfo | null> {
 	const data = await gql<{ tournament: TournamentData }>(TOURNAMENT_QUERY, { slug });
 	if (!data?.tournament?.events?.length) return null;
-	const event = data.tournament.events[0];
-	return { tournamentName: data.tournament.name, startAt: data.tournament.startAt, eventId: event.id, numEntrants: event.numEntrants };
+	const eventIds = data.tournament.events.map((e) => e.id);
+	const maxEntrants = Math.max(...data.tournament.events.map((e) => e.numEntrants));
+	return { tournamentName: data.tournament.name, startAt: data.tournament.startAt, eventIds, numEntrants: maxEntrants };
 }
 
 function classifySet(set: GqlRecord): { phase: string; roundLabel: string } {
@@ -200,14 +208,18 @@ export async function importSeason(
 		}
 
 		log(`Fetching ${slug}...`);
-		const info = await fetchTournamentEvent(slug);
+		const info = await fetchTournamentEvents(slug);
 		if (!info) { log(`Skipping ${slug} — not found on StartGG`); continue; }
 
 		const eventNumber = parseInt(slug.match(/(\d+)$/)?.[1] ?? '0', 10);
 		const dateStr = new Date(info.startAt * 1000).toISOString().split('T')[0];
 
-		log(`Fetching sets for ${info.tournamentName} (${info.numEntrants} entrants)...`);
-		const sets = await fetchLeagueSets(info.eventId);
+		log(`Fetching sets for ${info.tournamentName} (${info.numEntrants} entrants, ${info.eventIds.length} events)...`);
+		const sets: GqlRecord[] = [];
+		for (const eid of info.eventIds) {
+			const eventSets = await fetchLeagueSets(eid);
+			sets.push(...eventSets);
+		}
 		if (!sets.length) { log(`Skipping ${slug} — no sets found`); continue; }
 
 		const entrantMap = new Map<number, { playerId: string; gamerTag: string }>();
