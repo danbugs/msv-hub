@@ -55,7 +55,7 @@
 		return Math.max(...season.events.map((e) => e.eventNumber)) + 1;
 	}
 
-	async function runImportWithSlugs(slugs: string[]) {
+	async function runImportWithSlugs(slugs: string[], forceRefetch = false) {
 		importing = true;
 		importLogs = [];
 		error = '';
@@ -66,10 +66,11 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					seasonId: SEASON_ID,
-					seasonName: 'Season 10',
+					seasonName: `Season ${SEASON_ID}`,
 					startDate: '2026-02-01',
 					endDate: '2026-05-12',
-					tournamentSlugs: slugs
+					tournamentSlugs: slugs,
+					forceRefetch
 				})
 			});
 
@@ -124,8 +125,8 @@
 
 	async function fullReimport() {
 		if (!season?.events.length) return;
-		if (!confirm('Re-import all events from StartGG? This re-fetches all match data and may take a few minutes.')) return;
-		await runImportWithSlugs(getAllSeasonSlugs());
+		if (!confirm('Force re-import all events from StartGG? This re-fetches ALL match data (ignoring cache) and may take a few minutes.')) return;
+		await runImportWithSlugs(getAllSeasonSlugs(), true);
 	}
 
 	async function initialImport() {
