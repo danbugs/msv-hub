@@ -92,6 +92,16 @@ export interface LeagueMatch {
 	date: string;
 }
 
+export interface SeasonAward {
+	title: string;
+	description: string;
+	playerId?: string;
+	playerTag?: string;
+	secondPlayerId?: string;
+	secondPlayerTag?: string;
+	value: string;
+}
+
 export interface LeaguePlayerStats {
 	player: LeaguePlayer;
 	rank: number;

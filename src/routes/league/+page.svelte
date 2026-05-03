@@ -99,6 +99,35 @@
 				</table>
 			</div>
 
+			{#if data.awards?.length}
+				<div class="mt-6">
+					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Season Awards</h2>
+					<div class="grid gap-3 sm:grid-cols-2">
+						{#each data.awards as award}
+							<div class="rounded-xl border border-border bg-card p-4">
+								<div class="text-xs text-muted-foreground uppercase tracking-wider">{award.title}</div>
+								<div class="mt-1">
+									{#if award.playerId}
+										<a href="/league/player/{award.playerId}?season={data.seasonId}"
+											class="text-foreground hover:text-primary font-bold transition-colors">
+											{award.playerTag}
+										</a>
+									{/if}
+									{#if award.secondPlayerId}
+										<span class="text-muted-foreground mx-1">vs</span>
+										<a href="/league/player/{award.secondPlayerId}?season={data.seasonId}"
+											class="text-foreground hover:text-primary font-bold transition-colors">
+											{award.secondPlayerTag}
+										</a>
+									{/if}
+								</div>
+								<div class="mt-1 text-xs text-muted-foreground">{award.value}</div>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
 			{#if data.events?.length}
 				<div class="mt-6">
 					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Events</h2>

@@ -1,6 +1,6 @@
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
-import type { LeagueSeason, LeaguePlayerStats, LeagueMatch } from '$lib/types/league';
+import type { LeagueSeason, LeaguePlayerStats, LeagueMatch, SeasonAward } from '$lib/types/league';
 
 const LEAGUE_SEASON_PREFIX = 'league:season:';
 const LEAGUE_MERGES_KEY = 'league:merges';
@@ -198,4 +198,168 @@ function computeCharacterStats(matches: LeagueMatch[], playerId: string): { name
 	return [...charCounts.entries()]
 		.map(([name, { count, iconUrl }]) => ({ name, iconUrl, count }))
 		.sort((a, b) => b.count - a.count);
+}
+
+export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
+	const awards: SeasonAward[] = [];
+	const players = Object.values(season.players);
+	const MIN_EVENTS = Math.max(2, Math.floor(season.events.length * 0.4));
+
+	// Most Attended
+	const attendance = new Map<string, number>();
+	for (const evt of season.events) {
+		for (const p of evt.placements) {
+			attendance.set(p.playerId, (attendance.get(p.playerId) ?? 0) + 1);
+		}
+	}
+	const mostAttended = [...attendance.entries()].sort((a, b) => b[1] - a[1])[0];
+	if (mostAttended) {
+		const p = season.players[mostAttended[0]];
+		if (p) awards.push({
+			title: 'Iron Man',
+			description: 'Most events attended',
+			playerId: p.id, playerTag: p.gamerTag,
+			value: `${mostAttended[1]} events`
+		});
+	}
+
+	// Most Consistent (avg percentile - stdev, min 40% attendance)
+	const playerPercentiles = new Map<string, number[]>();
+	for (const evt of season.events) {
+		const total = evt.placements.length;
+		for (const pl of evt.placements) {
+			const pct = ((total - pl.placement) / Math.max(total - 1, 1)) * 100;
+			const arr = playerPercentiles.get(pl.playerId) ?? [];
+			arr.push(pct);
+			playerPercentiles.set(pl.playerId, arr);
+		}
+	}
+	let bestConsistency = -Infinity;
+	let consistentPlayer: string | null = null;
+	for (const [pid, pcts] of playerPercentiles) {
+		if (pcts.length < MIN_EVENTS) continue;
+		const avg = pcts.reduce((a, b) => a + b, 0) / pcts.length;
+		const variance = pcts.reduce((s, v) => s + (v - avg) ** 2, 0) / pcts.length;
+		const score = avg - Math.sqrt(variance);
+		if (score > bestConsistency) { bestConsistency = score; consistentPlayer = pid; }
+	}
+	if (consistentPlayer) {
+		const p = season.players[consistentPlayer];
+		if (p) awards.push({
+			title: 'The Rock',
+			description: 'Most consistent performer',
+			playerId: p.id, playerTag: p.gamerTag,
+			value: `${Math.round(bestConsistency)} consistency score`
+		});
+	}
+
+	// Most Improved (linear regression slope of points over events)
+	let bestSlope = -Infinity;
+	let improvedPlayer: string | null = null;
+	for (const p of players) {
+		if (p.rankHistory.length < MIN_EVENTS) continue;
+		const n = p.rankHistory.length;
+		const xs = p.rankHistory.map((_, i) => i);
+		const ys = p.rankHistory.map((h) => h.points);
+		const xMean = xs.reduce((a, b) => a + b, 0) / n;
+		const yMean = ys.reduce((a, b) => a + b, 0) / n;
+		let num = 0, den = 0;
+		for (let i = 0; i < n; i++) {
+			num += (xs[i] - xMean) * (ys[i] - yMean);
+			den += (xs[i] - xMean) ** 2;
+		}
+		const slope = den === 0 ? 0 : num / den;
+		if (slope > bestSlope) { bestSlope = slope; improvedPlayer = p.id; }
+	}
+	if (improvedPlayer && bestSlope > 0) {
+		const p = season.players[improvedPlayer];
+		if (p) awards.push({
+			title: 'Rising Star',
+			description: 'Most improved rating trend',
+			playerId: p.id, playerTag: p.gamerTag,
+			value: `+${Math.round(bestSlope)} pts/event`
+		});
+	}
+
+	// Biggest Up and Comer (outside top 17, biggest single-event gain)
+	const rankings = getRankings(season);
+	const topIds = new Set(rankings.slice(0, 17).map((r) => r.playerId));
+	let bestGain = 0;
+	let upComer: { id: string; gain: number } | null = null;
+	for (const p of players) {
+		if (topIds.has(p.id)) continue;
+		for (let i = 1; i < p.rankHistory.length; i++) {
+			const gain = p.rankHistory[i].points - p.rankHistory[i - 1].points;
+			if (gain > bestGain) { bestGain = gain; upComer = { id: p.id, gain }; }
+		}
+	}
+	if (upComer) {
+		const p = season.players[upComer.id];
+		if (p) awards.push({
+			title: 'Up and Comer',
+			description: 'Biggest single-event breakout (outside top 17)',
+			playerId: p.id, playerTag: p.gamerTag,
+			value: `+${upComer.gain} pts in one event`
+		});
+	}
+
+	// Biggest Upset (highest points gap win, bracket only)
+	let biggestUpset: { winnerId: string; loserId: string; gap: number; event: string } | null = null;
+	for (const m of season.matches) {
+		if (m.phase === 'swiss') continue;
+		const winner = season.players[m.winnerId];
+		const loser = season.players[m.winnerId === m.player1Id ? m.player2Id : m.player1Id];
+		if (!winner || !loser) continue;
+		if (loser.points <= winner.points) continue;
+		const gap = loser.points - winner.points;
+		if (!biggestUpset || gap > biggestUpset.gap)
+			biggestUpset = { winnerId: winner.id, loserId: loser.id, gap, event: m.eventSlug };
+	}
+	if (biggestUpset) {
+		const w = season.players[biggestUpset.winnerId];
+		const l = season.players[biggestUpset.loserId];
+		if (w && l) awards.push({
+			title: 'Giant Slayer',
+			description: 'Biggest bracket upset of the season',
+			playerId: w.id, playerTag: w.gamerTag,
+			secondPlayerId: l.id, secondPlayerTag: l.gamerTag,
+			value: `+${biggestUpset.gap} pts gap vs ${l.gamerTag}`
+		});
+	}
+
+	// Biggest Rivalry (closest h2h, min 3 sets)
+	const h2h = new Map<string, { p1: string; p2: string; p1Wins: number; p2Wins: number; total: number }>();
+	for (const m of season.matches) {
+		const key = [m.player1Id, m.player2Id].sort().join(':');
+		const entry = h2h.get(key) ?? { p1: m.player1Id, p2: m.player2Id, p1Wins: 0, p2Wins: 0, total: 0 };
+		const sorted = [m.player1Id, m.player2Id].sort();
+		if (m.winnerId === sorted[0]) entry.p1Wins++;
+		else entry.p2Wins++;
+		entry.total++;
+		entry.p1 = sorted[0];
+		entry.p2 = sorted[1];
+		h2h.set(key, entry);
+	}
+	let bestRivalry: { p1: string; p2: string; p1Wins: number; p2Wins: number; total: number } | null = null;
+	for (const entry of h2h.values()) {
+		if (entry.total < 3) continue;
+		const diff = Math.abs(entry.p1Wins - entry.p2Wins);
+		if (!bestRivalry ||
+			diff < Math.abs(bestRivalry.p1Wins - bestRivalry.p2Wins) ||
+			(diff === Math.abs(bestRivalry.p1Wins - bestRivalry.p2Wins) && entry.total > bestRivalry.total))
+			bestRivalry = entry;
+	}
+	if (bestRivalry) {
+		const p1 = season.players[bestRivalry.p1];
+		const p2 = season.players[bestRivalry.p2];
+		if (p1 && p2) awards.push({
+			title: 'Rivalry of the Season',
+			description: 'Closest head-to-head record',
+			playerId: p1.id, playerTag: p1.gamerTag,
+			secondPlayerId: p2.id, secondPlayerTag: p2.gamerTag,
+			value: `${p1.gamerTag} ${bestRivalry.p1Wins}-${bestRivalry.p2Wins} ${p2.gamerTag}`
+		});
+	}
+
+	return awards;
 }

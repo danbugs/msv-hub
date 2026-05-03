@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { getLeagueSeason, getRankings } from '$lib/server/league-store';
+import { getLeagueSeason, getRankings, computeSeasonAwards } from '$lib/server/league-store';
 import { getPlayerTier, getTournamentTier } from '$lib/types/league';
 
 export const load: PageServerLoad = async ({ url }) => {
@@ -54,6 +54,8 @@ export const load: PageServerLoad = async ({ url }) => {
 		};
 	});
 
+	const awards = computeSeasonAwards(season);
+
 	return {
 		season: {
 			id: season.id,
@@ -64,6 +66,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		},
 		rankings: enrichedRankings,
 		events: eventTiers,
+		awards,
 		seasonId
 	};
 };
