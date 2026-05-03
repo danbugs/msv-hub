@@ -24,7 +24,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			: undefined,
 		jitter: body.jitter !== undefined ? Number(body.jitter) : 5.0,
 		seed: body.seed !== undefined && body.seed !== '' ? Number(body.seed) : undefined,
-		apply: body.apply === true
+		apply: body.apply === true,
+		leagueSeasonId: body.leagueSeasonId ? Number(body.leagueSeasonId) : undefined
 	};
 
 	if (!input.targetNumber) {

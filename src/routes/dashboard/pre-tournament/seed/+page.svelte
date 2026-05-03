@@ -12,6 +12,8 @@
 	let jitter = $state('5');
 	let seed = $state('');
 	let showAdvanced = $state(false);
+	let leagueSeasons = $state<{ id: number; name: string }[]>([]);
+	let leagueSeasonId = $state('');
 
 	// ── State ──
 	let loading = $state(false);
@@ -41,15 +43,25 @@
 	} | null>(null);
 
 	onMount(async () => {
-		const tourneyRes = await fetch('/api/tournament');
+		const [tourneyRes, seasonsRes] = await Promise.all([
+			fetch('/api/tournament'),
+			fetch('/api/league/seasons')
+		]);
 		if (tourneyRes.ok) {
 			const t = await tourneyRes.json();
-			if (t?.startggEventSlug) { eventUrl = t.startggEventSlug; return; }
+			if (t?.startggEventSlug) { eventUrl = t.startggEventSlug; }
 		}
-		const cfgRes = await fetch('/api/discord/config');
-		if (cfgRes.ok) {
-			const cfg = await cfgRes.json();
-			if (cfg?.eventSlug) eventUrl = cfg.eventSlug;
+		if (!eventUrl) {
+			const cfgRes = await fetch('/api/discord/config');
+			if (cfgRes.ok) {
+				const cfg = await cfgRes.json();
+				if (cfg?.eventSlug) eventUrl = cfg.eventSlug;
+			}
+		}
+		if (seasonsRes.ok) {
+			const seasons = await seasonsRes.json();
+			leagueSeasons = seasons;
+			if (seasons.length) leagueSeasonId = String(seasons[seasons.length - 1].id);
 		}
 	});
 
@@ -83,7 +95,8 @@
 					mode, targetNumber, seasonStart,
 					microEnd: microEnd || undefined, macros: macros || undefined,
 					avoidEvents: avoidEvents || undefined, jitter: jitter || 5,
-					seed: seed || undefined, apply: false
+					seed: seed || undefined, apply: false,
+					leagueSeasonId: leagueSeasonId || undefined
 				}),
 				signal
 			});
@@ -255,7 +268,7 @@
 <main class="mx-auto max-w-4xl px-4 py-8">
 	<a href="/dashboard" class="text-sm text-primary hover:text-primary/80">&larr; Dashboard</a>
 	<h1 class="mt-4 text-2xl font-bold text-foreground">Seed Event</h1>
-	<p class="mt-1 text-muted-foreground">Generate Elo-based seedings for Swiss pairings.</p>
+	<p class="mt-1 text-muted-foreground">Generate seedings for Swiss pairings from league rankings or Elo history.</p>
 
 	{#if error}
 		<div class="mt-4 flex items-start gap-2 rounded-lg border border-destructive-border bg-destructive-muted px-4 py-3 text-sm text-destructive">
@@ -284,8 +297,22 @@
 						value={targetNumber}
 						oninput={(e) => onTargetChange((e.target as HTMLInputElement).value)}
 						required placeholder="e.g. 134" class="mt-1 w-48 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
-					<p class="mt-1 text-xs text-muted-foreground">Uses the previous 10 events for Elo history.</p>
 				</div>
+
+				{#if leagueSeasons.length}
+					<div>
+						<label for="league-season" class="block text-sm font-medium text-foreground">Rating source</label>
+						<select id="league-season" bind:value={leagueSeasonId} class="mt-1 w-64 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground focus:border-ring focus:outline-none">
+							<option value="">Elo (compute from history)</option>
+							{#each leagueSeasons as s}
+								<option value={String(s.id)}>{s.name} (TrueSkill)</option>
+							{/each}
+						</select>
+						<p class="mt-1 text-xs text-muted-foreground">
+							{leagueSeasonId ? 'Uses league rankings for known players, estimates newcomers from StartGG history.' : 'Computes Elo from the previous 10 events.'}
+						</p>
+					</div>
+				{/if}
 
 				<button type="button" onclick={() => showAdvanced = !showAdvanced}
 					class="text-sm text-muted-foreground hover:text-primary transition-colors">

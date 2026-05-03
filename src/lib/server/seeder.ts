@@ -11,6 +11,7 @@ import {
 	extractPlayerId,
 	extractGamerTag
 } from './startgg';
+import { getLeagueSeason, getRankings, getLeagueConfig } from './league-store';
 
 // ── Constants ───────────────────────────────────────────────────────────
 
@@ -73,6 +74,7 @@ export interface SeederInput {
 	jitter: number;
 	seed?: number;
 	apply: boolean;
+	leagueSeasonId?: number;
 }
 
 // ── Logging helper ──────────────────────────────────────────────────────
@@ -527,23 +529,42 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback, signal?
 
 	const microEnd = input.microEnd ?? (isMicro ? input.targetNumber - 1 : input.targetNumber);
 
-	// Step 1: Compute Elo from history
-	log('Step 1: Computing Elo ratings from historical tournaments...');
-	let eloRatings = new Map<number, number>();
-	if (microEnd >= input.seasonStart) {
-		const historySlugs = buildTournamentSlugs(input.seasonStart, microEnd, input.macros);
-		log(`Processing ${historySlugs.length} historical tournaments...`);
-		const playerRegistry = new Map<number, string>();
-		const tournaments: TournamentData[] = [];
-		for (const { slug, number: num, type } of historySlugs) {
-			const td = await collectTournamentData(slug, num, type, playerRegistry, log, signal);
-			if (td) tournaments.push(td);
+	// Step 1: Build ratings — prefer league TrueSkill, fall back to Elo history
+	let leagueRatings: Map<number, number> | null = null;
+	if (input.leagueSeasonId) {
+		log(`Step 1: Fetching league season ${input.leagueSeasonId} rankings...`);
+		const season = await getLeagueSeason(input.leagueSeasonId);
+		if (season) {
+			const config = await getLeagueConfig();
+			const rankings = getRankings(season, config);
+			leagueRatings = new Map();
+			for (const r of rankings) {
+				leagueRatings.set(parseInt(r.playerId, 10), r.points);
+			}
+			log(`${leagueRatings.size} players with TrueSkill league ratings.`);
+		} else {
+			warn(`League season ${input.leagueSeasonId} not found, falling back to Elo.`);
 		}
-		tournaments.sort((a, b) => a.startAt - b.startAt);
-		eloRatings = computeEloRatings(tournaments);
-		log(`${eloRatings.size} players with Elo ratings computed.`);
-	} else {
-		log('No history range. All entrants treated as newcomers.');
+	}
+
+	let eloRatings = new Map<number, number>();
+	if (!leagueRatings) {
+		log('Step 1: Computing Elo ratings from historical tournaments...');
+		if (microEnd >= input.seasonStart) {
+			const historySlugs = buildTournamentSlugs(input.seasonStart, microEnd, input.macros);
+			log(`Processing ${historySlugs.length} historical tournaments...`);
+			const playerRegistry = new Map<number, string>();
+			const tournaments: TournamentData[] = [];
+			for (const { slug, number: num, type } of historySlugs) {
+				const td = await collectTournamentData(slug, num, type, playerRegistry, log, signal);
+				if (td) tournaments.push(td);
+			}
+			tournaments.sort((a, b) => a.startAt - b.startAt);
+			eloRatings = computeEloRatings(tournaments);
+			log(`${eloRatings.size} players with Elo ratings computed.`);
+		} else {
+			log('No history range. All entrants treated as newcomers.');
+		}
 	}
 
 	// Step 2: Fetch target entrants
@@ -563,11 +584,29 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback, signal?
 
 	if (!entrants.length) throw new Error('No entrants found. Is registration open?');
 
-	// Step 3: Assign Elo
-	log('Step 3: Assigning Elo ratings...');
-	await assignEloRatings(entrants, eloRatings, log, signal);
-	const newcomers = entrants.filter((e) => e.isNewcomer).length;
-	log(`${entrants.length - newcomers} with MSV Elo, ${newcomers} newcomers estimated.`);
+	// Step 3: Assign ratings
+	if (leagueRatings) {
+		log('Step 3: Assigning TrueSkill league ratings...');
+		let leagueCount = 0;
+		for (const e of entrants) {
+			const ts = leagueRatings.get(e.playerId);
+			if (ts !== undefined) {
+				e.elo = ts;
+				leagueCount++;
+			} else {
+				log(`  Estimating rating for newcomer: ${e.gamerTag}...`);
+				e.elo = await estimateNewcomerElo(e.playerId, signal);
+				e.isNewcomer = true;
+			}
+		}
+		const newcomers = entrants.length - leagueCount;
+		log(`${leagueCount} with league ratings, ${newcomers} newcomers estimated.`);
+	} else {
+		log('Step 3: Assigning Elo ratings...');
+		await assignEloRatings(entrants, eloRatings, log, signal);
+		const newcomers = entrants.filter((e) => e.isNewcomer).length;
+		log(`${entrants.length - newcomers} with MSV Elo, ${newcomers} newcomers estimated.`);
+	}
 
 	// Step 4: Jitter
 	log(`Step 4: Applying jitter (max +/- ${input.jitter.toFixed(1)})...`);
