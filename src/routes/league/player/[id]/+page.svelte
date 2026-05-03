@@ -110,6 +110,15 @@
 		chartMode;
 		drawChart();
 	});
+
+	function phaseLabel(phase: string): { text: string; classes: string } {
+		if (phase === 'swiss') return { text: 'Swiss', classes: 'bg-blue-500/10 text-blue-400' };
+		if (phase === 'winners') return { text: 'Winners', classes: 'bg-green-500/10 text-green-400' };
+		if (phase === 'losers') return { text: 'Losers', classes: 'bg-red-500/10 text-red-400' };
+		if (phase === 'redemption-winners') return { text: 'Redem. W', classes: 'bg-amber-500/10 text-amber-400' };
+		if (phase === 'redemption-losers') return { text: 'Redem. L', classes: 'bg-orange-500/10 text-orange-400' };
+		return { text: phase, classes: 'bg-secondary text-muted-foreground' };
+	}
 </script>
 
 <svelte:head>
@@ -341,24 +350,42 @@
 				<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">
 					Match History ({s.matchesPlayed})
 				</h2>
-				<div class="space-y-1 max-h-[500px] overflow-y-auto">
-					{#each s.recentMatches as match}
-						{@const isP1 = match.player1Id === s.player.id}
-						{@const won = match.winnerId === s.player.id}
-						{@const oppTag = isP1 ? match.player2Tag : match.player1Tag}
-						{@const oppId = isP1 ? match.player2Id : match.player1Id}
-						{@const myScore = isP1 ? match.player1Score : match.player2Score}
-						{@const oppScore = isP1 ? match.player2Score : match.player1Score}
-						<div class="flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-sm">
-							<span class="w-2 h-2 rounded-full shrink-0 {won ? 'bg-green-500' : 'bg-red-500'}"></span>
-							<span class="{won ? 'text-success' : 'text-destructive'} font-medium w-10 shrink-0">{won ? 'Win' : 'Lose'}</span>
-							<span class="text-muted-foreground shrink-0">vs</span>
-							<a href="/league/player/{oppId}?season={data.seasonId}"
-								class="flex-1 text-foreground hover:text-primary truncate">{oppTag}</a>
-							{#if myScore > 0 || oppScore > 0}
-								<span class="text-xs text-muted-foreground shrink-0">{myScore}-{oppScore}</span>
-							{/if}
-							<span class="text-xs text-muted-foreground shrink-0 hidden sm:inline">{match.date}</span>
+				<div class="space-y-4 max-h-[600px] overflow-y-auto">
+					{#each s.matchesByEvent as evt}
+						<div>
+							<div class="flex items-center justify-between mb-1.5">
+								<span class="text-xs font-semibold text-foreground">{evt.name}</span>
+								<div class="flex items-center gap-2">
+									{#if evt.placement}
+										<span class="text-[10px] font-bold text-muted-foreground">#{evt.placement}</span>
+									{/if}
+									<span class="text-[10px] text-muted-foreground">{evt.date}</span>
+								</div>
+							</div>
+							<div class="space-y-1">
+								{#each evt.matches as match}
+									{@const isP1 = match.player1Id === s.player.id}
+									{@const won = match.winnerId === s.player.id}
+									{@const oppTag = isP1 ? match.player2Tag : match.player1Tag}
+									{@const oppId = isP1 ? match.player2Id : match.player1Id}
+									{@const myScore = isP1 ? match.player1Score : match.player2Score}
+									{@const oppScore = isP1 ? match.player2Score : match.player1Score}
+									{@const pl = phaseLabel(match.phase)}
+									<div class="flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-sm">
+										<span class="w-2 h-2 rounded-full shrink-0 {won ? 'bg-green-500' : 'bg-red-500'}"></span>
+										<span class="{won ? 'text-success' : 'text-destructive'} font-medium w-10 shrink-0">{won ? 'Win' : 'Lose'}</span>
+										<span class="text-muted-foreground shrink-0">vs</span>
+										<a href="/league/player/{oppId}?season={data.seasonId}"
+											class="flex-1 text-foreground hover:text-primary truncate">{oppTag}</a>
+										{#if myScore > 0 || oppScore > 0}
+											<span class="text-xs text-muted-foreground shrink-0">{myScore}-{oppScore}</span>
+										{/if}
+										<span class="text-xs px-1.5 py-0.5 rounded shrink-0 hidden sm:inline {pl.classes}">
+											{pl.text}
+										</span>
+									</div>
+								{/each}
+							</div>
 						</div>
 					{/each}
 				</div>
