@@ -88,7 +88,7 @@
 											class="text-foreground hover:text-primary font-medium transition-colors">
 											{player.gamerTag}
 										</a>
-										<span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded hidden sm:inline"
+										<span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
 											style="color: {player.tierColor}; background: {player.tierColor}15;">
 											{player.tier}
 										</span>
