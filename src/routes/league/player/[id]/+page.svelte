@@ -80,7 +80,7 @@
 					</div>
 					<div>
 						<div class="text-xs text-muted-foreground">Points</div>
-						<div class="text-lg font-bold text-primary">{s.player.points}</div>
+						<div class="text-lg font-bold text-primary">{data.adjustedPoints}</div>
 					</div>
 					<div>
 						<div class="text-xs text-muted-foreground">Win Rate</div>

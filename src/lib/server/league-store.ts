@@ -133,11 +133,11 @@ export function getRankings(
 	}));
 }
 
-export function getPlayerStats(season: LeagueSeason, playerId: string): LeaguePlayerStats | null {
+export function getPlayerStats(season: LeagueSeason, playerId: string, config?: { minEvents?: number; attendanceBonus?: number }): LeaguePlayerStats | null {
 	const player = season.players[playerId];
 	if (!player) return null;
 
-	const rankings = getRankings(season);
+	const rankings = getRankings(season, config);
 	const rankEntry = rankings.find((r) => r.playerId === playerId);
 	const rank = rankEntry?.rank ?? rankings.length;
 
