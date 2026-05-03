@@ -99,6 +99,23 @@
 				</table>
 			</div>
 
+			{#if data.events?.length}
+				<div class="mt-6">
+					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Events</h2>
+					<div class="space-y-1">
+						{#each data.events as evt}
+							<div class="flex items-center justify-between rounded-lg bg-card border border-border px-3 py-2 text-sm">
+								<div class="flex items-center gap-2">
+									<span class="text-xs font-bold w-5 text-center" style="color: {evt.color};">{evt.tier}</span>
+									<span class="text-foreground">{evt.name}</span>
+								</div>
+								<span class="text-xs text-muted-foreground">{evt.entrantCount} entrants · {evt.date}</span>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
 			<div class="mt-4 text-center text-xs text-muted-foreground">
 				Powered by TrueSkill — Rankings updated after each event
 			</div>

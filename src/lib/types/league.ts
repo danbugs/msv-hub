@@ -56,6 +56,20 @@ export function getPlayerTier(points: number): PlayerTier {
 	return { name: 'Bronze', color: '#d97706' };
 }
 
+export interface TournamentTier {
+	tier: string;
+	color: string;
+	avgPoints: number;
+}
+
+export function getTournamentTier(avgPoints: number): TournamentTier {
+	if (avgPoints >= 5800) return { tier: 'S', color: '#e879f9', avgPoints };
+	if (avgPoints >= 5500) return { tier: 'A', color: '#f87171', avgPoints };
+	if (avgPoints >= 5300) return { tier: 'B', color: '#fbbf24', avgPoints };
+	if (avgPoints >= 5100) return { tier: 'C', color: '#a3e635', avgPoints };
+	return { tier: 'D', color: '#94a3b8', avgPoints };
+}
+
 export interface CharacterSelection {
 	name: string;
 	iconUrl?: string;
