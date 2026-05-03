@@ -3,7 +3,7 @@
 
 	let { data } = $props();
 	let chartCanvas = $state<HTMLCanvasElement | null>(null);
-	let chartMode = $state<'rank' | 'points'>('rank');
+	let chartMode = $state<'rank' | 'points'>('points');
 	let bio = $state<string | null>(null);
 	let bioLoading = $state(false);
 
@@ -210,7 +210,7 @@
 			{#if s.player.rankHistory.length >= 2}
 				<div class="rounded-xl border border-border bg-card p-5">
 					<div class="flex items-center justify-between mb-3">
-						<h2 class="text-sm font-bold text-foreground uppercase tracking-wider">Ranking History</h2>
+						<h2 class="text-sm font-bold text-foreground uppercase tracking-wider">Rating History</h2>
 						<div class="flex gap-1">
 							<button
 								onclick={() => { chartMode = 'rank'; }}
@@ -288,8 +288,7 @@
 						{ label: 'Top 3', count: s.tournamentStats.top3 - s.tournamentStats.top1 },
 						{ label: 'Top 8', count: s.tournamentStats.top8 - s.tournamentStats.top3 },
 						{ label: 'Top 16', count: s.tournamentStats.top16 - s.tournamentStats.top8 },
-						{ label: 'Top 32', count: s.tournamentStats.top32 - s.tournamentStats.top16 },
-						{ label: '32+', count: s.tournamentsPlayed - s.tournamentStats.top32 }
+						{ label: 'Top 32', count: s.tournamentStats.top32 - s.tournamentStats.top16 }
 					].filter(p => p.count > 0) as p}
 						<div class="flex justify-between text-sm">
 							<span class="text-muted-foreground">{p.label}</span>
@@ -297,20 +296,11 @@
 						</div>
 					{/each}
 				</div>
-				{#if s.redemptionStats.top1 > 0 || s.redemptionStats.top3 > 0 || s.redemptionStats.top8 > 0}
+				{#if s.redemptionCount > 0}
 					<div class="border-t border-border mt-3 pt-3">
-						<div class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Redemption Bracket</div>
-						<div class="space-y-2">
-							{#each [
-								{ label: '1st', count: s.redemptionStats.top1 },
-								{ label: 'Top 3', count: s.redemptionStats.top3 - s.redemptionStats.top1 },
-								{ label: 'Top 8', count: s.redemptionStats.top8 - s.redemptionStats.top3 }
-							].filter(p => p.count > 0) as p}
-								<div class="flex justify-between text-sm">
-									<span class="text-muted-foreground">{p.label}</span>
-									<span class="font-medium text-foreground">{p.count}</span>
-								</div>
-							{/each}
+						<div class="flex justify-between text-sm">
+							<span class="text-muted-foreground">Went to Redemption</span>
+							<span class="font-medium text-foreground">{s.redemptionCount} / {s.tournamentsPlayed}</span>
 						</div>
 					</div>
 				{/if}
@@ -376,6 +366,26 @@
 				</div>
 			</div>
 
+			<!-- Best Wins -->
+			{#if s.bestWins?.length}
+				<div class="rounded-xl border border-border bg-card p-5">
+					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Best Wins</h2>
+					<div class="space-y-2">
+						{#each s.bestWins as win}
+							<div class="flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-sm">
+								<span class="text-xs font-mono text-muted-foreground w-8 shrink-0">#{win.oppRank}</span>
+								<a href="/league/player/{win.oppId}?season={data.seasonId}"
+									class="flex-1 text-foreground hover:text-primary font-medium truncate">{win.oppTag}</a>
+								{#if win.score}
+									<span class="text-xs text-muted-foreground shrink-0">{win.score}</span>
+								{/if}
+								<span class="text-[10px] text-muted-foreground shrink-0">{win.oppPoints} pts</span>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
 			<!-- Match History -->
 			<div class="rounded-xl border border-border bg-card p-5">
 				<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">
@@ -385,7 +395,10 @@
 					{#each s.matchesByEvent as evt}
 						<div>
 							<div class="flex items-center justify-between mb-1.5">
-								<span class="text-xs font-semibold text-foreground">{evt.name}</span>
+								<a href="https://www.start.gg/tournament/{evt.slug}" target="_blank" rel="noopener"
+									class="text-xs font-semibold text-foreground hover:text-primary transition-colors">
+									{evt.name} ↗
+								</a>
 								<div class="flex items-center gap-2">
 									{#if evt.placement}
 										<span class="text-[10px] font-bold text-muted-foreground">#{evt.placement}</span>
@@ -411,7 +424,7 @@
 										{#if myScore > 0 || oppScore > 0}
 											<span class="text-xs text-muted-foreground shrink-0">{myScore}-{oppScore}</span>
 										{/if}
-										<span class="text-xs px-1.5 py-0.5 rounded shrink-0 hidden sm:inline {pl.classes}">
+										<span class="text-xs px-1.5 py-0.5 rounded shrink-0 {pl.classes}">
 											{pl.text}
 										</span>
 									</div>

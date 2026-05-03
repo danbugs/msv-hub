@@ -1,12 +1,26 @@
 import type { RequestHandler } from './$types';
+import { Redis } from '@upstash/redis';
+import { env } from '$env/dynamic/private';
 import { getLeagueSeason, getPlayerStats } from '$lib/server/league-store';
 import { getPlayerTier } from '$lib/types/league';
 import { generatePlayerBio } from '$lib/server/ai';
+
+function getRedis(): Redis {
+	return new Redis({ url: env.UPSTASH_REDIS_REST_URL!, token: env.UPSTASH_REDIS_REST_TOKEN! });
+}
+
+function bioKey(seasonId: number, playerId: string): string {
+	return `league:bio:${seasonId}:${playerId}`;
+}
 
 export const GET: RequestHandler = async ({ url }) => {
 	const seasonId = parseInt(url.searchParams.get('season') ?? '10', 10);
 	const playerId = url.searchParams.get('playerId');
 	if (!playerId) return Response.json({ error: 'Missing playerId' }, { status: 400 });
+
+	const redis = getRedis();
+	const cached = await redis.get<string>(bioKey(seasonId, playerId));
+	if (cached) return Response.json({ bio: cached });
 
 	const season = await getLeagueSeason(seasonId);
 	if (!season) return Response.json({ error: 'Season not found' }, { status: 404 });
@@ -40,6 +54,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		tournamentStats: stats.tournamentStats,
 		trend
 	});
+
+	if (bio) await redis.set(bioKey(seasonId, playerId), bio);
 
 	return Response.json({ bio });
 };
