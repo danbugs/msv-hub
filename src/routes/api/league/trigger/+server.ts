@@ -11,13 +11,18 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const body = await request.json().catch(() => ({})) as Record<string, unknown>;
 	const seasonId = body.seasonId as number ?? 10;
-	const slugStart = body.slugStart as number ?? 125;
-	const slugEnd = body.slugEnd as number ?? 137;
 	const forceRefetch = body.forceRefetch as boolean ?? false;
 
-	const slugs: string[] = [];
-	for (let i = slugStart; i <= slugEnd; i++) {
-		slugs.push(`microspacing-vancouver-${i}`);
+	let slugs: string[];
+	if (Array.isArray(body.slugs)) {
+		slugs = body.slugs as string[];
+	} else {
+		const slugStart = body.slugStart as number ?? 125;
+		const slugEnd = body.slugEnd as number ?? 137;
+		slugs = [];
+		for (let i = slugStart; i <= slugEnd; i++) {
+			slugs.push(`microspacing-vancouver-${i}`);
+		}
 	}
 
 	const logs: string[] = [];
