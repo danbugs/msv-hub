@@ -30,6 +30,7 @@
 	let seasonsList = $state<{ id: number; name: string }[]>([]);
 	let currentSeasonId = $state(10);
 	let showCreateSeason = $state(false);
+	let newSeasonId = $state('');
 	let newSeasonStart = $state('');
 	let newSeasonEnd = $state('');
 	let newSeasonMacros = $state('');
@@ -42,7 +43,7 @@
 		loading = true;
 		const seasonsRes = await fetch('/api/league/seasons');
 		if (seasonsRes.ok) {
-			seasonsList = await seasonsRes.json();
+			seasonsList = (await seasonsRes.json()).sort((a: { id: number }, b: { id: number }) => a.id - b.id);
 			if (seasonsList.length > 0) currentSeasonId = seasonsList[seasonsList.length - 1].id;
 		}
 		await loadSeason();
@@ -103,7 +104,7 @@
 				]);
 				if (refreshRes.ok) season = await refreshRes.json();
 				const seasonsRes = await fetch('/api/league/seasons');
-				if (seasonsRes.ok) seasonsList = await seasonsRes.json();
+				if (seasonsRes.ok) seasonsList = (await seasonsRes.json()).sort((a: { id: number }, b: { id: number }) => a.id - b.id);
 			} else {
 				error = data.error ?? 'Import failed';
 			}
@@ -156,11 +157,14 @@
 	}
 
 	async function createSeason() {
+		const newId = parseInt(newSeasonId, 10);
+		if (isNaN(newId) || newId < 1) { error = 'Enter a valid season number'; return; }
+		if (seasonsList.some((s) => s.id === newId)) { error = `Season ${newId} already exists`; return; }
+
 		const start = parseInt(newSeasonStart, 10);
 		const end = parseInt(newSeasonEnd, 10);
 		if (isNaN(start) || isNaN(end) || end < start) { error = 'Enter valid start and end event numbers'; return; }
 
-		const newId = seasonsList.length > 0 ? Math.max(...seasonsList.map((s) => s.id)) + 1 : 1;
 		const slugs: string[] = [];
 		for (let i = start; i <= end; i++) slugs.push(`microspacing-vancouver-${i}`);
 
@@ -172,6 +176,7 @@
 
 		currentSeasonId = newId;
 		showCreateSeason = false;
+		newSeasonId = '';
 		newSeasonStart = '';
 		newSeasonEnd = '';
 		newSeasonMacros = '';
@@ -314,6 +319,11 @@
 			<h2 class="text-sm font-bold text-foreground mb-3">Create New Season</h2>
 			<div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end flex-wrap">
 				<div>
+					<label class="text-xs text-muted-foreground">Season #</label>
+					<input bind:value={newSeasonId} type="number" placeholder="9" min="1"
+						class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
+				</div>
+				<div>
 					<label class="text-xs text-muted-foreground">First Micro #</label>
 					<input bind:value={newSeasonStart} type="number" placeholder="112"
 						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
@@ -334,7 +344,7 @@
 				</button>
 			</div>
 			<p class="mt-2 text-xs text-muted-foreground">
-				Creates Season {seasonsList.length > 0 ? Math.max(...seasonsList.map((s) => s.id)) + 1 : 1} and imports all events in that range.
+				Creates the season and imports all events in that range.
 			</p>
 		</div>
 	{/if}
