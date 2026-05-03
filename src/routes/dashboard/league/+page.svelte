@@ -25,7 +25,8 @@
 	let mergeError = $state('');
 	let minEvents = $state(2);
 	let attendanceBonus = $state(50);
-	let awards = $state<{ title: string; description: string; playerId?: string; playerTag?: string; secondPlayerId?: string; secondPlayerTag?: string; value: string }[]>([]);
+	let awards = $state<{ title: string; description: string; playerId?: string; playerTag?: string; secondPlayerId?: string; secondPlayerTag?: string; value: string; candidates?: { playerId: string; playerTag: string; value: string }[] }[]>([]);
+	let awardsMinEvents = $state('');
 
 	const SEASON_ID = 10;
 	const SEASON_START = 125;
@@ -75,7 +76,10 @@
 			const data = await res.json();
 			if (res.ok) {
 				importLogs = data.logs ?? [];
-				const refreshRes = await fetch(`/api/league/season/${SEASON_ID}`);
+				const [refreshRes] = await Promise.all([
+					fetch(`/api/league/season/${SEASON_ID}`),
+					fetchAwards(awardsMinEvents || undefined)
+				]);
 				if (refreshRes.ok) season = await refreshRes.json();
 			} else {
 				error = data.error ?? 'Import failed';
@@ -84,6 +88,14 @@
 			error = e instanceof Error ? e.message : 'Network error';
 		}
 		importing = false;
+	}
+
+	async function fetchAwards(minEventsOverride?: string) {
+		const params = new URLSearchParams({ season: String(SEASON_ID) });
+		if (minEventsOverride) params.set('minEvents', minEventsOverride);
+		const res = await fetch(`/api/league/awards?${params}`);
+		if (res.ok) awards = await res.json();
+		return res;
 	}
 
 	function getAllSeasonSlugs(): string[] {
@@ -183,7 +195,10 @@
 			const data = await res.json();
 			if (res.ok) {
 				importLogs = data.logs ?? [];
-				const refreshRes = await fetch(`/api/league/season/${SEASON_ID}`);
+				const [refreshRes] = await Promise.all([
+					fetch(`/api/league/season/${SEASON_ID}`),
+					fetchAwards(awardsMinEvents || undefined)
+				]);
 				if (refreshRes.ok) season = await refreshRes.json();
 			} else {
 				error = data.error ?? 'Delete failed';
@@ -244,7 +259,16 @@
 		<!-- Season Awards (admin only) -->
 		{#if awards.length > 0}
 			<div class="mb-6">
-				<h2 class="text-sm font-semibold text-muted-foreground mb-2">Season Awards (not yet public)</h2>
+				<div class="flex items-center gap-3 mb-2">
+					<h2 class="text-sm font-semibold text-muted-foreground">Season Awards (not yet public)</h2>
+					<div class="flex items-center gap-1.5">
+						<label class="text-[10px] text-muted-foreground">Min events:</label>
+						<input bind:value={awardsMinEvents} type="number" min="1" max="20"
+							placeholder="auto"
+							onchange={() => fetchAwards(awardsMinEvents || undefined)}
+							class="w-14 rounded border border-input bg-secondary px-1.5 py-0.5 text-xs text-foreground focus:border-ring focus:outline-none" />
+					</div>
+				</div>
 				<div class="grid gap-3 sm:grid-cols-2">
 					{#each awards as award}
 						<div class="rounded-xl border border-border bg-card p-4" title={award.description}>
@@ -260,6 +284,17 @@
 							</div>
 							<div class="mt-1 text-xs text-muted-foreground">{award.value}</div>
 							<div class="mt-1 text-[10px] text-muted-foreground/60 italic">{award.description}</div>
+							{#if award.candidates?.length}
+								<div class="mt-2 border-t border-border pt-2">
+									<div class="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Runners-up</div>
+									{#each award.candidates as c}
+										<div class="flex justify-between text-[11px] text-muted-foreground">
+											<span>{c.playerTag}</span>
+											<span>{c.value}</span>
+										</div>
+									{/each}
+								</div>
+							{/if}
 						</div>
 					{/each}
 				</div>
