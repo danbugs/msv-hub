@@ -29,13 +29,13 @@
 		const range = maxVal - minVal || 1;
 		const pad = { top: 24, bottom: 24, left: 40, right: 16 };
 
-		const style = getComputedStyle(document.documentElement);
-		const borderColor = style.getPropertyValue('--border').trim();
-		const mutedColor = style.getPropertyValue('--muted-foreground').trim();
-		const primaryColor = style.getPropertyValue('--primary').trim();
+		const isDark = document.documentElement.classList.contains('dark');
+		const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+		const textColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)';
+		const lineColor = isDark ? '#93c5fd' : '#3b82f6';
 
 		// Grid lines
-		ctx.strokeStyle = `oklch(${borderColor})`;
+		ctx.strokeStyle = gridColor;
 		ctx.lineWidth = 0.5;
 		const gridSteps = 4;
 		for (let i = 0; i <= gridSteps; i++) {
@@ -48,14 +48,14 @@
 			const label = chartMode === 'rank'
 				? Math.round(minVal + (i / gridSteps) * range)
 				: Math.round(maxVal - (i / gridSteps) * range);
-			ctx.fillStyle = `oklch(${mutedColor})`;
+			ctx.fillStyle = textColor;
 			ctx.font = '10px system-ui';
 			ctx.textAlign = 'right';
 			ctx.fillText(String(label), pad.left - 6, y + 3);
 		}
 
 		// Data line
-		ctx.strokeStyle = `oklch(${primaryColor})`;
+		ctx.strokeStyle = lineColor;
 		ctx.lineWidth = 2;
 		ctx.lineJoin = 'round';
 		ctx.beginPath();
@@ -75,7 +75,7 @@
 		ctx.stroke();
 
 		// Dots
-		ctx.fillStyle = `oklch(${primaryColor})`;
+		ctx.fillStyle = lineColor;
 		for (let i = 0; i < values.length; i++) {
 			const x = pad.left + (i / (values.length - 1)) * chartW;
 			const normalized = (values[i] - minVal) / range;
@@ -88,7 +88,7 @@
 		}
 
 		// X-axis labels (event numbers)
-		ctx.fillStyle = `oklch(${mutedColor})`;
+		ctx.fillStyle = textColor;
 		ctx.font = '9px system-ui';
 		ctx.textAlign = 'center';
 		const step = Math.max(1, Math.floor(history.length / 6));
@@ -283,6 +283,23 @@
 						</div>
 					{/each}
 				</div>
+				{#if s.redemptionStats.top1 > 0 || s.redemptionStats.top3 > 0 || s.redemptionStats.top8 > 0}
+					<div class="border-t border-border mt-3 pt-3">
+						<div class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Redemption Bracket</div>
+						<div class="space-y-2">
+							{#each [
+								{ label: '1st', count: s.redemptionStats.top1 },
+								{ label: 'Top 3', count: s.redemptionStats.top3 - s.redemptionStats.top1 },
+								{ label: 'Top 8', count: s.redemptionStats.top8 - s.redemptionStats.top3 }
+							].filter(p => p.count > 0) as p}
+								<div class="flex justify-between text-sm">
+									<span class="text-muted-foreground">{p.label}</span>
+									<span class="font-medium text-foreground">{p.count}</span>
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
 			</div>
 
 			<!-- Matchups -->
