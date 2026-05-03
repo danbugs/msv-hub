@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { getLeagueSeason, getRankings, computeSeasonAwards } from '$lib/server/league-store';
-import { getPlayerTier, getTournamentTier } from '$lib/types/league';
+import { getPlayerTier, getTournamentTiers } from '$lib/types/league';
 
 export const load: PageServerLoad = async ({ url }) => {
 	const seasonId = parseInt(url.searchParams.get('season') ?? '10', 10);
@@ -36,21 +36,26 @@ export const load: PageServerLoad = async ({ url }) => {
 		};
 	});
 
-	const eventTiers = season.events.map((evt) => {
+	const eventAvgs = season.events.map((evt) => {
 		const attendeeIds = new Set(evt.placements.map((p) => p.playerId));
 		const attendeePoints = [...attendeeIds]
 			.map((id) => season.players[id]?.points ?? 5000)
 			.filter((p) => p > 0);
-		const avg = attendeePoints.length > 0
+		return attendeePoints.length > 0
 			? Math.round(attendeePoints.reduce((a, b) => a + b, 0) / attendeePoints.length)
 			: 5000;
+	});
+	const tierMap = getTournamentTiers(eventAvgs);
+	const eventTiers = season.events.map((evt, i) => {
+		const avg = eventAvgs[i];
+		const tier = tierMap.get(avg) ?? { tier: 'D', color: '#94a3b8', avgPoints: avg };
 		return {
 			slug: evt.slug,
 			name: evt.name,
 			date: evt.date,
 			eventNumber: evt.eventNumber,
 			entrantCount: evt.entrantCount,
-			...getTournamentTier(avg)
+			...tier
 		};
 	});
 

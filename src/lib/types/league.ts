@@ -48,7 +48,7 @@ export interface PlayerTier {
 }
 
 export function getPlayerTier(points: number): PlayerTier {
-	if (points >= 7000) return { name: 'Master', color: '#e879f9' };
+	if (points >= 7000) return { name: 'Master', color: '#ef4444' };
 	if (points >= 6500) return { name: 'Diamond', color: '#38bdf8' };
 	if (points >= 6000) return { name: 'Platinum', color: '#a3e635' };
 	if (points >= 5500) return { name: 'Gold', color: '#fbbf24' };
@@ -62,12 +62,25 @@ export interface TournamentTier {
 	avgPoints: number;
 }
 
-export function getTournamentTier(avgPoints: number): TournamentTier {
-	if (avgPoints >= 5800) return { tier: 'S', color: '#e879f9', avgPoints };
-	if (avgPoints >= 5500) return { tier: 'A', color: '#f87171', avgPoints };
-	if (avgPoints >= 5300) return { tier: 'B', color: '#fbbf24', avgPoints };
-	if (avgPoints >= 5100) return { tier: 'C', color: '#a3e635', avgPoints };
-	return { tier: 'D', color: '#94a3b8', avgPoints };
+export function getTournamentTiers(eventAvgPoints: number[]): Map<number, TournamentTier> {
+	if (eventAvgPoints.length === 0) return new Map();
+	const sorted = [...eventAvgPoints].sort((a, b) => a - b);
+	const p = (pct: number) => sorted[Math.min(Math.floor(pct * sorted.length), sorted.length - 1)];
+	const thresholds: [number, string, string][] = [
+		[p(0.8), 'S', '#ef4444'],
+		[p(0.6), 'A', '#f87171'],
+		[p(0.4), 'B', '#fbbf24'],
+		[p(0.2), 'C', '#a3e635'],
+	];
+	const result = new Map<number, TournamentTier>();
+	for (const avg of eventAvgPoints) {
+		let tier: TournamentTier = { tier: 'D', color: '#94a3b8', avgPoints: avg };
+		for (const [threshold, name, color] of thresholds) {
+			if (avg >= threshold) { tier = { tier: name, color, avgPoints: avg }; break; }
+		}
+		result.set(avg, tier);
+	}
+	return result;
 }
 
 export interface CharacterSelection {
@@ -87,6 +100,7 @@ export interface LeagueMatch {
 	player2Score: number;
 	player1Characters?: CharacterSelection[];
 	player2Characters?: CharacterSelection[];
+	isDQ?: boolean;
 	phase: string;
 	roundLabel: string;
 	date: string;

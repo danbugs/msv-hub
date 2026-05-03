@@ -120,9 +120,14 @@ function classifySet(set: GqlRecord): { phase: string; roundLabel: string } {
 	return { phase: 'losers', roundLabel: fullRoundText || `Losers R${Math.abs(round)}` };
 }
 
+function isDQSet(displayScore: string | null): boolean {
+	if (!displayScore) return false;
+	return displayScore.toUpperCase().includes('DQ');
+}
+
 function parseScore(displayScore: string | null, entrant1Name: string): { s1: number; s2: number } {
 	if (!displayScore) return { s1: 0, s2: 0 };
-	if (displayScore.toUpperCase().includes('DQ')) return { s1: 0, s2: 0 };
+	if (isDQSet(displayScore)) return { s1: 0, s2: 0 };
 	const parts = displayScore.split(' - ');
 	if (parts.length !== 2) return { s1: 0, s2: 0 };
 	const leftMatch = parts[0].trim().match(/^(.+?)\s+(\d+)$/);
@@ -297,6 +302,7 @@ export async function importSeason(
 			if (!winnerPlayer) continue;
 
 			const { phase, roundLabel } = classifySet(set);
+			const dq = isDQSet(set.displayScore as string | null);
 			const { s1, s2 } = parseScore(set.displayScore as string | null, e1.gamerTag);
 			const p1Chars = extractCharacters(set, entrant1Id);
 			const p2Chars = extractCharacters(set, entrant2Id);
@@ -309,6 +315,7 @@ export async function importSeason(
 				player1Score: s1, player2Score: s2,
 				player1Characters: p1Chars.length ? p1Chars : undefined,
 				player2Characters: p2Chars.length ? p2Chars : undefined,
+				isDQ: dq || undefined,
 				phase, roundLabel, date: dateStr
 			});
 		}

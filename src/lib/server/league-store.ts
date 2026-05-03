@@ -137,9 +137,11 @@ function computeMatchups(matches: LeagueMatch[], playerId: string, season: Leagu
 		else opp.losses++;
 		opp.total++;
 		opp.tag = oppTag;
-		const myScore = isP1 ? m.player1Score : m.player2Score;
-		const oppScore = isP1 ? m.player2Score : m.player1Score;
-		if (Math.abs(myScore - oppScore) === 1 && myScore + oppScore >= 3) opp.closeGames++;
+		if (!m.isDQ) {
+			const myScore = isP1 ? m.player1Score : m.player2Score;
+			const oppScore = isP1 ? m.player2Score : m.player1Score;
+			if (Math.abs(myScore - oppScore) === 1 && myScore + oppScore >= 3) opp.closeGames++;
+		}
 		opponents.set(oppId, opp);
 	}
 
@@ -168,7 +170,7 @@ function computeMatchups(matches: LeagueMatch[], playerId: string, season: Leagu
 	let biggestUpset: { tag: string; playerId: string; upsetFactor: number; eventSlug: string } | null = null;
 	const playerPoints = season.players[playerId]?.points ?? 5000;
 	for (const m of matches) {
-		if (m.winnerId !== playerId) continue;
+		if (m.winnerId !== playerId || m.isDQ) continue;
 		const isP1 = m.player1Id === playerId;
 		const oppId = isP1 ? m.player2Id : m.player1Id;
 		const oppTag = isP1 ? m.player2Tag : m.player1Tag;
@@ -306,7 +308,7 @@ export function computeSeasonAwards(season: LeagueSeason): SeasonAward[] {
 	// Biggest Upset (highest points gap win, bracket only)
 	let biggestUpset: { winnerId: string; loserId: string; gap: number; event: string } | null = null;
 	for (const m of season.matches) {
-		if (m.phase === 'swiss') continue;
+		if (m.phase === 'swiss' || m.isDQ) continue;
 		const winner = season.players[m.winnerId];
 		const loser = season.players[m.winnerId === m.player1Id ? m.player2Id : m.player1Id];
 		if (!winner || !loser) continue;
