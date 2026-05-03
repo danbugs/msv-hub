@@ -624,10 +624,19 @@
 			{/if}
 		</div>
 
-		<button onclick={fullReimport} disabled={importing}
-			class="rounded-lg border border-warning-border bg-warning-muted px-4 py-2 text-sm font-medium text-warning hover:bg-warning-muted/80 transition-colors disabled:opacity-50">
-			{importing ? 'Importing...' : 'Re-import all from StartGG'}
-		</button>
+		<div class="flex gap-2">
+			<button onclick={fullReimport} disabled={importing}
+				class="rounded-lg border border-warning-border bg-warning-muted px-4 py-2 text-sm font-medium text-warning hover:bg-warning-muted/80 transition-colors disabled:opacity-50">
+				{importing ? 'Importing...' : 'Re-import all from StartGG'}
+			</button>
+			<button onclick={async () => {
+				if (!confirm('Clear all cached AI bios for this season? They will regenerate on next profile view.')) return;
+				await fetch(`/api/league/bio?season=${getSeasonId()}`, { method: 'DELETE' });
+			}}
+				class="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+				Clear bios
+			</button>
+		</div>
 	{:else}
 		<div class="rounded-xl border border-dashed border-border p-8 text-center">
 			<p class="text-muted-foreground mb-4">No league data for this season. Create a new season or switch to an existing one.</p>

@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
-import { getLeagueSeason, getPlayerStats } from '$lib/server/league-store';
+import { getLeagueSeason, getLeagueConfig, getPlayerStats, getRankings } from '$lib/server/league-store';
 import { getPlayerTier } from '$lib/types/league';
 import { generatePlayerBio } from '$lib/server/ai';
 
@@ -25,10 +25,14 @@ export const GET: RequestHandler = async ({ url }) => {
 	const season = await getLeagueSeason(seasonId);
 	if (!season) return Response.json({ error: 'Season not found' }, { status: 404 });
 
-	const stats = getPlayerStats(season, playerId);
+	const config = await getLeagueConfig();
+	const stats = getPlayerStats(season, playerId, config);
 	if (!stats) return Response.json({ error: 'Player not found' }, { status: 404 });
 
-	const tier = getPlayerTier(stats.player.points);
+	const rankings = getRankings(season, config);
+	const rankEntry = rankings.find((r) => r.playerId === playerId);
+	const adjustedPoints = rankEntry?.points ?? stats.player.points;
+	const tier = getPlayerTier(adjustedPoints);
 	const history = stats.player.rankHistory;
 	let trend: 'rising' | 'falling' | 'steady' = 'steady';
 	if (history.length >= 3) {
@@ -58,4 +62,18 @@ export const GET: RequestHandler = async ({ url }) => {
 	if (bio) await redis.set(bioKey(seasonId, playerId), bio);
 
 	return Response.json({ bio });
+};
+
+export const DELETE: RequestHandler = async ({ url }) => {
+	const seasonId = parseInt(url.searchParams.get('season') ?? '10', 10);
+	const redis = getRedis();
+	const prefix = `league:bio:${seasonId}:`;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const [, keys] = await redis.scan(0, { match: `${prefix}*`, count: 200 }) as [any, string[]];
+	if (keys.length > 0) {
+		const pipeline = redis.pipeline();
+		for (const key of keys) pipeline.del(key);
+		await pipeline.exec();
+	}
+	return Response.json({ ok: true, cleared: keys.length });
 };
