@@ -142,6 +142,11 @@ export interface LeaguePlayerStats {
 		top16: number;
 		top32: number;
 	};
+	redemptionStats: {
+		top1: number;
+		top3: number;
+		top8: number;
+	};
 	matchups: {
 		nemesis: { tag: string; playerId: string; losses: number } | null;
 		dominated: { tag: string; playerId: string; wins: number } | null;

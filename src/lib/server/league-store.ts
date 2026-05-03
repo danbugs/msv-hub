@@ -132,15 +132,28 @@ export function getPlayerStats(season: LeagueSeason, playerId: string): LeaguePl
 	const eventSlugs = new Set(playerMatches.map((m) => m.eventSlug));
 	const tournamentsPlayed = eventSlugs.size;
 
+	const redemptionEvents = new Set<string>();
+	for (const m of playerMatches) {
+		if (m.phase.startsWith('redemption-')) redemptionEvents.add(m.eventSlug);
+	}
+
 	const tournamentStats = { top1: 0, top3: 0, top8: 0, top16: 0, top32: 0 };
+	const redemptionStats = { top1: 0, top3: 0, top8: 0 };
 	for (const evt of season.events) {
 		const pl = evt.placements.find((p) => p.playerId === playerId);
 		if (!pl) continue;
-		if (pl.placement <= 1) tournamentStats.top1++;
-		if (pl.placement <= 3) tournamentStats.top3++;
-		if (pl.placement <= 8) tournamentStats.top8++;
-		if (pl.placement <= 16) tournamentStats.top16++;
-		if (pl.placement <= 32) tournamentStats.top32++;
+		const isRedemption = redemptionEvents.has(evt.slug);
+		if (isRedemption) {
+			if (pl.placement <= 1) redemptionStats.top1++;
+			if (pl.placement <= 3) redemptionStats.top3++;
+			if (pl.placement <= 8) redemptionStats.top8++;
+		} else {
+			if (pl.placement <= 1) tournamentStats.top1++;
+			if (pl.placement <= 3) tournamentStats.top3++;
+			if (pl.placement <= 8) tournamentStats.top8++;
+			if (pl.placement <= 16) tournamentStats.top16++;
+			if (pl.placement <= 32) tournamentStats.top32++;
+		}
 	}
 
 	const matchups = computeMatchups(playerMatches, playerId, season);
@@ -177,6 +190,7 @@ export function getPlayerStats(season: LeagueSeason, playerId: string): LeaguePl
 		scoreDiff: scoreFor - scoreAgainst,
 		tournamentsPlayed,
 		tournamentStats,
+		redemptionStats,
 		matchups,
 		characters,
 		recentMatches: [...playerMatches].reverse(),
@@ -266,21 +280,24 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 	const players = Object.values(season.players);
 	const MIN_EVENTS = overrideMinEvents ?? Math.max(2, Math.floor(season.events.length * 0.4));
 
-	// Most Attended
+	// Most Attended (show all tied)
 	const attendance = new Map<string, number>();
 	for (const evt of season.events) {
 		for (const p of evt.placements) {
 			attendance.set(p.playerId, (attendance.get(p.playerId) ?? 0) + 1);
 		}
 	}
-	const mostAttended = [...attendance.entries()].sort((a, b) => b[1] - a[1])[0];
-	if (mostAttended) {
-		const p = season.players[mostAttended[0]];
-		if (p) awards.push({
+	const sortedAttendance = [...attendance.entries()].sort((a, b) => b[1] - a[1]);
+	const maxAttendance = sortedAttendance[0]?.[1] ?? 0;
+	const tied = sortedAttendance.filter(([, count]) => count === maxAttendance);
+	if (tied.length > 0) {
+		const tags = tied.map(([pid]) => season.players[pid]?.gamerTag ?? pid).filter(Boolean);
+		awards.push({
 			title: 'Most Attended',
 			description: 'Simple count of events the player appeared in.',
-			playerId: p.id, playerTag: p.gamerTag,
-			value: `${mostAttended[1]} events`
+			playerId: tied[0][0],
+			playerTag: tags.join(', '),
+			value: `${maxAttendance} events${tied.length > 1 ? ` (${tied.length}-way tie)` : ''}`
 		});
 	}
 
