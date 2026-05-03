@@ -6,6 +6,7 @@ const LEAGUE_SEASON_PREFIX = 'league:season:';
 const LEAGUE_MERGES_KEY = 'league:merges';
 const LEAGUE_CONFIG_KEY = 'league:config';
 const LEAGUE_SEASONS_INDEX_KEY = 'league:seasons';
+const LEAGUE_BIO_PREFIX = 'league:bio:';
 
 export interface LeagueConfig {
 	minEvents: number;
@@ -48,6 +49,18 @@ export async function saveLeagueSeason(season: LeagueSeason): Promise<void> {
 	if (!index.find((s) => s.id === season.id)) {
 		index.push({ id: season.id, name: season.name });
 		await redis.set(LEAGUE_SEASONS_INDEX_KEY, JSON.stringify(index));
+	}
+}
+
+export async function clearBioCache(seasonId: number): Promise<void> {
+	const redis = getRedis();
+	const prefix = `${LEAGUE_BIO_PREFIX}${seasonId}:`;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const [, keys] = await redis.scan(0, { match: `${prefix}*`, count: 200 }) as [any, string[]];
+	if (keys.length > 0) {
+		const pipeline = redis.pipeline();
+		for (const key of keys) pipeline.del(key);
+		await pipeline.exec();
 	}
 }
 
@@ -147,29 +160,22 @@ export function getPlayerStats(season: LeagueSeason, playerId: string): LeaguePl
 	const eventSlugs = new Set(playerMatches.map((m) => m.eventSlug));
 	const tournamentsPlayed = eventSlugs.size;
 
+	const tournamentStats = { top1: 0, top3: 0, top8: 0, top16: 0, top32: 0 };
+	for (const evt of season.events) {
+		const pl = evt.placements.find((p) => p.playerId === playerId);
+		if (!pl) continue;
+		if (pl.placement <= 1) tournamentStats.top1++;
+		if (pl.placement <= 3) tournamentStats.top3++;
+		if (pl.placement <= 8) tournamentStats.top8++;
+		if (pl.placement <= 16) tournamentStats.top16++;
+		if (pl.placement <= 32) tournamentStats.top32++;
+	}
+
 	const redemptionEvents = new Set<string>();
 	for (const m of playerMatches) {
 		if (m.phase.startsWith('redemption-')) redemptionEvents.add(m.eventSlug);
 	}
-
-	const tournamentStats = { top1: 0, top3: 0, top8: 0, top16: 0, top32: 0 };
-	const redemptionStats = { top1: 0, top3: 0, top8: 0 };
-	for (const evt of season.events) {
-		const pl = evt.placements.find((p) => p.playerId === playerId);
-		if (!pl) continue;
-		const isRedemption = redemptionEvents.has(evt.slug);
-		if (isRedemption) {
-			if (pl.placement <= 1) redemptionStats.top1++;
-			if (pl.placement <= 3) redemptionStats.top3++;
-			if (pl.placement <= 8) redemptionStats.top8++;
-		} else {
-			if (pl.placement <= 1) tournamentStats.top1++;
-			if (pl.placement <= 3) tournamentStats.top3++;
-			if (pl.placement <= 8) tournamentStats.top8++;
-			if (pl.placement <= 16) tournamentStats.top16++;
-			if (pl.placement <= 32) tournamentStats.top32++;
-		}
-	}
+	const redemptionCount = redemptionEvents.size;
 
 	const matchups = computeMatchups(playerMatches, playerId, season);
 	const characters = computeCharacterStats(playerMatches, playerId);
@@ -192,6 +198,25 @@ export function getPlayerStats(season: LeagueSeason, playerId: string): LeaguePl
 		}))
 		.reverse();
 
+	const bestWins: { oppTag: string; oppId: string; oppPoints: number; oppRank: number; eventSlug: string; date: string; score: string }[] = [];
+	for (const m of playerMatches) {
+		if (m.winnerId !== playerId || m.isDQ) continue;
+		const isP1 = m.player1Id === playerId;
+		const oppId = isP1 ? m.player2Id : m.player1Id;
+		const oppTag = isP1 ? m.player2Tag : m.player1Tag;
+		const oppRanking = rankings.find((r) => r.playerId === oppId);
+		if (!oppRanking) continue;
+		const myScore = isP1 ? m.player1Score : m.player2Score;
+		const oppScore = isP1 ? m.player2Score : m.player1Score;
+		bestWins.push({
+			oppTag, oppId, oppPoints: oppRanking.points, oppRank: oppRanking.rank,
+			eventSlug: m.eventSlug, date: m.date,
+			score: myScore > 0 || oppScore > 0 ? `${myScore}-${oppScore}` : ''
+		});
+	}
+	bestWins.sort((a, b) => a.oppRank - b.oppRank);
+	const topWins = bestWins.slice(0, 5);
+
 	return {
 		player,
 		rank,
@@ -205,11 +230,12 @@ export function getPlayerStats(season: LeagueSeason, playerId: string): LeaguePl
 		scoreDiff: scoreFor - scoreAgainst,
 		tournamentsPlayed,
 		tournamentStats,
-		redemptionStats,
+		redemptionCount,
 		matchups,
 		characters,
 		recentMatches: [...playerMatches].reverse(),
-		matchesByEvent
+		matchesByEvent,
+		bestWins: topWins
 	};
 }
 

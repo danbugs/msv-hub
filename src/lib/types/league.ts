@@ -142,11 +142,7 @@ export interface LeaguePlayerStats {
 		top16: number;
 		top32: number;
 	};
-	redemptionStats: {
-		top1: number;
-		top3: number;
-		top8: number;
-	};
+	redemptionCount: number;
 	matchups: {
 		nemesis: { tag: string; playerId: string; losses: number } | null;
 		dominated: { tag: string; playerId: string; wins: number } | null;
@@ -163,5 +159,14 @@ export interface LeaguePlayerStats {
 		eventNumber: number;
 		placement?: number;
 		matches: LeagueMatch[];
+	}[];
+	bestWins: {
+		oppTag: string;
+		oppId: string;
+		oppPoints: number;
+		oppRank: number;
+		eventSlug: string;
+		date: string;
+		score: string;
 	}[];
 }

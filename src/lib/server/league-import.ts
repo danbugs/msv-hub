@@ -1,6 +1,6 @@
 import { gql, TOURNAMENT_QUERY } from '$lib/server/startgg';
 import { createRating, rate1v1, ratingToPoints } from '$lib/server/trueskill';
-import { getLeagueSeason, saveLeagueSeason, getMergeMap } from '$lib/server/league-store';
+import { getLeagueSeason, saveLeagueSeason, getMergeMap, clearBioCache } from '$lib/server/league-store';
 import type { MergeMap } from '$lib/server/league-store';
 import type { LeagueSeason, LeagueEvent, LeaguePlayer, LeagueMatch, LeaguePlacement, CharacterSelection } from '$lib/types/league';
 import type { Rating } from '$lib/server/trueskill';
@@ -71,6 +71,24 @@ query LeagueEventSets($eventId: ID!, $page: Int!, $perPage: Int!) {
   }
 }`;
 
+const EVENT_STANDINGS_QUERY = `
+query EventStandings($eventId: ID!, $page: Int!, $perPage: Int!) {
+  event(id: $eventId) {
+    standings(query: { page: $page, perPage: $perPage }) {
+      pageInfo { totalPages }
+      nodes {
+        placement
+        entrant {
+          id
+          participants {
+            player { id gamerTag }
+          }
+        }
+      }
+    }
+  }
+}`;
+
 const API_DELAY = 800;
 const SETS_PER_PAGE = 50;
 
@@ -87,6 +105,27 @@ async function fetchLeagueSets(eventId: number): Promise<GqlRecord[]> {
 		page++;
 	}
 	return all;
+}
+
+async function fetchEventStandings(eventId: number): Promise<{ playerId: string; gamerTag: string; placement: number }[]> {
+	const results: { playerId: string; gamerTag: string; placement: number }[] = [];
+	let page = 1;
+	while (true) {
+		const data = await gql<GqlRecord>(EVENT_STANDINGS_QUERY, { eventId, page, perPage: 50 }, { delay: API_DELAY });
+		if (!data) break;
+		const standings = (data.event as GqlRecord)?.standings;
+		if (!standings?.nodes?.length) break;
+		for (const node of standings.nodes as GqlRecord[]) {
+			const playerId = node.entrant?.participants?.[0]?.player?.id;
+			const gamerTag = node.entrant?.participants?.[0]?.player?.gamerTag;
+			if (playerId && node.placement) {
+				results.push({ playerId: String(playerId), gamerTag: gamerTag ?? '', placement: node.placement as number });
+			}
+		}
+		if (page >= standings.pageInfo.totalPages) break;
+		page++;
+	}
+	return results;
 }
 
 interface TournamentData {
@@ -160,29 +199,52 @@ function extractCharacters(set: GqlRecord, entrantId: number): CharacterSelectio
 	return chars;
 }
 
-function derivePlacements(sets: GqlRecord[], entrantMap: Map<number, { playerId: string; gamerTag: string }>): LeaguePlacement[] {
-	const playerWins = new Map<string, number>();
-	const playerLosses = new Map<string, number>();
-	for (const set of sets) {
-		if (!set.winnerId || !set.slots?.length) continue;
-		for (const slot of set.slots) {
-			const entrantId = slot.entrant?.id as number | undefined;
-			if (!entrantId) continue;
-			const player = entrantMap.get(entrantId);
-			if (!player) continue;
-			if (entrantId === set.winnerId) playerWins.set(player.playerId, (playerWins.get(player.playerId) ?? 0) + 1);
-			else playerLosses.set(player.playerId, (playerLosses.get(player.playerId) ?? 0) + 1);
+async function fetchTournamentPlacements(
+	eventList: { id: number; name: string }[],
+	entrantMap: Map<number, { playerId: string; gamerTag: string }>,
+	mergeMap?: MergeMap
+): Promise<LeaguePlacement[]> {
+	const placements = new Map<string, LeaguePlacement>();
+
+	const mainEvents = eventList.filter((e) => !isSwissEvent(e.name) && !isRedemptionEvent(e.name));
+	const redemptionEvents = eventList.filter((e) => isRedemptionEvent(e.name));
+
+	let mainBracketSize = 0;
+	for (const evt of mainEvents) {
+		const standings = await fetchEventStandings(evt.id);
+		for (const s of standings) {
+			const pid = mergeMap?.[s.playerId] ?? s.playerId;
+			if (!placements.has(pid) || s.placement < placements.get(pid)!.placement) {
+				placements.set(pid, { playerId: pid, gamerTag: s.gamerTag, placement: s.placement });
+			}
+		}
+		mainBracketSize = Math.max(mainBracketSize, standings.length);
+	}
+
+	for (const evt of redemptionEvents) {
+		const standings = await fetchEventStandings(evt.id);
+		for (const s of standings) {
+			const pid = mergeMap?.[s.playerId] ?? s.playerId;
+			const adjusted = s.placement + mainBracketSize;
+			if (!placements.has(pid) || adjusted < placements.get(pid)!.placement) {
+				placements.set(pid, { playerId: pid, gamerTag: s.gamerTag, placement: adjusted });
+			}
 		}
 	}
-	const allPlayerIds = new Set([...playerWins.keys(), ...playerLosses.keys()]);
-	const entries = [...allPlayerIds].map((pid) => {
-		let tag = '';
-		for (const [, p] of entrantMap) { if (p.playerId === pid) { tag = p.gamerTag; break; } }
-		return { playerId: pid, gamerTag: tag, wins: playerWins.get(pid) ?? 0, losses: playerLosses.get(pid) ?? 0 };
-	});
-	entries.sort((a, b) => b.wins !== a.wins ? b.wins - a.wins : a.losses - b.losses);
-	return entries.map((e, i) => ({ playerId: e.playerId, gamerTag: e.gamerTag, placement: i + 1 }));
+
+	// Fill in any players from entrantMap who weren't in standings (Swiss-only DQs, etc.)
+	for (const [, p] of entrantMap) {
+		const pid = mergeMap?.[p.playerId] ?? p.playerId;
+		if (!placements.has(pid)) {
+			placements.set(pid, { playerId: pid, gamerTag: p.gamerTag, placement: placements.size + 1 });
+		}
+	}
+
+	return [...placements.values()].sort((a, b) => a.placement - b.placement);
 }
+
+function isSwissEvent(name: string): boolean { return /swiss/i.test(name); }
+function isRedemptionEvent(name: string): boolean { return /redemption/i.test(name); }
 
 function applyMerges(
 	matches: LeagueMatch[],
@@ -245,6 +307,7 @@ export async function importSeason(
 	const allTags = new Map<string, Set<string>>();
 	const events: LeagueEvent[] = [];
 	const allMatches: LeagueMatch[] = [];
+	const mergeMap = await getMergeMap();
 
 	for (const slug of tournamentSlugs) {
 		if (!forceRefetch && existingEventSlugs.has(slug)) {
@@ -323,17 +386,18 @@ export async function importSeason(
 		}
 
 		allMatches.push(...eventMatches);
-		const allSets = setsWithSource.map(({ set }) => set);
+
+		log(`Fetching standings for ${info.tournamentName}...`);
+		const placements = await fetchTournamentPlacements(info.events, entrantMap, mergeMap);
 		events.push({
 			slug, name: info.tournamentName, date: dateStr,
 			eventNumber, entrantCount: info.numEntrants,
-			placements: derivePlacements(allSets, entrantMap)
+			placements
 		});
 
 		log(`Processed ${info.tournamentName}: ${eventMatches.length} matches, ${entrantMap.size} players`);
 	}
 
-	const mergeMap = await getMergeMap();
 	if (Object.keys(mergeMap).length > 0) {
 		applyMerges(allMatches, events, allTags, mergeMap);
 		log(`Applied ${Object.keys(mergeMap).length} player merge(s)`);
@@ -391,6 +455,7 @@ export async function importSeason(
 	};
 
 	await saveLeagueSeason(season);
+	await clearBioCache(seasonId);
 	log(`Season ${seasonId} saved: ${events.length} events, ${players.size} players, ${allMatches.length} matches`);
 	return season;
 }
