@@ -2,6 +2,10 @@
 	let { data } = $props();
 
 	let searchQuery = $state('');
+	let showGallery = $state(false);
+	let lightboxSeason = $state<number | null>(null);
+
+	const seasons = Array.from({ length: 9 }, (_, i) => i + 1);
 
 	function filteredRankings() {
 		if (!searchQuery.trim()) return data.rankings;
@@ -125,9 +129,60 @@
 				</div>
 			{/if}
 
+			<!-- PR Graphics Gallery -->
+			<div class="mt-6">
+				<button onclick={() => showGallery = !showGallery}
+					class="flex items-center gap-2 text-sm font-bold text-foreground uppercase tracking-wider mb-3 hover:text-primary transition-colors">
+					<span class="text-xs transition-transform" class:rotate-90={showGallery}>&#9654;</span>
+					Past Season Graphics
+				</button>
+				{#if showGallery}
+					<div class="grid grid-cols-3 gap-3">
+						{#each seasons as s}
+							<button onclick={() => lightboxSeason = s}
+								class="rounded-lg border border-border overflow-hidden hover:border-primary transition-colors aspect-[4/3] bg-card">
+								<img src="/pr-graphics/season{s}.png" alt="Season {s}" loading="lazy"
+									class="w-full h-full object-cover" />
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
 			<div class="mt-4 text-center text-xs text-muted-foreground">
 				Powered by TrueSkill — Rankings updated after each event
 			</div>
 		{/if}
 	</div>
 </div>
+
+<!-- Lightbox -->
+{#if lightboxSeason !== null}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+		role="dialog" aria-modal="true"
+		onclick={() => lightboxSeason = null}
+		onkeydown={(e) => {
+			if (e.key === 'Escape') lightboxSeason = null;
+			if (e.key === 'ArrowLeft' && lightboxSeason !== null && lightboxSeason > 1) lightboxSeason--;
+			if (e.key === 'ArrowRight' && lightboxSeason !== null && lightboxSeason < 9) lightboxSeason++;
+		}}>
+		<div class="relative max-w-4xl w-full mx-4" onclick={(e) => e.stopPropagation()}>
+			<div class="flex items-center justify-between mb-2">
+				<span class="text-white text-sm font-bold">Season {lightboxSeason}</span>
+				<div class="flex items-center gap-2">
+					<button onclick={() => { if (lightboxSeason! > 1) lightboxSeason!--; }}
+						disabled={lightboxSeason === 1}
+						class="text-white/70 hover:text-white disabled:text-white/30 text-lg px-2">&#8592;</button>
+					<span class="text-white/50 text-xs">{lightboxSeason} / 9</span>
+					<button onclick={() => { if (lightboxSeason! < 9) lightboxSeason!++; }}
+						disabled={lightboxSeason === 9}
+						class="text-white/70 hover:text-white disabled:text-white/30 text-lg px-2">&#8594;</button>
+					<button onclick={() => lightboxSeason = null}
+						class="text-white/70 hover:text-white text-xl px-2 ml-2">&#10005;</button>
+				</div>
+			</div>
+			<img src="/pr-graphics/season{lightboxSeason}.png" alt="Season {lightboxSeason}"
+				class="w-full rounded-lg shadow-2xl" />
+		</div>
+	</div>
+{/if}
