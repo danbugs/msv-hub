@@ -146,6 +146,12 @@
 						</div>
 					{/if}
 					<h1 class="text-2xl font-bold text-foreground">{s.player.gamerTag}</h1>
+					{#if data.tier}
+						<span class="text-xs font-bold uppercase tracking-wider px-2 py-1 rounded"
+							style="color: {data.tier.color}; background: {data.tier.color}15;">
+							{data.tier.name}
+						</span>
+					{/if}
 				</div>
 				{#if s.player.aliases?.length}
 					<div class="mt-1 text-sm text-muted-foreground">

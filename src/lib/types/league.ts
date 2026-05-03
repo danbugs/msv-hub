@@ -42,6 +42,20 @@ export interface LeagueRankSnapshot {
 	sigma: number;
 }
 
+export interface PlayerTier {
+	name: string;
+	color: string;
+}
+
+export function getPlayerTier(points: number): PlayerTier {
+	if (points >= 7000) return { name: 'Master', color: '#e879f9' };
+	if (points >= 6500) return { name: 'Diamond', color: '#38bdf8' };
+	if (points >= 6000) return { name: 'Platinum', color: '#a3e635' };
+	if (points >= 5500) return { name: 'Gold', color: '#fbbf24' };
+	if (points >= 5000) return { name: 'Silver', color: '#94a3b8' };
+	return { name: 'Bronze', color: '#d97706' };
+}
+
 export interface CharacterSelection {
 	name: string;
 	iconUrl?: string;

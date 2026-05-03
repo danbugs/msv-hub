@@ -1,5 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { getLeagueSeason, getRankings } from '$lib/server/league-store';
+import { getPlayerTier } from '$lib/types/league';
 
 export const load: PageServerLoad = async ({ url }) => {
 	const seasonId = parseInt(url.searchParams.get('season') ?? '10', 10);
@@ -23,12 +24,15 @@ export const load: PageServerLoad = async ({ url }) => {
 	const enrichedRankings = rankings.map((r) => {
 		const stats = playerMatchCounts.get(r.playerId);
 		const player = season.players[r.playerId];
+		const tier = getPlayerTier(r.points);
 		return {
 			...r,
 			aliases: player?.aliases ?? [],
 			wins: stats?.wins ?? 0,
 			losses: stats?.losses ?? 0,
-			events: stats?.events.size ?? 0
+			events: stats?.events.size ?? 0,
+			tier: tier.name,
+			tierColor: tier.color
 		};
 	});
 

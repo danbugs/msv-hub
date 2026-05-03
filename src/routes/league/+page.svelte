@@ -70,10 +70,16 @@
 							<tr class="border-b border-border last:border-0 hover:bg-accent/50 transition-colors">
 								<td class="px-4 py-3 text-muted-foreground font-mono text-xs">{player.rank}</td>
 								<td class="px-4 py-3">
-									<a href="/league/player/{player.playerId}?season={data.seasonId}"
-										class="text-foreground hover:text-primary font-medium transition-colors">
-										{player.gamerTag}
-									</a>
+									<div class="flex items-center gap-2">
+										<a href="/league/player/{player.playerId}?season={data.seasonId}"
+											class="text-foreground hover:text-primary font-medium transition-colors">
+											{player.gamerTag}
+										</a>
+										<span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+											style="color: {player.tierColor}; background: {player.tierColor}15;">
+											{player.tier}
+										</span>
+									</div>
 								</td>
 								<td class="px-4 py-3 text-right hidden sm:table-cell">
 									<span class="text-success">{player.wins}</span>
