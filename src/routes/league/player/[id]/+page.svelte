@@ -122,15 +122,17 @@
 		}
 	}
 
+	function loadBio() {
+		if (!data.stats || bioLoading) return;
+		bioLoading = true;
+		fetch(`/api/league/bio?season=${data.seasonId}&playerId=${data.stats.player.id}`)
+			.then((r) => r.ok ? r.json() : null)
+			.then((d) => { if (d?.bio) bio = d.bio; })
+			.finally(() => { bioLoading = false; });
+	}
+
 	onMount(() => {
 		drawChart();
-		if (data.stats) {
-			bioLoading = true;
-			fetch(`/api/league/bio?season=${data.seasonId}&playerId=${data.stats.player.id}`)
-				.then((r) => r.ok ? r.json() : null)
-				.then((d) => { if (d?.bio) bio = d.bio; })
-				.finally(() => { bioLoading = false; });
-		}
 	});
 
 	function phaseLabel(phase: string): { text: string; classes: string } {
@@ -216,6 +218,11 @@
 					<p class="mt-3 text-sm text-muted-foreground italic">{bio}</p>
 				{:else if bioLoading}
 					<div class="mt-3 h-4 w-3/4 rounded bg-secondary animate-pulse"></div>
+				{:else}
+					<button onclick={loadBio}
+						class="mt-3 text-xs text-muted-foreground hover:text-primary transition-colors">
+						AI season overview
+					</button>
 				{/if}
 			</div>
 
