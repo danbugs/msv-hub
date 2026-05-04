@@ -220,7 +220,7 @@
 					<div class="mt-3 h-4 w-3/4 rounded bg-secondary animate-pulse"></div>
 				{:else}
 					<button onclick={loadBio}
-						class="mt-3 text-xs text-muted-foreground hover:text-primary transition-colors">
+						class="mt-3 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
 						AI season overview
 					</button>
 				{/if}
