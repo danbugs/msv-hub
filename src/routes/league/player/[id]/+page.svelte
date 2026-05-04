@@ -25,7 +25,8 @@
 		ctx.clearRect(0, 0, W, H);
 
 		const bonus = data.attendanceBonus ?? 0;
-		const values = history.map((h, i) => h.points + (i + 1) * bonus);
+		const values = history.map((h) => h.points);
+		const adjustedValues = history.map((h, i) => h.points + (i + 1) * bonus);
 		const minVal = Math.min(...values);
 		const maxVal = Math.max(...values);
 		const range = maxVal - minVal || 1;
@@ -38,25 +39,6 @@
 
 		const chartW = W - pad.left - pad.right;
 		const chartH = H - pad.top - pad.bottom;
-
-		for (const tier of PLAYER_TIERS) {
-			if (tier.minPoints <= 0) continue;
-			if (tier.minPoints < minVal - range * 0.1 || tier.minPoints > maxVal + range * 0.1) continue;
-			const normalized = (tier.minPoints - minVal) / range;
-			const y = pad.top + (1 - normalized) * chartH;
-			ctx.strokeStyle = tier.color + '40';
-			ctx.lineWidth = 1;
-			ctx.setLineDash([4, 4]);
-			ctx.beginPath();
-			ctx.moveTo(pad.left, y);
-			ctx.lineTo(W - pad.right, y);
-			ctx.stroke();
-			ctx.setLineDash([]);
-			ctx.fillStyle = tier.color + '80';
-			ctx.font = '9px system-ui';
-			ctx.textAlign = 'left';
-			ctx.fillText(tier.name, pad.left + 2, y - 3);
-		}
 
 		ctx.strokeStyle = gridColor;
 		ctx.lineWidth = 0.5;
@@ -89,8 +71,8 @@
 			const y = pad.top + (1 - (values[i] - minVal) / range) * chartH;
 
 			if (i > 0) {
-				const prevTier = PLAYER_TIERS.find((t) => values[i - 1] >= t.minPoints);
-				const currTier = PLAYER_TIERS.find((t) => values[i] >= t.minPoints);
+				const prevTier = PLAYER_TIERS.find((t) => adjustedValues[i - 1] >= t.minPoints);
+				const currTier = PLAYER_TIERS.find((t) => adjustedValues[i] >= t.minPoints);
 				if (prevTier && currTier && prevTier.name !== currTier.name) {
 					ctx.fillStyle = currTier.color;
 					ctx.beginPath();
@@ -230,7 +212,7 @@
 			<!-- Points History Chart -->
 			{#if s.player.rankHistory.length >= 2}
 				<div class="rounded-xl border border-border bg-card p-5">
-					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Points History</h2>
+					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">TrueSkill Rating</h2>
 					<canvas bind:this={chartCanvas} class="w-full" style="height: 180px;"></canvas>
 				</div>
 			{/if}
