@@ -19,6 +19,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
 	return {
 		stats,
 		adjustedPoints,
+		attendanceBonus: config.attendanceBonus,
 		seasonId,
 		seasonName: season.name,
 		seasonStart: season.startDate,

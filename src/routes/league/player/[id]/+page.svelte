@@ -24,7 +24,8 @@
 		const H = rect.height;
 		ctx.clearRect(0, 0, W, H);
 
-		const values = history.map((h) => h.points);
+		const bonus = data.attendanceBonus ?? 0;
+		const values = history.map((h, i) => h.points + (i + 1) * bonus);
 		const minVal = Math.min(...values);
 		const maxVal = Math.max(...values);
 		const range = maxVal - minVal || 1;
@@ -88,8 +89,8 @@
 			const y = pad.top + (1 - (values[i] - minVal) / range) * chartH;
 
 			if (i > 0) {
-				const prevTier = PLAYER_TIERS.find((t) => history[i - 1].points >= t.minPoints);
-				const currTier = PLAYER_TIERS.find((t) => history[i].points >= t.minPoints);
+				const prevTier = PLAYER_TIERS.find((t) => values[i - 1] >= t.minPoints);
+				const currTier = PLAYER_TIERS.find((t) => values[i] >= t.minPoints);
 				if (prevTier && currTier && prevTier.name !== currTier.name) {
 					ctx.fillStyle = currTier.color;
 					ctx.beginPath();
@@ -398,7 +399,9 @@
 					Match History ({s.matchesPlayed})
 				</h2>
 				<div class="space-y-4 max-h-[600px] overflow-y-auto">
-					{#each s.matchesByEvent as evt}
+					{#each s.matchesByEvent as evt, evtIdx}
+						{@const histIdx = s.player.rankHistory.findIndex((h) => h.eventNumber === evt.eventNumber)}
+						{@const ptsDelta = histIdx > 0 ? s.player.rankHistory[histIdx].points - s.player.rankHistory[histIdx - 1].points : null}
 						<div>
 							<div class="flex items-center justify-between mb-1.5">
 								<a href="https://www.start.gg/tournament/{evt.slug}" target="_blank" rel="noopener"
@@ -406,6 +409,11 @@
 									{evt.name} ↗
 								</a>
 								<div class="flex items-center gap-2">
+									{#if ptsDelta !== null}
+										<span class="text-[10px] font-bold {ptsDelta >= 0 ? 'text-success' : 'text-destructive'}">
+											{ptsDelta >= 0 ? '+' : ''}{ptsDelta} pts
+										</span>
+									{/if}
 									{#if evt.placement}
 										<span class="text-[10px] font-bold text-muted-foreground">#{evt.placement}</span>
 									{/if}
