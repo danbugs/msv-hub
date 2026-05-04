@@ -408,9 +408,13 @@ export async function importSeason(
 
 	for (const evt of events) {
 		const eventMatches = allMatches.filter((m) => m.eventSlug === evt.slug);
+
+		const eventPlayerIds = new Set<string>();
 		for (const match of eventMatches) {
 			if (!ratings.has(match.player1Id)) ratings.set(match.player1Id, createRating());
 			if (!ratings.has(match.player2Id)) ratings.set(match.player2Id, createRating());
+			eventPlayerIds.add(match.player1Id);
+			eventPlayerIds.add(match.player2Id);
 			const r1 = ratings.get(match.player1Id)!;
 			const r2 = ratings.get(match.player2Id)!;
 			const result = match.winnerId === match.player1Id ? rate1v1(r1, r2) : rate1v1(r2, r1);
@@ -427,7 +431,8 @@ export async function importSeason(
 			.map(([id, r]) => ({ id, points: ratingToPoints(r), sigma: r.sigma }))
 			.sort((a, b) => b.points - a.points || a.sigma - b.sigma);
 
-		for (const [id, r] of ratings) {
+		for (const id of eventPlayerIds) {
+			const r = ratings.get(id)!;
 			const tags = allTags.get(id);
 			const latestTag = getLatestTag(allMatches, id, tags);
 			const aliases = tags ? [...tags].filter((t) => t !== latestTag) : [];
