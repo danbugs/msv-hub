@@ -228,13 +228,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// in losers rounds (e.g., L1 bye from W1 bye).
 	function propagateAndAdvance() {
 		for (const m of bracket.matches) {
-			if (!m.winnerId || !m.loserNextMatchId || m.loserId) continue;
-			const loserId = m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId;
-			if (!loserId) continue;
-			const next = bracket.matches.find((n) => n.id === m.loserNextMatchId);
-			if (next) {
-				placeInNextMatch(next, loserId, m.loserNextSlot ?? 'bottom');
-				m.loserId = loserId;
+			if (!m.winnerId) continue;
+			// Propagate winner
+			if (m.winnerNextMatchId) {
+				const next = bracket.matches.find((n) => n.id === m.winnerNextMatchId);
+				if (next) {
+					placeInNextMatch(next, m.winnerId, m.winnerNextSlot ?? 'bottom');
+				}
+			}
+			// Propagate loser
+			if (m.loserNextMatchId && !m.loserId) {
+				const loserId = m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId;
+				if (loserId) {
+					const next = bracket.matches.find((n) => n.id === m.loserNextMatchId);
+					if (next) {
+						placeInNextMatch(next, loserId, m.loserNextSlot ?? 'bottom');
+						m.loserId = loserId;
+					}
+				}
 			}
 		}
 		autoAdvanceByes(bracket.matches);
