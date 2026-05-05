@@ -29,6 +29,7 @@ import {
 	getTournamentRegistrationInfo,
 	registerTOForTournament
 } from '$lib/server/startgg-admin';
+import { sendMessage } from '$lib/server/discord';
 import type { TOConfig } from '$lib/server/store';
 
 interface StepResult {
@@ -139,6 +140,9 @@ async function handleCreateEvent(request: Request) {
 		return Response.json({ ok: false, steps: log, error: 'Clone failed — aborting' });
 	}
 
+	// Give start.gg time to propagate the cloned tournament's events
+	await new Promise<void>((r) => setTimeout(r, 5000));
+
 	// Step 2: Update short slug and basic details
 	await step('Update short slug', async () => {
 		const result = await updateTournamentBasicDetails(tournamentId, {
@@ -187,8 +191,6 @@ async function handleCreateEvent(request: Request) {
 		let regInfo: Awaited<ReturnType<typeof getTournamentRegistrationInfo>> = null;
 
 		await step('Fetch registration info', async () => {
-			// Wait a moment for start.gg to propagate the cloned tournament
-			await new Promise<void>((r) => setTimeout(r, 3000));
 			regInfo = await getTournamentRegistrationInfo(tournamentSlug);
 			if (!regInfo) throw new Error('Could not discover registration configuration');
 			return `eventId=${regInfo.eventId}, phaseId=${regInfo.phaseId}, passTypeId=${regInfo.passTypeId}, options=${regInfo.registrationOptionValueIds.length}`;
@@ -258,6 +260,20 @@ async function handleCreateEvent(request: Request) {
 	});
 
 	const anyFailed = log.some((s) => !s.ok);
+
+	const TALK_TO_BALROG = '1317322917129879562';
+	try {
+		if (anyFailed) {
+			const failed = log.filter((s) => !s.ok).map((s) => s.step).join(', ');
+			await sendMessage(TALK_TO_BALROG, `⚠️ Event creation for **${eventName}** finished with errors.\nFailed steps: ${failed}`);
+		} else {
+			const url = tournamentSlug ? `https://start.gg/tournament/${tournamentSlug}` : '';
+			await sendMessage(TALK_TO_BALROG, `✅ **${eventName}** created successfully!${url ? `\n${url}` : ''}`);
+		}
+	} catch (_) {
+		// Don't fail the whole response if Discord notification fails
+	}
+
 	return Response.json({ ok: !anyFailed, steps: log });
 }
 

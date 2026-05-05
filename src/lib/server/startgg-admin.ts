@@ -964,22 +964,21 @@ export interface TournamentRegistrationInfo {
 export async function getTournamentRegistrationInfo(
 	tournamentSlug: string
 ): Promise<TournamentRegistrationInfo | null> {
-	// Get events and phases via public GQL
+	// Get events and phases via admin GQL (works even if events aren't published yet)
 	type TData = {
 		tournament: {
 			id: number;
 			events: { id: number; name: string; phases: { id: number }[] }[];
 		};
 	};
-	const evData = await gql<TData>(
+	const evData = await adminGql<TData>(
 		`query($slug: String!) {
 			tournament(slug: $slug) {
 				id
 				events { id name phases { id } }
 			}
 		}`,
-		{ slug: tournamentSlug },
-		{ delay: 0 }
+		{ slug: tournamentSlug }
 	);
 
 	if (!evData?.tournament?.events?.length) return null;
