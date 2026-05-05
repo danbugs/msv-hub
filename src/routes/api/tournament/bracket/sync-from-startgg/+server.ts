@@ -226,19 +226,27 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	for (const [key, setsInGroup] of setsByKey) {
 		const allMsvMatches = msvMatchesFor(key).sort((a, b) => a.matchIndex - b.matchIndex);
 		// Filter out bye matches (auto-advanced with one empty slot) so positional
-		// mapping stays aligned — StartGG doesn't create sets for byes.
+		// mapping stays aligned with StartGG sets.
 		const msvMatches = allMsvMatches.filter(
 			(m) => !(m.winnerId && (!m.topPlayerId || !m.bottomPlayerId))
 		);
-		const sortedSets = [...setsInGroup].sort((a, b) => {
-			const ai = String(a.identifier ?? '');
-			const bi = String(b.identifier ?? '');
-			if (ai.length !== bi.length) return ai.length - bi.length;
-			return ai.localeCompare(bi);
-		});
+		// Filter out StartGG bye sets (one slot has no entrant) so they don't
+		// shift the positional mapping against MSV non-bye matches.
+		const sortedSets = [...setsInGroup]
+			.filter((s) => {
+				const slots = (s.slots ?? []) as Slot[];
+				return slots.length >= 2 && slots[0]?.entrant?.id && slots[1]?.entrant?.id;
+			})
+			.sort((a, b) => {
+				const ai = String(a.identifier ?? '');
+				const bi = String(b.identifier ?? '');
+				if (ai.length !== bi.length) return ai.length - bi.length;
+				return ai.localeCompare(bi);
+			});
 
-		const byeCount = allMsvMatches.length - msvMatches.length;
-		debug.push(`${key}: StartGG sets=${sortedSets.length}, MSV matches=${msvMatches.length}${byeCount ? ` (${byeCount} byes skipped)` : ''}`);
+		const msvByeCount = allMsvMatches.length - msvMatches.length;
+		const sgByeCount = setsInGroup.length - sortedSets.length;
+		debug.push(`${key}: StartGG sets=${sortedSets.length}${sgByeCount ? ` (${sgByeCount} bye sets skipped)` : ''}, MSV matches=${msvMatches.length}${msvByeCount ? ` (${msvByeCount} byes skipped)` : ''}`);
 		if (sortedSets.length !== msvMatches.length) {
 			debug.push(`  ${key}: SIZE MISMATCH`);
 		}
