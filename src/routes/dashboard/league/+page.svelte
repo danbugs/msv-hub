@@ -494,7 +494,7 @@
 				</div>
 			</div>
 			{#if adminPreview.length > 0}
-				<div class="max-h-[400px] overflow-y-auto">
+				<div class="max-h-[530px] overflow-y-auto">
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="text-left text-xs text-muted-foreground">
