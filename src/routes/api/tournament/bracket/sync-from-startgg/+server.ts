@@ -223,7 +223,33 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let synced = 0;
 	let unmatched = 0;
 
-	for (const [key, setsInGroup] of setsByKey) {
+	// Process rounds in dependency order so losers propagate before
+	// downstream rounds are synced. This lets bye detection work correctly
+	// in losers rounds (e.g., L1 bye from W1 bye).
+	function propagateAndAdvance() {
+		for (const m of bracket.matches) {
+			if (!m.winnerId || !m.loserNextMatchId || m.loserId) continue;
+			const loserId = m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId;
+			if (!loserId) continue;
+			const next = bracket.matches.find((n) => n.id === m.loserNextMatchId);
+			if (next) {
+				placeInNextMatch(next, loserId, m.loserNextSlot ?? 'bottom');
+				m.loserId = loserId;
+			}
+		}
+		autoAdvanceByes(bracket.matches);
+	}
+
+	const wKeys = [...setsByKey.keys()].filter((k) => k.startsWith('W')).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+	const lKeys = [...setsByKey.keys()].filter((k) => k.startsWith('L')).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+	const gfKeys = [...setsByKey.keys()].filter((k) => k === 'GF' || k === 'GFR');
+	const roundOrder = [...wKeys, ...lKeys, ...gfKeys];
+
+	for (const key of roundOrder) {
+		// Propagate before each round so bye structure is up to date
+		propagateAndAdvance();
+
+		const setsInGroup = setsByKey.get(key)!;
 		const allMsvMatches = msvMatchesFor(key).sort((a, b) => a.matchIndex - b.matchIndex);
 		// Filter out bye matches (auto-advanced with one empty slot) so positional
 		// mapping stays aligned with StartGG sets.
@@ -252,7 +278,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		const n = Math.min(sortedSets.length, msvMatches.length);
-		let groupSynced = 0;
 		for (let i = 0; i < n; i++) {
 			const s = sortedSets[i];
 			const m = msvMatches[i];
@@ -281,7 +306,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				m.topScore = topScore;
 				m.bottomScore = bottomScore;
 				synced++;
-				groupSynced++;
 			} else {
 				m.winnerId = undefined;
 				m.topScore = undefined;
@@ -294,20 +318,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	// Propagate losers from completed matches into the losers bracket.
-	// The sync only copies StartGG set data per-round but doesn't advance
-	// losers through bracket wiring, so bye-adjacent L1 slots stay empty.
-	for (const m of bracket.matches) {
-		if (!m.winnerId || !m.loserNextMatchId) continue;
-		const loserId = m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId;
-		if (!loserId) continue;
-		const next = bracket.matches.find((n) => n.id === m.loserNextMatchId);
-		if (next) {
-			placeInNextMatch(next, loserId, m.loserNextSlot ?? 'bottom');
-			m.loserId = loserId;
-		}
-	}
-	autoAdvanceByes(bracket.matches);
+	// Final propagation after all rounds are synced
+	propagateAndAdvance();
 
 	const totalReported = (sets as GqlRecord[]).filter((s) => s.winnerId).length;
 	const notFound = totalReported - synced;
