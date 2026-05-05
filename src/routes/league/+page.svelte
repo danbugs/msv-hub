@@ -65,7 +65,6 @@
 							<th class="px-4 py-3 w-12">#</th>
 							<th class="px-4 py-3">Player</th>
 							<th class="px-4 py-3 text-right hidden sm:table-cell">W-L</th>
-							<th class="px-4 py-3 text-right hidden sm:table-cell">Events</th>
 							<th class="px-4 py-3 text-right">Points</th>
 						</tr>
 					</thead>
@@ -99,8 +98,7 @@
 									<span class="text-muted-foreground">-</span>
 									<span class="text-destructive">{player.losses}</span>
 								</td>
-								<td class="px-4 py-3 text-right text-muted-foreground hidden sm:table-cell">{player.events}</td>
-								<td class="px-4 py-3 text-right font-mono font-semibold text-foreground">{player.points}</td>
+									<td class="px-4 py-3 text-right font-mono font-semibold text-foreground">{player.points}</td>
 							</tr>
 						{/each}
 						{#if filteredRankings().length === 0}
