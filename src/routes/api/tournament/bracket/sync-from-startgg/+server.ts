@@ -1,7 +1,7 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { fetchAllSets, fetchAllEntrants, gql, PHASE_GROUP_SEEDS_QUERY } from '$lib/server/startgg';
-import { generateBracket, reportBracketMatch, assignBracketStations } from '$lib/server/swiss';
+import { generateBracket, reportBracketMatch, assignBracketStations, placeInNextMatch, autoAdvanceByes } from '$lib/server/swiss';
 import type { BracketMatch, FinalStanding } from '$lib/types/tournament';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -293,6 +293,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 	}
+
+	// Propagate losers from completed matches into the losers bracket.
+	// The sync only copies StartGG set data per-round but doesn't advance
+	// losers through bracket wiring, so bye-adjacent L1 slots stay empty.
+	for (const m of bracket.matches) {
+		if (!m.winnerId || !m.loserNextMatchId) continue;
+		const loserId = m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId;
+		if (!loserId) continue;
+		const next = bracket.matches.find((n) => n.id === m.loserNextMatchId);
+		if (next) {
+			placeInNextMatch(next, loserId, m.loserNextSlot ?? 'bottom');
+			m.loserId = loserId;
+		}
+	}
+	autoAdvanceByes(bracket.matches);
 
 	const totalReported = (sets as GqlRecord[]).filter((s) => s.winnerId).length;
 	const notFound = totalReported - synced;

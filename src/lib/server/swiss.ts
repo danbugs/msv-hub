@@ -1075,7 +1075,7 @@ export function generateBracket(
 	return settings ? assignBracketStations(state, settings, name as 'main' | 'redemption') : state;
 }
 
-function placeInNextMatch(next: BracketMatch, playerId: string, preferredSlot: 'top' | 'bottom') {
+export function placeInNextMatch(next: BracketMatch, playerId: string, preferredSlot: 'top' | 'bottom') {
 	// If both empty, use preferred slot. If one occupied, use the free one.
 	if (!next.topPlayerId && !next.bottomPlayerId) {
 		if (preferredSlot === 'top') next.topPlayerId = playerId;
@@ -1116,7 +1116,7 @@ function advancePlayer(allMatches: BracketMatch[], completedMatch: BracketMatch)
  * and whose empty slot will never be filled (all feeders for that slot have resolved).
  * Repeats until stable to handle cascading BYEs.
  */
-function autoAdvanceByes(allMatches: BracketMatch[]) {
+export function autoAdvanceByes(allMatches: BracketMatch[]) {
 	let changed = true;
 	while (changed) {
 		changed = false;
