@@ -99,6 +99,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	const redemptionChamps = new Map<string, string>();
 	for (const m of season.matches) {
 		if (m.phase !== 'redemption-winners') continue;
+		if (m.roundLabel !== 'Grand Final' && m.roundLabel !== 'Grand Final Reset') continue;
 		redemptionChamps.set(m.eventSlug, m.winnerId);
 	}
 	const redemptionWinCounts = new Map<string, { tag: string; count: number }>();
