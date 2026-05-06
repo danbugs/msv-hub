@@ -1203,6 +1203,10 @@ export function reportBracketMatch(
 		const resetIdx = updated.matches.findIndex((m) => m.id.includes('-GFR-'));
 		if (resetIdx >= 0) {
 			updated.matches.splice(resetIdx, 1);
+			match.winnerNextMatchId = undefined;
+			match.winnerNextSlot = undefined;
+			match.loserNextMatchId = undefined;
+			match.loserNextSlot = undefined;
 		}
 	}
 
@@ -1214,11 +1218,14 @@ export function reportBracketMatch(
 				id: `${bracket.name}-GFR-0`,
 				round: maxRound + 1,
 				matchIndex: 0,
-				// Original winners finalist is top, losers finalist (who just won GF) is bottom
 				topPlayerId: match.topPlayerId,
 				bottomPlayerId: match.bottomPlayerId
 			};
 			updated.matches.push(resetMatch);
+			match.winnerNextMatchId = resetMatch.id;
+			match.winnerNextSlot = 'bottom';
+			match.loserNextMatchId = resetMatch.id;
+			match.loserNextSlot = 'top';
 		}
 	}
 
