@@ -90,7 +90,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			eventCount: season.events.length
 		},
 		rankings: enrichedRankings,
-		events: eventTiers,
+		events: eventTiers.reverse(),
 		seasonId
 	};
 };
