@@ -153,13 +153,23 @@
 
 	function computePairings(entrants: NonNullable<typeof result>['entrants']) {
 		const n = entrants.length;
-		const half = Math.floor(n / 2);
 		const pairings = [];
-		for (let i = 0; i < half; i++) {
-			pairings.push({
-				top: { seedNum: entrants[i].seedNum, gamerTag: entrants[i].gamerTag, playerId: entrants[i].playerId },
-				bottom: { seedNum: entrants[i + half].seedNum, gamerTag: entrants[i + half].gamerTag, playerId: entrants[i + half].playerId }
-			});
+		if (n % 2 === 1) {
+			const half = (n + 1) / 2;
+			for (let i = 0; i < half - 1; i++) {
+				pairings.push({
+					top: { seedNum: entrants[i].seedNum, gamerTag: entrants[i].gamerTag, playerId: entrants[i].playerId },
+					bottom: { seedNum: entrants[i + half].seedNum, gamerTag: entrants[i + half].gamerTag, playerId: entrants[i + half].playerId }
+				});
+			}
+		} else {
+			const half = n / 2;
+			for (let i = 0; i < half; i++) {
+				pairings.push({
+					top: { seedNum: entrants[i].seedNum, gamerTag: entrants[i].gamerTag, playerId: entrants[i].playerId },
+					bottom: { seedNum: entrants[i + half].seedNum, gamerTag: entrants[i + half].gamerTag, playerId: entrants[i + half].playerId }
+				});
+			}
 		}
 		return pairings;
 	}
@@ -460,7 +470,7 @@
 							</div>
 						{/each}
 						{#if result.entrants.length % 2 === 1}
-							{@const bye = result.entrants[result.entrants.length - 1]}
+							{@const bye = result.entrants[Math.floor(result.entrants.length / 2)]}
 							<div class="flex items-center gap-2 rounded bg-card px-3 py-1.5 text-sm">
 								<span class="w-6 text-right font-mono text-xs text-muted-foreground">{bye.seedNum}</span>
 								<span class="text-foreground">{bye.gamerTag}</span>
