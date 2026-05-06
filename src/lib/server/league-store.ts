@@ -382,53 +382,52 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		});
 	}
 
-	// Most Improved (linear regression slope of points over events)
-	const improvementScores: { pid: string; slope: number }[] = [];
+	// Most Improved (rating gain from start to finish, only players who started below median)
+	const startRatings: { pid: string; start: number; end: number }[] = [];
 	for (const p of players) {
 		if ((attendance.get(p.id) ?? 0) < MIN_EVENTS) continue;
-		const n = p.rankHistory.length;
-		const xs = p.rankHistory.map((_, i) => i);
-		const ys = p.rankHistory.map((h) => h.points);
-		const xMean = xs.reduce((a, b) => a + b, 0) / n;
-		const yMean = ys.reduce((a, b) => a + b, 0) / n;
-		let num = 0, den = 0;
-		for (let i = 0; i < n; i++) {
-			num += (xs[i] - xMean) * (ys[i] - yMean);
-			den += (xs[i] - xMean) ** 2;
-		}
-		const slope = den === 0 ? 0 : num / den;
-		if (slope > 0) improvementScores.push({ pid: p.id, slope });
+		if (p.rankHistory.length < 2) continue;
+		const start = p.rankHistory.length >= 2
+			? (p.rankHistory[0].points + p.rankHistory[1].points) / 2
+			: p.rankHistory[0].points;
+		const end = p.rankHistory[p.rankHistory.length - 1].points;
+		startRatings.push({ pid: p.id, start, end });
 	}
-	improvementScores.sort((a, b) => b.slope - a.slope);
-	if (improvementScores.length > 0) {
-		const top = improvementScores[0];
-		const p = season.players[top.pid];
-		if (p) awards.push({
-			title: 'Most Improved',
-			description: `Linear regression slope of TrueSkill points over events. Higher slope = faster improvement. Min ${MIN_EVENTS} events.`,
-			playerId: p.id, playerTag: p.gamerTag,
-			value: `+${Math.round(top.slope)} pts/event`,
-			candidates: improvementScores.slice(1, 6).map((c) => ({
-				playerId: c.pid,
-				playerTag: season.players[c.pid]?.gamerTag ?? c.pid,
-				value: `+${Math.round(c.slope)} pts/event`
-			}))
-		});
+	if (startRatings.length > 0) {
+		const medianStart = [...startRatings].sort((a, b) => a.start - b.start)[Math.floor(startRatings.length / 2)].start;
+		const improvementScores = startRatings
+			.filter((r) => r.start <= medianStart && r.end > r.start)
+			.map((r) => ({ pid: r.pid, gain: Math.round(r.end - r.start) }))
+			.sort((a, b) => b.gain - a.gain);
+		if (improvementScores.length > 0) {
+			const top = improvementScores[0];
+			const p = season.players[top.pid];
+			if (p) awards.push({
+				title: 'Most Improved',
+				description: `Biggest rating gain from first 2 events to final rating, among players who started below median. Min ${MIN_EVENTS} events.`,
+				playerId: p.id, playerTag: p.gamerTag,
+				value: `+${top.gain} pts total`,
+				candidates: improvementScores.slice(1, 6).map((c) => ({
+					playerId: c.pid,
+					playerTag: season.players[c.pid]?.gamerTag ?? c.pid,
+					value: `+${c.gain} pts`
+				}))
+			});
+		}
 	}
 
-	// Biggest Up and Comer (outside top 17, biggest single-event gain)
+	// Biggest Up and Comer (outside top 17, sustained growth after sigma stabilizes)
 	const rankings = getRankings(season, config);
 	const topIds = new Set(rankings.slice(0, 17).map((r) => r.playerId));
 	const upComerScores: { pid: string; gain: number }[] = [];
 	for (const p of players) {
 		if (topIds.has(p.id)) continue;
 		if ((attendance.get(p.id) ?? 0) < MIN_EVENTS) continue;
-		let bestGain = 0;
-		for (let i = 1; i < p.rankHistory.length; i++) {
-			const gain = p.rankHistory[i].points - p.rankHistory[i - 1].points;
-			if (gain > bestGain) bestGain = gain;
-		}
-		if (bestGain > 0) upComerScores.push({ pid: p.id, gain: bestGain });
+		if (p.rankHistory.length < 4) continue;
+		const stableStart = p.rankHistory[2].points;
+		const end = p.rankHistory[p.rankHistory.length - 1].points;
+		const gain = Math.round(end - stableStart);
+		if (gain > 0) upComerScores.push({ pid: p.id, gain });
 	}
 	upComerScores.sort((a, b) => b.gain - a.gain);
 	if (upComerScores.length > 0) {
@@ -436,9 +435,9 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		const p = season.players[top.pid];
 		if (p) awards.push({
 			title: 'Biggest Up and Comer',
-			description: `Biggest single-event rating gain by a player outside the top 17. Min ${MIN_EVENTS} events.`,
+			description: `Total rating gain from 3rd event onward (after initial uncertainty settles), outside top 17. Min ${MIN_EVENTS} events.`,
 			playerId: p.id, playerTag: p.gamerTag,
-			value: `+${top.gain} pts in one event`,
+			value: `+${top.gain} pts`,
 			candidates: upComerScores.slice(1, 6).map((c) => ({
 				playerId: c.pid,
 				playerTag: season.players[c.pid]?.gamerTag ?? c.pid,
