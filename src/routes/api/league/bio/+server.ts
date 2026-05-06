@@ -26,10 +26,11 @@ export const GET: RequestHandler = async ({ url }) => {
 	if (!season) return Response.json({ error: 'Season not found' }, { status: 404 });
 
 	const config = await getLeagueConfig();
-	const stats = getPlayerStats(season, playerId, config);
+	const rankConfig = seasonId === 0 ? { ...config, attendanceBonus: 0 } : config;
+	const stats = getPlayerStats(season, playerId, rankConfig);
 	if (!stats) return Response.json({ error: 'Player not found' }, { status: 404 });
 
-	const rankings = getRankings(season, config);
+	const rankings = getRankings(season, rankConfig);
 	const rankEntry = rankings.find((r) => r.playerId === playerId);
 	const adjustedPoints = rankEntry?.points ?? stats.player.points;
 	const tier = getPlayerTier(adjustedPoints);
