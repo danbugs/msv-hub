@@ -200,7 +200,7 @@ async function fetchAllSets(eventId: number): Promise<GqlRecord[]> {
 	const all: GqlRecord[] = [];
 	let page = 1;
 	while (true) {
-		const data = await gql<GqlRecord>(SETS_QUERY, { eventId, page, perPage: 50 });
+		const data = await gql<GqlRecord>(SETS_QUERY, { eventId, page, perPage: 20 });
 		if (!data) break;
 		const paged = (data.event as GqlRecord)?.sets;
 		if (!paged) break;
