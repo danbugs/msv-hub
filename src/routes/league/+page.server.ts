@@ -84,23 +84,31 @@ export const load: PageServerLoad = async ({ url }) => {
 		};
 	});
 
-	// Season stats
+	// Season stats — bracket winners
 	const mainWinCounts = new Map<string, { tag: string; count: number }>();
-	const redemptionWinCounts = new Map<string, { tag: string; count: number }>();
-	for (const m of season.matches) {
-		if (m.roundLabel !== 'Grand Final' && m.roundLabel !== 'Grand Final Reset') continue;
-		const tag = m.winnerId === m.player1Id ? m.player1Tag : m.player2Tag;
-		if (m.phase === 'winners') {
-			const e = mainWinCounts.get(m.winnerId) ?? { tag, count: 0 };
-			e.count++;
-			mainWinCounts.set(m.winnerId, e);
-		} else if (m.phase === 'redemption-winners') {
-			const e = redemptionWinCounts.get(m.winnerId) ?? { tag, count: 0 };
-			e.count++;
-			redemptionWinCounts.set(m.winnerId, e);
-		}
+	for (const evt of season.events) {
+		const winner = evt.placements.find((p) => p.placement === 1);
+		if (!winner) continue;
+		const tag = season.players[winner.playerId]?.gamerTag ?? winner.gamerTag;
+		const e = mainWinCounts.get(winner.playerId) ?? { tag, count: 0 };
+		e.count++;
+		mainWinCounts.set(winner.playerId, e);
 	}
 	const mainWins = [...mainWinCounts.values()].sort((a, b) => b.count - a.count).slice(0, 10);
+
+	const redemptionChamps = new Map<string, string>();
+	for (const m of season.matches) {
+		if (m.phase !== 'redemption-winners') continue;
+		if (m.roundLabel !== 'Grand Final' && m.roundLabel !== 'Grand Final Reset') continue;
+		redemptionChamps.set(m.eventSlug, m.winnerId);
+	}
+	const redemptionWinCounts = new Map<string, { tag: string; count: number }>();
+	for (const winnerId of redemptionChamps.values()) {
+		const tag = season.players[winnerId]?.gamerTag ?? winnerId;
+		const e = redemptionWinCounts.get(winnerId) ?? { tag, count: 0 };
+		e.count++;
+		redemptionWinCounts.set(winnerId, e);
+	}
 	const redemptionWins = [...redemptionWinCounts.values()].sort((a, b) => b.count - a.count).slice(0, 10);
 
 	// Consecutive event wins (placement 1)

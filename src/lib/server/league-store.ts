@@ -233,6 +233,14 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 	}
 
 	season.players = Object.fromEntries(finalPlayers);
+
+	for (const evt of season.events) {
+		for (const pl of evt.placements) {
+			const p = finalPlayers.get(pl.playerId);
+			if (p) pl.gamerTag = p.gamerTag;
+		}
+	}
+
 	log(`Recomputed: ${season.events.length} events, ${finalPlayers.size} players, ${season.matches.length} matches`);
 
 	await saveLeagueSeason(season);
