@@ -125,7 +125,7 @@
 									<span class="text-xs font-bold w-5 text-center" style="color: {evt.color};"
 										title="Tier {evt.tier} — based on average attendee rating">{evt.tier}</span>
 									<a href="https://www.start.gg/tournament/{evt.slug}" target="_blank" rel="noopener"
-										class="text-foreground hover:text-primary transition-colors">{evt.name}</a>
+										class="text-foreground hover:text-primary transition-colors">{evt.name} ↗</a>
 								</div>
 								<span class="text-xs text-muted-foreground">{evt.entrantCount} entrants · {evt.date}</span>
 							</div>

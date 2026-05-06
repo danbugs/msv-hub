@@ -416,11 +416,13 @@
 										<span class="{won ? 'text-success' : 'text-destructive'} font-medium w-10 shrink-0">{won ? 'Win' : 'Lose'}</span>
 										<span class="text-muted-foreground shrink-0">vs</span>
 										<a href="/league/player/{oppId}?season={data.seasonId}"
-											class="flex-1 text-foreground hover:text-primary truncate">{oppTag}</a>
-										<span class="text-xs font-mono text-muted-foreground w-8 text-right shrink-0">{myScore > 0 || oppScore > 0 ? `${myScore}-${oppScore}` : ''}</span>
-										<span class="text-xs px-1.5 py-0.5 rounded shrink-0 {pl.classes}">
-											{pl.text}
-										</span>
+											class="flex-1 text-foreground hover:text-primary truncate min-w-0">{oppTag}</a>
+										<div class="flex items-center gap-1.5 shrink-0 ml-auto">
+											<span class="text-xs tabular-nums text-muted-foreground w-7 text-right">{myScore > 0 || oppScore > 0 ? `${myScore}-${oppScore}` : ''}</span>
+											<span class="text-xs px-1.5 py-0.5 rounded w-16 text-center {pl.classes}">
+												{pl.text}
+											</span>
+										</div>
 									</div>
 								{/each}
 							</div>
