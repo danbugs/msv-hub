@@ -446,6 +446,11 @@ export async function importSeason(
 				if (!ratings.has(match.player2Id)) ratings.set(match.player2Id, createRating());
 				eventPlayerIds.add(match.player1Id);
 				eventPlayerIds.add(match.player2Id);
+				if (match.isDQ) {
+					match.p1Delta = 0;
+					match.p2Delta = 0;
+					continue;
+				}
 				const r1 = ratings.get(match.player1Id)!;
 				const r2 = ratings.get(match.player2Id)!;
 				const p1Before = ratingToPoints(r1);

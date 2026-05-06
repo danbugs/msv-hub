@@ -411,14 +411,16 @@
 									{@const oppScore = isP1 ? match.player2Score : match.player1Score}
 									{@const delta = isP1 ? match.p1Delta : match.p2Delta}
 									{@const pl = phaseLabel(match.phase)}
-									<div class="flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-sm">
+									<div class="flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-sm {match.isDQ ? 'opacity-50' : ''}">
 										<span class="w-2 h-2 rounded-full shrink-0 {won ? 'bg-green-500' : 'bg-red-500'}"></span>
 										<span class="{won ? 'text-success' : 'text-destructive'} font-medium w-10 shrink-0">{won ? 'Win' : 'Lose'}</span>
 										<span class="text-muted-foreground shrink-0">vs</span>
 										<a href="/league/player/{oppId}?season={data.seasonParam}"
 											class="flex-1 text-foreground hover:text-primary truncate min-w-0">{oppTag}</a>
 										<div class="flex items-center gap-1.5 shrink-0 ml-auto">
-											{#if delta != null}
+											{#if match.isDQ}
+												<span class="text-[10px] font-bold text-muted-foreground w-12 text-right">DQ</span>
+											{:else if delta != null}
 												<span class="text-[10px] font-bold tabular-nums w-12 text-right {delta >= 0 ? 'text-success' : 'text-destructive'}">
 													{delta >= 0 ? '+' : ''}{delta}
 												</span>
