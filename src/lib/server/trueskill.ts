@@ -2,7 +2,7 @@ const DEFAULT_MU = 25;
 const DEFAULT_SIGMA = DEFAULT_MU / 3;
 const BETA = DEFAULT_SIGMA / 2;
 const TAU = DEFAULT_SIGMA / 100;
-const SIGMA_FLOOR = DEFAULT_SIGMA / 3;
+const SIGMA_FLOOR = DEFAULT_SIGMA / 6;
 const POINTS_SCALE = 200;
 
 export interface Rating {
