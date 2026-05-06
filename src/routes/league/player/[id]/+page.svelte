@@ -25,8 +25,7 @@
 		ctx.clearRect(0, 0, W, H);
 
 		const bonus = data.attendanceBonus ?? 0;
-		const values = history.map((h) => h.points);
-		const adjustedValues = history.map((h, i) => h.points + (i + 1) * bonus);
+		const values = history.map((h, i) => h.points + (i + 1) * bonus);
 		const minVal = Math.min(...values);
 		const maxVal = Math.max(...values);
 		const range = maxVal - minVal || 1;
@@ -71,8 +70,8 @@
 			const y = pad.top + (1 - (values[i] - minVal) / range) * chartH;
 
 			if (i > 0) {
-				const prevTier = PLAYER_TIERS.find((t) => adjustedValues[i - 1] >= t.minPoints);
-				const currTier = PLAYER_TIERS.find((t) => adjustedValues[i] >= t.minPoints);
+				const prevTier = PLAYER_TIERS.find((t) => values[i - 1] >= t.minPoints);
+				const currTier = PLAYER_TIERS.find((t) => values[i] >= t.minPoints);
 				if (prevTier && currTier && prevTier.name !== currTier.name) {
 					ctx.fillStyle = currTier.color;
 					ctx.beginPath();
