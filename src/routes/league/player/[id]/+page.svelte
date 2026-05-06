@@ -134,7 +134,7 @@
 <div class="min-h-screen bg-background text-foreground">
 	<div class="border-b border-border bg-card/90 backdrop-blur-md">
 		<div class="mx-auto max-w-3xl px-4 py-4">
-			<a href="/league?season={data.seasonId}" class="text-sm text-muted-foreground hover:text-primary transition-colors">
+			<a href="/league?season={data.seasonParam}" class="text-sm text-muted-foreground hover:text-primary transition-colors">
 				← Back to rankings
 			</a>
 		</div>
@@ -304,7 +304,7 @@
 								<div class="text-foreground font-medium">Nemesis</div>
 								<div class="text-xs text-muted-foreground">Lost {s.matchups.nemesis.losses} sets to</div>
 							</div>
-							<a href="/league/player/{s.matchups.nemesis.playerId}?season={data.seasonId}"
+							<a href="/league/player/{s.matchups.nemesis.playerId}?season={data.seasonParam}"
 								class="text-destructive hover:text-destructive/80 font-medium">{s.matchups.nemesis.tag}</a>
 						</div>
 					{/if}
@@ -314,7 +314,7 @@
 								<div class="text-foreground font-medium">Dominated</div>
 								<div class="text-xs text-muted-foreground">Won {s.matchups.dominated.wins} sets over</div>
 							</div>
-							<a href="/league/player/{s.matchups.dominated.playerId}?season={data.seasonId}"
+							<a href="/league/player/{s.matchups.dominated.playerId}?season={data.seasonParam}"
 								class="text-success hover:text-success/80 font-medium">{s.matchups.dominated.tag}</a>
 						</div>
 					{/if}
@@ -324,7 +324,7 @@
 								<div class="text-foreground font-medium">Rival</div>
 								<div class="text-xs text-muted-foreground">{s.matchups.rival.wins}-{s.matchups.rival.losses} in {s.matchups.rival.total} sets</div>
 							</div>
-							<a href="/league/player/{s.matchups.rival.playerId}?season={data.seasonId}"
+							<a href="/league/player/{s.matchups.rival.playerId}?season={data.seasonParam}"
 								class="text-primary hover:text-primary/80 font-medium">{s.matchups.rival.tag}</a>
 						</div>
 					{/if}
@@ -334,7 +334,7 @@
 								<div class="text-foreground font-medium">Gatekeeper</div>
 								<div class="text-xs text-muted-foreground">{s.matchups.gatekeeper.closeGames} close set{s.matchups.gatekeeper.closeGames > 1 ? 's' : ''}, {s.matchups.gatekeeper.wins}-{s.matchups.gatekeeper.losses}</div>
 							</div>
-							<a href="/league/player/{s.matchups.gatekeeper.playerId}?season={data.seasonId}"
+							<a href="/league/player/{s.matchups.gatekeeper.playerId}?season={data.seasonParam}"
 								class="text-foreground hover:text-primary font-medium">{s.matchups.gatekeeper.tag}</a>
 						</div>
 					{/if}
@@ -344,7 +344,7 @@
 								<div class="text-foreground font-medium">Biggest Upset</div>
 								<div class="text-xs text-muted-foreground">+{s.matchups.biggestUpset.upsetFactor} pts gap</div>
 							</div>
-							<a href="/league/player/{s.matchups.biggestUpset.playerId}?season={data.seasonId}"
+							<a href="/league/player/{s.matchups.biggestUpset.playerId}?season={data.seasonParam}"
 								class="text-success hover:text-success/80 font-medium">{s.matchups.biggestUpset.tag}</a>
 						</div>
 					{/if}
@@ -362,7 +362,7 @@
 						{#each s.bestWins as win}
 							<div class="flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-sm">
 								<span class="text-xs font-mono text-muted-foreground w-8 shrink-0">#{win.oppRank}</span>
-								<a href="/league/player/{win.oppId}?season={data.seasonId}"
+								<a href="/league/player/{win.oppId}?season={data.seasonParam}"
 									class="flex-1 text-foreground hover:text-primary font-medium truncate">{win.oppTag}</a>
 								{#if win.score}
 									<span class="text-xs text-muted-foreground shrink-0">{win.score}</span>
@@ -415,7 +415,7 @@
 										<span class="w-2 h-2 rounded-full shrink-0 {won ? 'bg-green-500' : 'bg-red-500'}"></span>
 										<span class="{won ? 'text-success' : 'text-destructive'} font-medium w-10 shrink-0">{won ? 'Win' : 'Lose'}</span>
 										<span class="text-muted-foreground shrink-0">vs</span>
-										<a href="/league/player/{oppId}?season={data.seasonId}"
+										<a href="/league/player/{oppId}?season={data.seasonParam}"
 											class="flex-1 text-foreground hover:text-primary truncate min-w-0">{oppTag}</a>
 										<div class="flex items-center gap-1.5 shrink-0 ml-auto">
 											{#if delta != null}

@@ -3,10 +3,11 @@ import { getLeagueSeason, getLeagueConfig, getPlayerStats, getRankings } from '$
 import { getPlayerTier } from '$lib/types/league';
 
 export const load: PageServerLoad = async ({ params, url }) => {
-	const seasonId = parseInt(url.searchParams.get('season') ?? '10', 10);
+	const seasonParam = url.searchParams.get('season') ?? '10';
+	const seasonId = seasonParam === 'all-time' ? 0 : parseInt(seasonParam, 10);
 	const season = await getLeagueSeason(seasonId);
 
-	if (!season) return { stats: null, seasonId, seasonName: null };
+	if (!season) return { stats: null, seasonId, seasonParam, seasonName: null };
 
 	const config = await getLeagueConfig();
 	const stats = getPlayerStats(season, params.id, config);
@@ -21,6 +22,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
 		adjustedPoints,
 		attendanceBonus: config.attendanceBonus,
 		seasonId,
+		seasonParam,
 		seasonName: season.name,
 		seasonStart: season.startDate,
 		seasonEnd: season.endDate,

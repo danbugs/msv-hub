@@ -1,12 +1,14 @@
 import type { PageServerLoad } from './$types';
-import { getLeagueSeason, getRankings, getLeagueConfig } from '$lib/server/league-store';
+import { getLeagueSeason, getRankings, getLeagueConfig, getSeasonIndex } from '$lib/server/league-store';
 import { getPlayerTier, getTournamentTiers } from '$lib/types/league';
 
 export const load: PageServerLoad = async ({ url }) => {
-	const seasonId = parseInt(url.searchParams.get('season') ?? '10', 10);
+	const seasonParam = url.searchParams.get('season') ?? '10';
+	const seasonId = seasonParam === 'all-time' ? 0 : parseInt(seasonParam, 10);
 	const season = await getLeagueSeason(seasonId);
+	const seasons = await getSeasonIndex();
 
-	if (!season) return { season: null, rankings: [], seasonId, events: [], awards: [] };
+	if (!season) return { season: null, rankings: [], seasonId, seasonParam, events: [], awards: [], seasons };
 
 	const config = await getLeagueConfig();
 	const rankings = getRankings(season, config);
@@ -91,6 +93,8 @@ export const load: PageServerLoad = async ({ url }) => {
 		},
 		rankings: enrichedRankings,
 		events: eventTiers.reverse(),
-		seasonId
+		seasonId,
+		seasonParam,
+		seasons
 	};
 };

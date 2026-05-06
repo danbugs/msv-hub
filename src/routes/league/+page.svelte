@@ -5,7 +5,7 @@
 	let showGallery = $state(false);
 	let lightboxSeason = $state<number | null>(null);
 
-	const seasons = Array.from({ length: 9 }, (_, i) => i + 1);
+	const prGraphicSeasons = Array.from({ length: 9 }, (_, i) => i + 1);
 
 	function filteredRankings() {
 		if (!searchQuery.trim()) return data.rankings;
@@ -14,6 +14,10 @@
 			r.gamerTag.toLowerCase().includes(q) ||
 			(r.aliases ?? []).some((a: string) => a.toLowerCase().includes(q))
 		);
+	}
+
+	function seasonUrlParam(s: { id: number; name: string }): string {
+		return s.id === 0 ? 'all-time' : String(s.id);
 	}
 </script>
 
@@ -42,6 +46,18 @@
 					{/if}
 				</div>
 			</div>
+			{#if data.seasons?.length}
+				<div class="flex gap-1.5 mt-3 flex-wrap">
+					{#each data.seasons.sort((a, b) => a.id === 0 ? -1 : b.id === 0 ? 1 : b.id - a.id) as s}
+						{@const param = seasonUrlParam(s)}
+						{@const active = data.seasonParam === param}
+						<a href="/league?season={param}"
+							class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors {active ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'}">
+							{s.id === 0 ? 'All-Time' : s.name}
+						</a>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	</div>
 
@@ -83,7 +99,7 @@
 												{/each}
 											</div>
 										{/if}
-										<a href="/league/player/{player.playerId}?season={data.seasonId}"
+										<a href="/league/player/{player.playerId}?season={data.seasonParam}"
 											class="text-foreground hover:text-primary font-medium transition-colors">
 											{player.gamerTag}
 										</a>
@@ -143,7 +159,7 @@
 				</button>
 				{#if showGallery}
 					<div class="grid grid-cols-3 gap-3">
-						{#each seasons as s}
+						{#each prGraphicSeasons as s}
 							<button onclick={() => lightboxSeason = s}
 								class="rounded-lg border border-border overflow-hidden hover:border-primary transition-colors aspect-[4/3] bg-card">
 								<img src="/pr-graphics/season{s}.png" alt="Season {s}" loading="lazy"
