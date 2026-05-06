@@ -24,6 +24,7 @@
 	let mergePlayer2 = $state<{ id: string; tag: string } | null>(null);
 	let merges = $state<Record<string, string>>({});
 	let mergeError = $state('');
+	let showEvents = $state(false);
 	let minEvents = $state(2);
 	let attendanceBonus = $state(50);
 	let awards = $state<{ title: string; description: string; playerId?: string; playerTag?: string; secondPlayerId?: string; secondPlayerTag?: string; value: string; candidates?: { playerId: string; playerTag: string; value: string }[] }[]>([]);
@@ -549,26 +550,32 @@
 		</div>
 
 		<div class="mb-6">
-			<h2 class="text-sm font-semibold text-muted-foreground mb-2">Events</h2>
-			<div class="space-y-1">
-				{#each season.events as evt}
-					<div class="flex items-center justify-between rounded-lg bg-card px-3 py-2 text-sm">
-						<span class="text-foreground">{evt.name}</span>
-						<div class="flex items-center gap-3">
-							<span class="text-muted-foreground">{evt.entrantCount} entrants · {evt.date}</span>
-							<button onclick={() => deleteEvent(evt.slug)} disabled={importing}
-								class="text-xs text-destructive hover:text-destructive/80 disabled:opacity-50">Remove</button>
+			<button onclick={() => showEvents = !showEvents}
+				class="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-2 hover:text-foreground transition-colors">
+				<span class="text-xs transition-transform" class:rotate-90={showEvents}>&#9654;</span>
+				Events ({season.events.length})
+			</button>
+			{#if showEvents}
+				<div class="space-y-1">
+					{#each season.events as evt}
+						<div class="flex items-center justify-between rounded-lg bg-card px-3 py-2 text-sm">
+							<span class="text-foreground">{evt.name}</span>
+							<div class="flex items-center gap-3">
+								<span class="text-muted-foreground">{evt.entrantCount} entrants · {evt.date}</span>
+								<button onclick={() => deleteEvent(evt.slug)} disabled={importing}
+									class="text-xs text-destructive hover:text-destructive/80 disabled:opacity-50">Remove</button>
+							</div>
 						</div>
-					</div>
-				{/each}
-				{#each (season.plannedSlugs ?? []).filter((s) => !season!.events.some((e) => e.slug === s)) as slug}
-					<div class="flex items-center justify-between rounded-lg bg-card/50 border border-dashed border-border px-3 py-2 text-sm">
-						<span class="text-muted-foreground">{slug}</span>
-						<button onclick={() => importSlug(slug)} disabled={importing}
-							class="text-xs text-primary hover:text-primary/80 disabled:opacity-50">Import</button>
-					</div>
-				{/each}
-			</div>
+					{/each}
+					{#each (season.plannedSlugs ?? []).filter((s) => !season!.events.some((e) => e.slug === s)) as slug}
+						<div class="flex items-center justify-between rounded-lg bg-card/50 border border-dashed border-border px-3 py-2 text-sm">
+							<span class="text-muted-foreground">{slug}</span>
+							<button onclick={() => importSlug(slug)} disabled={importing}
+								class="text-xs text-primary hover:text-primary/80 disabled:opacity-50">Import</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
 
 		<!-- Add Event -->

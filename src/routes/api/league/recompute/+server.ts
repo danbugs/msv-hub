@@ -1,6 +1,8 @@
 import type { RequestHandler } from './$types';
 import { recomputeSeasonFromStored } from '$lib/server/league-store';
 
+export const config = { maxDuration: 60 };
+
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 

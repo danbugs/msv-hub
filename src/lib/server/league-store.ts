@@ -138,6 +138,13 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 		}
 	}
 
+	const matchesByEvent = new Map<string, LeagueMatch[]>();
+	for (const m of season.matches) {
+		const arr = matchesByEvent.get(m.eventSlug) ?? [];
+		arr.push(m);
+		matchesByEvent.set(m.eventSlug, arr);
+	}
+
 	function computeRatings(
 		initialRatings?: Map<string, Rating>, resetSigma?: number
 	): { ratings: Map<string, Rating>; players: Map<string, LeaguePlayer> } {
@@ -151,7 +158,7 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 		}
 
 		for (const evt of season!.events) {
-			const eventMatches = season!.matches.filter((m) => m.eventSlug === evt.slug);
+			const eventMatches = matchesByEvent.get(evt.slug) ?? [];
 			const weight = evt.weight ?? 1.0;
 
 			for (const m of eventMatches) {
