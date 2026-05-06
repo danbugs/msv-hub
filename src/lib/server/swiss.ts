@@ -1076,7 +1076,7 @@ export function generateBracket(
 }
 
 export function placeInNextMatch(next: BracketMatch, playerId: string, preferredSlot: 'top' | 'bottom') {
-	// If both empty, use preferred slot. If one occupied, use the free one.
+	if (next.topPlayerId === playerId || next.bottomPlayerId === playerId) return;
 	if (!next.topPlayerId && !next.bottomPlayerId) {
 		if (preferredSlot === 'top') next.topPlayerId = playerId;
 		else next.bottomPlayerId = playerId;
