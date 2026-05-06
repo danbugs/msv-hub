@@ -69,6 +69,9 @@
 			minEvents = cfg.minEvents ?? 2;
 			attendanceBonus = cfg.attendanceBonus ?? 50;
 		}
+		if (!awardsMinEvents && season) {
+			awardsMinEvents = String(Math.max(2, Math.floor(season.events.length * 0.4)));
+		}
 		adminPreview = [];
 	}
 
@@ -426,7 +429,6 @@
 					<div class="flex items-center gap-1.5">
 						<label class="text-[10px] text-muted-foreground">Min events:</label>
 						<input bind:value={awardsMinEvents} type="number" min="1" max="20"
-							placeholder={String(Math.max(2, Math.floor((season?.events?.length ?? 0) * 0.4)))}
 							onchange={() => fetchAwards(awardsMinEvents || undefined)}
 							class="w-14 rounded border border-input bg-secondary px-1.5 py-0.5 text-xs text-foreground focus:border-ring focus:outline-none" />
 					</div>
