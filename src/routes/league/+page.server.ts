@@ -96,24 +96,10 @@ export const load: PageServerLoad = async ({ url }) => {
 	}
 	const mainWins = [...mainWinCounts.values()].sort((a, b) => b.count - a.count).slice(0, 10);
 
-	const redemptionChamps = new Map<string, string>();
-	for (const m of season.matches) {
-		if (m.phase !== 'redemption-winners') continue;
-		if (m.roundLabel !== 'Grand Final' && m.roundLabel !== 'Grand Final Reset') continue;
-		redemptionChamps.set(m.eventSlug, m.winnerId);
-	}
-	const redemptionWinCounts = new Map<string, { tag: string; count: number }>();
-	for (const winnerId of redemptionChamps.values()) {
-		const tag = season.players[winnerId]?.gamerTag ?? winnerId;
-		const e = redemptionWinCounts.get(winnerId) ?? { tag, count: 0 };
-		e.count++;
-		redemptionWinCounts.set(winnerId, e);
-	}
-	const redemptionWins = [...redemptionWinCounts.values()].sort((a, b) => b.count - a.count).slice(0, 10);
-
-	// Consecutive event wins (placement 1)
+	// Consecutive micro event wins (placement 1, excluding macrospacing)
 	const eventWinners: string[] = [];
 	for (const evt of season.events) {
+		if (evt.slug.startsWith('macrospacing-')) continue;
 		const p1 = evt.placements.find((p) => p.placement === 1);
 		if (p1) eventWinners.push(p1.playerId);
 	}
@@ -158,7 +144,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		},
 		rankings: enrichedRankings,
 		events: eventTiers.reverse(),
-		stats: { mainWins, redemptionWins, topStreaks, topOpponents },
+		stats: { mainWins, topStreaks, topOpponents },
 		seasonId,
 		seasonParam,
 		seasons

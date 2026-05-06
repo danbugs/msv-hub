@@ -144,19 +144,6 @@
 								</div>
 							</div>
 						{/if}
-						{#if data.stats.redemptionWins.length}
-							<div class="rounded-xl border border-border bg-card p-4">
-								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Redemption Wins</div>
-								<div class="space-y-1">
-									{#each data.stats.redemptionWins as w}
-										<div class="flex items-center justify-between text-sm">
-											<span class="text-foreground">{w.tag}</span>
-											<span class="text-muted-foreground font-mono">{w.count}</span>
-										</div>
-									{/each}
-								</div>
-							</div>
-						{/if}
 						{#if data.stats.topStreaks.length}
 							<div class="rounded-xl border border-border bg-card p-4">
 								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Event Win Streaks</div>
