@@ -1,5 +1,5 @@
 import { gql, TOURNAMENT_QUERY } from '$lib/server/startgg';
-import { createRating, rate1v1, ratingToPoints } from '$lib/server/trueskill';
+import { createRating, rate1v1, rate1v1Weighted, ratingToPoints, DEFAULT_SIGMA } from '$lib/server/trueskill';
 import { getLeagueSeason, saveLeagueSeason, getMergeMap, clearBioCache } from '$lib/server/league-store';
 import type { MergeMap } from '$lib/server/league-store';
 import type { LeagueSeason, LeagueEvent, LeaguePlayer, LeagueMatch, LeaguePlacement, CharacterSelection } from '$lib/types/league';
@@ -282,6 +282,13 @@ function applyMerges(
 	}
 }
 
+export interface ImportOptions {
+	forceRefetch?: boolean;
+	twoPass?: boolean;
+	weights?: Record<string, number>;
+	singlesOnly?: Set<string>;
+}
+
 export async function importSeason(
 	seasonId: number,
 	seasonName: string,
@@ -289,8 +296,12 @@ export async function importSeason(
 	endDate: string,
 	tournamentSlugs: string[],
 	onProgress?: (msg: string) => void,
-	forceRefetch = false
+	forceRefetchOrOptions?: boolean | ImportOptions
 ): Promise<LeagueSeason> {
+	const opts: ImportOptions = typeof forceRefetchOrOptions === 'boolean'
+		? { forceRefetch: forceRefetchOrOptions }
+		: forceRefetchOrOptions ?? {};
+	const forceRefetch = opts.forceRefetch ?? false;
 	const log = onProgress ?? console.log;
 
 	const existing = await getLeagueSeason(seasonId);
@@ -330,9 +341,15 @@ export async function importSeason(
 		const eventNumber = parseInt(slug.match(/(\d+)$/)?.[1] ?? '0', 10);
 		const dateStr = new Date(info.startAt * 1000).toISOString().split('T')[0];
 
-		log(`Fetching sets for ${info.tournamentName} (${info.numEntrants} entrants, ${info.events.length} events)...`);
+		let eventsToProcess = info.events;
+		if (opts.singlesOnly?.has(slug)) {
+			eventsToProcess = info.events.filter((e) => /singles/i.test(e.name));
+			if (!eventsToProcess.length) eventsToProcess = info.events;
+		}
+
+		log(`Fetching sets for ${info.tournamentName} (${info.numEntrants} entrants, ${eventsToProcess.length} events)...`);
 		const setsWithSource: { set: GqlRecord; isRedemption: boolean }[] = [];
-		for (const evt of info.events) {
+		for (const evt of eventsToProcess) {
 			const isRedemption = /redemption/i.test(evt.name);
 			const eventSets = await fetchLeagueSets(evt.id);
 			for (const s of eventSets) setsWithSource.push({ set: s, isRedemption });
@@ -385,14 +402,18 @@ export async function importSeason(
 			});
 		}
 
+		const eventWeight = opts.weights?.[slug] ?? 1.0;
+		if (eventWeight < 1.0) {
+			for (const m of eventMatches) m.weight = eventWeight;
+		}
 		allMatches.push(...eventMatches);
 
 		log(`Fetching standings for ${info.tournamentName}...`);
-		const placements = await fetchTournamentPlacements(info.events, entrantMap, mergeMap);
+		const placements = await fetchTournamentPlacements(eventsToProcess, entrantMap, mergeMap);
 		events.push({
 			slug, name: info.tournamentName, date: dateStr,
 			eventNumber, entrantCount: info.numEntrants,
-			placements
+			placements, weight: eventWeight < 1.0 ? eventWeight : undefined
 		});
 
 		log(`Processed ${info.tournamentName}: ${eventMatches.length} matches, ${entrantMap.size} players`);
@@ -403,60 +424,85 @@ export async function importSeason(
 		log(`Applied ${Object.keys(mergeMap).length} player merge(s)`);
 	}
 
-	const players = new Map<string, LeaguePlayer>();
-	const ratings = new Map<string, Rating>();
-
-	for (const evt of events) {
-		const eventMatches = allMatches.filter((m) => m.eventSlug === evt.slug);
-
-		const eventPlayerIds = new Set<string>();
-		for (const match of eventMatches) {
-			if (!ratings.has(match.player1Id)) ratings.set(match.player1Id, createRating());
-			if (!ratings.has(match.player2Id)) ratings.set(match.player2Id, createRating());
-			eventPlayerIds.add(match.player1Id);
-			eventPlayerIds.add(match.player2Id);
-			const r1 = ratings.get(match.player1Id)!;
-			const r2 = ratings.get(match.player2Id)!;
-			const p1Before = ratingToPoints(r1);
-			const p2Before = ratingToPoints(r2);
-			const result = match.winnerId === match.player1Id ? rate1v1(r1, r2) : rate1v1(r2, r1);
-			if (match.winnerId === match.player1Id) {
-				ratings.set(match.player1Id, result.winner);
-				ratings.set(match.player2Id, result.loser);
-			} else {
-				ratings.set(match.player2Id, result.winner);
-				ratings.set(match.player1Id, result.loser);
+	function computeRatings(
+		initialRatings?: Map<string, Rating>,
+		resetSigma?: number
+	) {
+		const players = new Map<string, LeaguePlayer>();
+		const ratings = new Map<string, Rating>();
+		if (initialRatings && resetSigma) {
+			for (const [id, r] of initialRatings) {
+				ratings.set(id, createRating(r.mu, resetSigma));
 			}
-			match.p1Delta = ratingToPoints(ratings.get(match.player1Id)!) - p1Before;
-			match.p2Delta = ratingToPoints(ratings.get(match.player2Id)!) - p2Before;
 		}
 
-		const ranked = [...ratings.entries()]
-			.map(([id, r]) => ({ id, points: ratingToPoints(r), sigma: r.sigma }))
-			.sort((a, b) => b.points - a.points || a.sigma - b.sigma);
+		for (const evt of events) {
+			const evtMatches = allMatches.filter((m) => m.eventSlug === evt.slug);
+			const weight = evt.weight ?? 1.0;
 
-		for (const id of eventPlayerIds) {
-			const r = ratings.get(id)!;
-			const tags = allTags.get(id);
-			const latestTag = getLatestTag(allMatches, id, tags);
-			const aliases = tags ? [...tags].filter((t) => t !== latestTag) : [];
-			const rankIdx = ranked.findIndex((x) => x.id === id);
-			let player = players.get(id);
-			if (!player) {
-				player = { id, gamerTag: latestTag, aliases, mu: r.mu, sigma: r.sigma, points: ratingToPoints(r), rankHistory: [] };
-				players.set(id, player);
+			const eventPlayerIds = new Set<string>();
+			for (const match of evtMatches) {
+				if (!ratings.has(match.player1Id)) ratings.set(match.player1Id, createRating());
+				if (!ratings.has(match.player2Id)) ratings.set(match.player2Id, createRating());
+				eventPlayerIds.add(match.player1Id);
+				eventPlayerIds.add(match.player2Id);
+				const r1 = ratings.get(match.player1Id)!;
+				const r2 = ratings.get(match.player2Id)!;
+				const p1Before = ratingToPoints(r1);
+				const p2Before = ratingToPoints(r2);
+				const rateFn = weight < 1.0
+					? (w: Rating, l: Rating) => rate1v1Weighted(w, l, weight)
+					: rate1v1;
+				const result = match.winnerId === match.player1Id ? rateFn(r1, r2) : rateFn(r2, r1);
+				if (match.winnerId === match.player1Id) {
+					ratings.set(match.player1Id, result.winner);
+					ratings.set(match.player2Id, result.loser);
+				} else {
+					ratings.set(match.player2Id, result.winner);
+					ratings.set(match.player1Id, result.loser);
+				}
+				match.p1Delta = ratingToPoints(ratings.get(match.player1Id)!) - p1Before;
+				match.p2Delta = ratingToPoints(ratings.get(match.player2Id)!) - p2Before;
 			}
-			player.mu = r.mu;
-			player.sigma = r.sigma;
-			player.points = ratingToPoints(r);
-			player.gamerTag = latestTag;
-			player.aliases = aliases;
-			player.rankHistory.push({
-				eventSlug: evt.slug, eventNumber: evt.eventNumber,
-				rank: rankIdx + 1, points: ratingToPoints(r), mu: r.mu, sigma: r.sigma
-			});
+
+			const ranked = [...ratings.entries()]
+				.map(([id, r]) => ({ id, points: ratingToPoints(r), sigma: r.sigma }))
+				.sort((a, b) => b.points - a.points || a.sigma - b.sigma);
+
+			for (const id of eventPlayerIds) {
+				const r = ratings.get(id)!;
+				const tags = allTags.get(id);
+				const latestTag = getLatestTag(allMatches, id, tags);
+				const aliases = tags ? [...tags].filter((t) => t !== latestTag) : [];
+				const rankIdx = ranked.findIndex((x) => x.id === id);
+				let player = players.get(id);
+				if (!player) {
+					player = { id, gamerTag: latestTag, aliases, mu: r.mu, sigma: r.sigma, points: ratingToPoints(r), rankHistory: [] };
+					players.set(id, player);
+				}
+				player.mu = r.mu;
+				player.sigma = r.sigma;
+				player.points = ratingToPoints(r);
+				player.gamerTag = latestTag;
+				player.aliases = aliases;
+				player.rankHistory.push({
+					eventSlug: evt.slug, eventNumber: evt.eventNumber,
+					rank: rankIdx + 1, points: ratingToPoints(r), mu: r.mu, sigma: r.sigma
+				});
+			}
 		}
+		return { players, ratings };
 	}
+
+	let pass1Ratings: Map<string, Rating> | undefined;
+	if (opts.twoPass) {
+		log('Pass 1: computing initial ratings...');
+		const pass1 = computeRatings();
+		pass1Ratings = pass1.ratings;
+		log(`Pass 1 complete: ${pass1.ratings.size} players rated`);
+		log('Pass 2: refining with seeded ratings...');
+	}
+	const { players } = computeRatings(pass1Ratings, pass1Ratings ? DEFAULT_SIGMA / 2 : undefined);
 
 	const season: LeagueSeason = {
 		id: seasonId, name: seasonName, startDate, endDate,

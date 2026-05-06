@@ -86,6 +86,17 @@ export function rate1v1(winner: Rating, loser: Rating): { winner: Rating; loser:
 	};
 }
 
+export function rate1v1Weighted(winner: Rating, loser: Rating, weight: number): { winner: Rating; loser: Rating } {
+	const result = rate1v1(winner, loser);
+	if (weight >= 1.0) return result;
+	const wMuDelta = (result.winner.mu - winner.mu) * weight;
+	const lMuDelta = (result.loser.mu - loser.mu) * weight;
+	return {
+		winner: { mu: winner.mu + wMuDelta, sigma: result.winner.sigma },
+		loser: { mu: loser.mu + lMuDelta, sigma: result.loser.sigma }
+	};
+}
+
 export function matchQuality(a: Rating, b: Rating): number {
 	const totalSigma2 = a.sigma * a.sigma + b.sigma * b.sigma + 2 * BETA * BETA;
 	const muDiff = a.mu - b.mu;

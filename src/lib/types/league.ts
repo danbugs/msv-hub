@@ -16,6 +16,7 @@ export interface LeagueEvent {
 	eventNumber: number;
 	entrantCount: number;
 	placements: LeaguePlacement[];
+	weight?: number;
 }
 
 export interface LeaguePlacement {
@@ -116,6 +117,7 @@ export interface LeagueMatch {
 	date: string;
 	p1Delta?: number;
 	p2Delta?: number;
+	weight?: number;
 }
 
 export interface AwardCandidate {
