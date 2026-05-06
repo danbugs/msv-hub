@@ -26,7 +26,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		endDate,
 		tournamentSlugs,
 		(msg) => logs.push(msg),
-		forceRefetch
+		{ forceRefetch: forceRefetch ?? false, twoPass: true }
 	);
 
 	return Response.json({

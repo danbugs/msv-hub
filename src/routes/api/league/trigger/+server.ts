@@ -33,7 +33,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		'2026-05-12',
 		slugs,
 		(msg) => logs.push(msg),
-		forceRefetch
+		{ forceRefetch, twoPass: true }
 	);
 
 	return Response.json({
