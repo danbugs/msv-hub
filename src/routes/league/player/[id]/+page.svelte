@@ -417,9 +417,7 @@
 										<span class="text-muted-foreground shrink-0">vs</span>
 										<a href="/league/player/{oppId}?season={data.seasonId}"
 											class="flex-1 text-foreground hover:text-primary truncate">{oppTag}</a>
-										{#if myScore > 0 || oppScore > 0}
-											<span class="text-xs text-muted-foreground shrink-0">{myScore}-{oppScore}</span>
-										{/if}
+										<span class="text-xs font-mono text-muted-foreground w-8 text-right shrink-0">{myScore > 0 || oppScore > 0 ? `${myScore}-${oppScore}` : ''}</span>
 										<span class="text-xs px-1.5 py-0.5 rounded shrink-0 {pl.classes}">
 											{pl.text}
 										</span>
