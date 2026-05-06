@@ -1,6 +1,8 @@
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
-import type { LeagueSeason, LeaguePlayerStats, LeagueMatch, SeasonAward } from '$lib/types/league';
+import type { LeagueSeason, LeaguePlayer, LeaguePlayerStats, LeagueMatch, SeasonAward } from '$lib/types/league';
+import { createRating, rate1v1, rate1v1Weighted, ratingToPoints, DEFAULT_SIGMA, SIGMA_FLOOR } from '$lib/server/trueskill';
+import type { Rating } from '$lib/server/trueskill';
 
 const LEAGUE_SEASON_PREFIX = 'league:season:';
 const LEAGUE_MERGES_KEY = 'league:merges';
@@ -100,6 +102,89 @@ export async function removeMerge(secondaryId: string): Promise<void> {
 	const merges = await getMergeMap();
 	delete merges[secondaryId];
 	await saveMergeMap(merges);
+}
+
+export async function recomputeSeasonFromStored(seasonId: number, log: (msg: string) => void): Promise<LeagueSeason | null> {
+	const season = await getLeagueSeason(seasonId);
+	if (!season) return null;
+	const mergeMap = await getMergeMap();
+
+	function resolve(id: string): string { return mergeMap[id] ?? id; }
+
+	for (const m of season.matches) {
+		m.player1Id = resolve(m.player1Id);
+		m.player2Id = resolve(m.player2Id);
+		m.winnerId = resolve(m.winnerId);
+	}
+	for (const evt of season.events) {
+		for (const pl of evt.placements) {
+			pl.playerId = resolve(pl.playerId);
+		}
+		const seen = new Set<string>();
+		evt.placements = evt.placements.filter((pl) => {
+			if (seen.has(pl.playerId)) return false;
+			seen.add(pl.playerId);
+			return true;
+		});
+	}
+
+	const allTags = new Map<string, Set<string>>();
+	for (const m of season.matches) {
+		for (const [id, tag] of [[m.player1Id, m.player1Tag], [m.player2Id, m.player2Tag]] as const) {
+			const tags = allTags.get(id) ?? new Set();
+			tags.add(tag);
+			allTags.set(id, tags);
+		}
+	}
+
+	const ratings = new Map<string, Rating>();
+	const players = new Map<string, LeaguePlayer>();
+
+	for (const evt of season.events) {
+		const eventMatches = season.matches.filter((m) => m.eventSlug === evt.slug);
+		const weight = evt.weight ?? 1.0;
+
+		for (const m of eventMatches) {
+			if (m.isDQ) { m.p1Delta = 0; m.p2Delta = 0; continue; }
+			const w = ratings.get(m.winnerId) ?? createRating();
+			const l = ratings.get(m.winnerId === m.player1Id ? m.player2Id : m.player1Id) ?? createRating();
+			const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
+			const result = weight < 1.0 ? rate1v1Weighted(w, l, weight) : rate1v1(w, l);
+			const wPrev = ratingToPoints(w);
+			const lPrev = ratingToPoints(l);
+			ratings.set(m.winnerId, result.winner);
+			ratings.set(loserId, result.loser);
+			const wDelta = ratingToPoints(result.winner) - wPrev;
+			const lDelta = ratingToPoints(result.loser) - lPrev;
+			if (m.player1Id === m.winnerId) { m.p1Delta = Math.round(wDelta); m.p2Delta = Math.round(lDelta); }
+			else { m.p1Delta = Math.round(lDelta); m.p2Delta = Math.round(wDelta); }
+		}
+
+		const ranked = [...ratings.entries()]
+			.sort(([, a], [, b]) => ratingToPoints(b) - ratingToPoints(a));
+		for (let i = 0; i < ranked.length; i++) {
+			const [pid, r] = ranked[i];
+			const tags = allTags.get(pid) ?? new Set();
+			const existing = players.get(pid);
+			const gamerTag = [...tags][0] ?? pid;
+			const aliases = [...tags].filter((t) => t !== gamerTag);
+			const snap = { eventSlug: evt.slug, eventNumber: evt.eventNumber, rank: i + 1, points: ratingToPoints(r), mu: r.mu, sigma: r.sigma };
+			if (existing) {
+				existing.mu = r.mu; existing.sigma = r.sigma; existing.points = ratingToPoints(r);
+				existing.rankHistory.push(snap);
+				for (const a of aliases) if (!existing.aliases.includes(a)) existing.aliases.push(a);
+			} else {
+				players.set(pid, { id: pid, gamerTag, aliases, mu: r.mu, sigma: r.sigma, points: ratingToPoints(r), rankHistory: [snap] });
+			}
+		}
+	}
+
+	season.players = Object.fromEntries(players);
+	log(`Recomputed: ${season.events.length} events, ${players.size} players, ${season.matches.length} matches`);
+
+	await saveLeagueSeason(season);
+	await clearBioCache(seasonId);
+	return season;
 }
 
 export function getRankings(

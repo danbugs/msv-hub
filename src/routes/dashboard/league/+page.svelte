@@ -225,6 +225,27 @@
 		await runImportWithSlugs(getAllSeasonSlugs(), false);
 	}
 
+	async function recomputeAllTime() {
+		importing = true;
+		error = '';
+		try {
+			const res = await fetch('/api/league/recompute', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ seasonId: 0 })
+			});
+			const data = await res.json();
+			if (res.ok) {
+				importLogs = data.logs ?? [];
+			} else {
+				error = data.error ?? 'Recompute failed';
+			}
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Network error';
+		}
+		importing = false;
+	}
+
 	async function fullReimport() {
 		if (!season?.events.length) return;
 		if (!confirm('Force re-import all events from StartGG? This re-fetches ALL match data (ignoring cache) and may take a few minutes.')) return;
@@ -638,6 +659,10 @@
 			<button onclick={recomputeRatings} disabled={importing}
 				class="rounded-lg border border-primary bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors disabled:opacity-50">
 				{importing ? 'Recomputing...' : 'Recompute ratings'}
+			</button>
+			<button onclick={recomputeAllTime} disabled={importing}
+				class="rounded-lg border border-primary bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors disabled:opacity-50">
+				{importing ? 'Recomputing...' : 'Recompute All-Time'}
 			</button>
 			<button onclick={fullReimport} disabled={importing}
 				class="rounded-lg border border-warning-border bg-warning-muted px-4 py-2 text-sm font-medium text-warning hover:bg-warning-muted/80 transition-colors disabled:opacity-50">
