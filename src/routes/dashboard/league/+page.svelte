@@ -217,6 +217,11 @@
 		}
 	}
 
+	async function recomputeRatings() {
+		if (!season?.events.length) return;
+		await runImportWithSlugs(getAllSeasonSlugs(), false);
+	}
+
 	async function fullReimport() {
 		if (!season?.events.length) return;
 		if (!confirm('Force re-import all events from StartGG? This re-fetches ALL match data (ignoring cache) and may take a few minutes.')) return;
@@ -624,7 +629,11 @@
 			{/if}
 		</div>
 
-		<div class="flex gap-2">
+		<div class="flex gap-2 flex-wrap">
+			<button onclick={recomputeRatings} disabled={importing}
+				class="rounded-lg border border-primary bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors disabled:opacity-50">
+				{importing ? 'Recomputing...' : 'Recompute ratings'}
+			</button>
 			<button onclick={fullReimport} disabled={importing}
 				class="rounded-lg border border-warning-border bg-warning-muted px-4 py-2 text-sm font-medium text-warning hover:bg-warning-muted/80 transition-colors disabled:opacity-50">
 				{importing ? 'Importing...' : 'Re-import all from StartGG'}
