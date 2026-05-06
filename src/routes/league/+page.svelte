@@ -78,17 +78,17 @@
 				<table class="w-full text-sm">
 					<thead>
 						<tr class="border-b border-border text-left text-xs text-muted-foreground">
-							<th class="px-4 py-3 w-12">#</th>
-							<th class="px-4 py-3">Player</th>
-							<th class="px-4 py-3 text-right hidden sm:table-cell">W-L</th>
-							<th class="px-4 py-3 text-right">Points</th>
+							<th class="px-2 sm:px-4 py-3 w-10 sm:w-12">#</th>
+							<th class="px-2 sm:px-4 py-3">Player</th>
+							<th class="px-2 sm:px-4 py-3 text-right hidden sm:table-cell">W-L</th>
+							<th class="px-2 sm:px-4 py-3 text-right">Points</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#each filteredRankings() as player}
 							<tr class="border-b border-border last:border-0 hover:bg-accent/50 transition-colors">
-								<td class="px-4 py-3 text-muted-foreground font-mono text-xs">{player.rank}</td>
-								<td class="px-4 py-3">
+								<td class="px-2 sm:px-4 py-3 text-muted-foreground font-mono text-xs">{player.rank}</td>
+								<td class="px-2 sm:px-4 py-3">
 									<div class="flex items-center gap-2">
 										{#if player.characters?.length}
 											<div class="flex -space-x-1 shrink-0">
@@ -109,12 +109,12 @@
 										</span>
 									</div>
 								</td>
-								<td class="px-4 py-3 text-right hidden sm:table-cell">
+								<td class="px-2 sm:px-4 py-3 text-right hidden sm:table-cell">
 									<span class="text-success">{player.wins}</span>
 									<span class="text-muted-foreground">-</span>
 									<span class="text-destructive">{player.losses}</span>
 								</td>
-									<td class="px-4 py-3 text-right font-mono font-semibold text-foreground">{player.points}</td>
+									<td class="px-2 sm:px-4 py-3 text-right font-mono font-semibold text-foreground">{player.points}</td>
 							</tr>
 						{/each}
 						{#if filteredRankings().length === 0}
