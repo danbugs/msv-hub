@@ -39,14 +39,35 @@ function getRedis(): Redis {
 
 export async function getLeagueSeason(id: number): Promise<LeagueSeason | null> {
 	const redis = getRedis();
-	const data = await redis.get<string>(`${LEAGUE_SEASON_PREFIX}${id}`);
+	const key = `${LEAGUE_SEASON_PREFIX}${id}`;
+	const [data, matchData] = await Promise.all([
+		redis.get<string>(key),
+		redis.get<string>(`${key}:matches`)
+	]);
 	if (!data) return null;
-	return typeof data === 'string' ? JSON.parse(data) : data as unknown as LeagueSeason;
+	const season = typeof data === 'string' ? JSON.parse(data) : data as unknown as LeagueSeason;
+	if (matchData) {
+		season.matches = typeof matchData === 'string' ? JSON.parse(matchData) : matchData as unknown as LeagueMatch[];
+	}
+	return season;
 }
+
+const UPSTASH_MAX_SIZE = 5 * 1024 * 1024;
 
 export async function saveLeagueSeason(season: LeagueSeason): Promise<void> {
 	const redis = getRedis();
-	await redis.set(`${LEAGUE_SEASON_PREFIX}${season.id}`, JSON.stringify(season));
+	const key = `${LEAGUE_SEASON_PREFIX}${season.id}`;
+	const full = JSON.stringify(season);
+	if (full.length > UPSTASH_MAX_SIZE) {
+		const { matches, ...rest } = season;
+		await Promise.all([
+			redis.set(key, JSON.stringify({ ...rest, matches: [] })),
+			redis.set(`${key}:matches`, JSON.stringify(matches))
+		]);
+	} else {
+		await redis.set(key, full);
+		await redis.del(`${key}:matches`);
+	}
 	const index = await getSeasonIndex();
 	if (!index.find((s) => s.id === season.id)) {
 		index.push({ id: season.id, name: season.name });

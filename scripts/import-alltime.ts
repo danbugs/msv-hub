@@ -391,9 +391,20 @@ async function main() {
 		matches: allMatches
 	};
 
-	// Save to Redis
+	// Save to Redis (split matches into separate key if too large)
 	console.log(`\nSaving to Redis (season 0)...`);
-	await redis.set(`league:season:0`, JSON.stringify(season));
+	const full = JSON.stringify(season);
+	if (full.length > 5 * 1024 * 1024) {
+		const { matches, ...rest } = season;
+		await Promise.all([
+			redis.set('league:season:0', JSON.stringify({ ...rest, matches: [] })),
+			redis.set('league:season:0:matches', JSON.stringify(matches))
+		]);
+		console.log(`Split save: season ${(JSON.stringify(rest).length / 1024 / 1024).toFixed(1)}MB + matches ${(JSON.stringify(matches).length / 1024 / 1024).toFixed(1)}MB`);
+	} else {
+		await redis.set('league:season:0', full);
+		await redis.del('league:season:0:matches');
+	}
 
 	// Update season index
 	const indexRaw = await redis.get<string>('league:seasons');
