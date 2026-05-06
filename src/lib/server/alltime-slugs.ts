@@ -5,7 +5,7 @@ export interface AllTimeEventConfig {
 }
 
 const SPECIAL_SLUGS: Record<number, string> = {
-	3: '3-special-edititon',
+	3: '3-special-edition',
 	17: '17-bobc-pre-pre-pre-pre-local',
 	29: '29-3',
 	34: '34-1',
