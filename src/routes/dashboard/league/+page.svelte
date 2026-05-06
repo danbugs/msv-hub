@@ -313,6 +313,7 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ minEvents, attendanceBonus })
 		});
+		await loadSeason();
 	}
 
 	function playerTag(id: string): string {
@@ -465,19 +466,21 @@
 		<!-- Ranking Settings -->
 		<div class="rounded-xl border border-border bg-card p-5 mb-6">
 			<h2 class="text-sm font-bold text-foreground mb-3">Ranking Settings</h2>
-			<div class="flex flex-col sm:flex-row gap-4">
+			<div class="flex flex-col sm:flex-row gap-4 items-end">
 				<div>
 					<label class="text-xs text-muted-foreground">Min events to qualify</label>
 					<input bind:value={minEvents} type="number" min="0" max="20"
-						onchange={saveConfig}
 						class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
 				</div>
 				<div>
 					<label class="text-xs text-muted-foreground">Attendance bonus (pts/event)</label>
 					<input bind:value={attendanceBonus} type="number" min="0" max="200"
-						onchange={saveConfig}
 						class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
 				</div>
+				<button onclick={saveConfig}
+					class="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+					Save
+				</button>
 			</div>
 			<p class="mt-2 text-xs text-muted-foreground">
 				Min events filters the public rankings. Attendance bonus adds points per event attended to reward showing up.
