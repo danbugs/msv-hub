@@ -100,36 +100,44 @@ export const load: PageServerLoad = async ({ url }) => {
 			redemptionWinCounts.set(m.winnerId, e);
 		}
 	}
-	const mainWins = [...mainWinCounts.values()].sort((a, b) => b.count - a.count).slice(0, 5);
-	const redemptionWins = [...redemptionWinCounts.values()].sort((a, b) => b.count - a.count).slice(0, 5);
+	const mainWins = [...mainWinCounts.values()].sort((a, b) => b.count - a.count).slice(0, 10);
+	const redemptionWins = [...redemptionWinCounts.values()].sort((a, b) => b.count - a.count).slice(0, 10);
 
-	const streaks = new Map<string, number>();
-	const currentStreak = new Map<string, number>();
-	for (const m of season.matches) {
-		if (m.isDQ) continue;
-		for (const pid of [m.player1Id, m.player2Id]) {
-			if (m.winnerId === pid) {
-				const cur = (currentStreak.get(pid) ?? 0) + 1;
-				currentStreak.set(pid, cur);
-				if (cur > (streaks.get(pid) ?? 0)) streaks.set(pid, cur);
-			} else {
-				currentStreak.set(pid, 0);
-			}
-		}
+	// Consecutive event wins (placement 1)
+	const eventWinners: string[] = [];
+	for (const evt of season.events) {
+		const p1 = evt.placements.find((p) => p.placement === 1);
+		if (p1) eventWinners.push(p1.playerId);
 	}
-	const topStreaks = [...streaks.entries()]
+	const eventStreaks = new Map<string, number>();
+	let streakPid = '';
+	let streakLen = 0;
+	for (const pid of eventWinners) {
+		if (pid === streakPid) {
+			streakLen++;
+		} else {
+			streakPid = pid;
+			streakLen = 1;
+		}
+		if (streakLen > (eventStreaks.get(pid) ?? 0)) eventStreaks.set(pid, streakLen);
+	}
+	const topStreaks = [...eventStreaks.entries()]
 		.map(([pid, streak]) => ({ tag: season.players[pid]?.gamerTag ?? pid, streak }))
 		.sort((a, b) => b.streak - a.streak)
 		.slice(0, 5);
 
-	const winRates = rankings
-		.map((r) => {
-			const stats = playerMatchCounts.get(r.playerId);
-			const total = (stats?.wins ?? 0) + (stats?.losses ?? 0);
-			return { tag: r.gamerTag, rate: total > 0 ? Math.round(((stats?.wins ?? 0) / total) * 100) : 0, total };
-		})
-		.filter((r) => r.total >= 20)
-		.sort((a, b) => b.rate - a.rate)
+	// Most unique opponents beaten
+	const opponentsBeaten = new Map<string, Set<string>>();
+	for (const m of season.matches) {
+		if (m.isDQ) continue;
+		const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
+		const set = opponentsBeaten.get(m.winnerId) ?? new Set();
+		set.add(loserId);
+		opponentsBeaten.set(m.winnerId, set);
+	}
+	const topOpponents = [...opponentsBeaten.entries()]
+		.map(([pid, set]) => ({ tag: season.players[pid]?.gamerTag ?? pid, count: set.size }))
+		.sort((a, b) => b.count - a.count)
 		.slice(0, 5);
 
 	return {
@@ -142,7 +150,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		},
 		rankings: enrichedRankings,
 		events: eventTiers.reverse(),
-		stats: { mainWins, redemptionWins, topStreaks, winRates },
+		stats: { mainWins, redemptionWins, topStreaks, topOpponents },
 		seasonId,
 		seasonParam,
 		seasons

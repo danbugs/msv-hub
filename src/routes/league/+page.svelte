@@ -159,25 +159,25 @@
 						{/if}
 						{#if data.stats.topStreaks.length}
 							<div class="rounded-xl border border-border bg-card p-4">
-								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Longest Win Streaks</div>
+								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Event Win Streaks</div>
 								<div class="space-y-1">
 									{#each data.stats.topStreaks as s}
 										<div class="flex items-center justify-between text-sm">
 											<span class="text-foreground">{s.tag}</span>
-											<span class="text-muted-foreground font-mono">{s.streak} wins</span>
+											<span class="text-muted-foreground font-mono">{s.streak} in a row</span>
 										</div>
 									{/each}
 								</div>
 							</div>
 						{/if}
-						{#if data.stats.winRates.length}
+						{#if data.stats.topOpponents.length}
 							<div class="rounded-xl border border-border bg-card p-4">
-								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Best Win Rate (20+ sets)</div>
+								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Most Unique Opponents Beaten</div>
 								<div class="space-y-1">
-									{#each data.stats.winRates as w}
+									{#each data.stats.topOpponents as o}
 										<div class="flex items-center justify-between text-sm">
-											<span class="text-foreground">{w.tag}</span>
-											<span class="text-muted-foreground font-mono">{w.rate}% ({w.total} sets)</span>
+											<span class="text-foreground">{o.tag}</span>
+											<span class="text-muted-foreground font-mono">{o.count} players</span>
 										</div>
 									{/each}
 								</div>
