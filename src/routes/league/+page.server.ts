@@ -84,6 +84,54 @@ export const load: PageServerLoad = async ({ url }) => {
 		};
 	});
 
+	// Season stats
+	const mainWinCounts = new Map<string, { tag: string; count: number }>();
+	const redemptionWinCounts = new Map<string, { tag: string; count: number }>();
+	for (const m of season.matches) {
+		if (m.roundLabel !== 'Grand Final' && m.roundLabel !== 'Grand Final Reset') continue;
+		const tag = m.winnerId === m.player1Id ? m.player1Tag : m.player2Tag;
+		if (m.phase === 'winners') {
+			const e = mainWinCounts.get(m.winnerId) ?? { tag, count: 0 };
+			e.count++;
+			mainWinCounts.set(m.winnerId, e);
+		} else if (m.phase === 'redemption-winners') {
+			const e = redemptionWinCounts.get(m.winnerId) ?? { tag, count: 0 };
+			e.count++;
+			redemptionWinCounts.set(m.winnerId, e);
+		}
+	}
+	const mainWins = [...mainWinCounts.values()].sort((a, b) => b.count - a.count).slice(0, 5);
+	const redemptionWins = [...redemptionWinCounts.values()].sort((a, b) => b.count - a.count).slice(0, 5);
+
+	const streaks = new Map<string, number>();
+	const currentStreak = new Map<string, number>();
+	for (const m of season.matches) {
+		if (m.isDQ) continue;
+		for (const pid of [m.player1Id, m.player2Id]) {
+			if (m.winnerId === pid) {
+				const cur = (currentStreak.get(pid) ?? 0) + 1;
+				currentStreak.set(pid, cur);
+				if (cur > (streaks.get(pid) ?? 0)) streaks.set(pid, cur);
+			} else {
+				currentStreak.set(pid, 0);
+			}
+		}
+	}
+	const topStreaks = [...streaks.entries()]
+		.map(([pid, streak]) => ({ tag: season.players[pid]?.gamerTag ?? pid, streak }))
+		.sort((a, b) => b.streak - a.streak)
+		.slice(0, 5);
+
+	const winRates = rankings
+		.map((r) => {
+			const stats = playerMatchCounts.get(r.playerId);
+			const total = (stats?.wins ?? 0) + (stats?.losses ?? 0);
+			return { tag: r.gamerTag, rate: total > 0 ? Math.round(((stats?.wins ?? 0) / total) * 100) : 0, total };
+		})
+		.filter((r) => r.total >= 20)
+		.sort((a, b) => b.rate - a.rate)
+		.slice(0, 5);
+
 	return {
 		season: {
 			id: season.id,
@@ -94,6 +142,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		},
 		rankings: enrichedRankings,
 		events: eventTiers.reverse(),
+		stats: { mainWins, redemptionWins, topStreaks, winRates },
 		seasonId,
 		seasonParam,
 		seasons

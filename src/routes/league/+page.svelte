@@ -2,6 +2,7 @@
 	let { data } = $props();
 
 	let searchQuery = $state('');
+	let showAllEvents = $state(false);
 	let showGallery = $state(false);
 	let lightboxSeason = $state<number | null>(null);
 
@@ -126,7 +127,68 @@
 				</table>
 			</div>
 
+			{#if data.stats}
+				<div class="mt-6">
+					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Season Stats</h2>
+					<div class="grid gap-3 sm:grid-cols-2">
+						{#if data.stats.mainWins.length}
+							<div class="rounded-xl border border-border bg-card p-4">
+								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Main Bracket Wins</div>
+								<div class="space-y-1">
+									{#each data.stats.mainWins as w}
+										<div class="flex items-center justify-between text-sm">
+											<span class="text-foreground">{w.tag}</span>
+											<span class="text-muted-foreground font-mono">{w.count}</span>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+						{#if data.stats.redemptionWins.length}
+							<div class="rounded-xl border border-border bg-card p-4">
+								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Redemption Wins</div>
+								<div class="space-y-1">
+									{#each data.stats.redemptionWins as w}
+										<div class="flex items-center justify-between text-sm">
+											<span class="text-foreground">{w.tag}</span>
+											<span class="text-muted-foreground font-mono">{w.count}</span>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+						{#if data.stats.topStreaks.length}
+							<div class="rounded-xl border border-border bg-card p-4">
+								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Longest Win Streaks</div>
+								<div class="space-y-1">
+									{#each data.stats.topStreaks as s}
+										<div class="flex items-center justify-between text-sm">
+											<span class="text-foreground">{s.tag}</span>
+											<span class="text-muted-foreground font-mono">{s.streak} wins</span>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+						{#if data.stats.winRates.length}
+							<div class="rounded-xl border border-border bg-card p-4">
+								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Best Win Rate (20+ sets)</div>
+								<div class="space-y-1">
+									{#each data.stats.winRates as w}
+										<div class="flex items-center justify-between text-sm">
+											<span class="text-foreground">{w.tag}</span>
+											<span class="text-muted-foreground font-mono">{w.rate}% ({w.total} sets)</span>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+					</div>
+				</div>
+			{/if}
+
 			{#if data.events?.length}
+				{@const visibleEvents = showAllEvents ? data.events : data.events.slice(0, 10)}
 				<div class="mt-6">
 					<div class="flex items-center gap-2 mb-3">
 						<h2 class="text-sm font-bold text-foreground uppercase tracking-wider">Events</h2>
@@ -135,7 +197,7 @@
 						</span>
 					</div>
 					<div class="space-y-1">
-						{#each data.events as evt}
+						{#each visibleEvents as evt}
 							<div class="flex items-center justify-between rounded-lg bg-card border border-border px-3 py-2 text-sm">
 								<div class="flex items-center gap-2">
 									<span class="text-xs font-bold w-5 text-center" style="color: {evt.color};"
@@ -147,6 +209,12 @@
 							</div>
 						{/each}
 					</div>
+					{#if data.events.length > 10}
+						<button onclick={() => showAllEvents = !showAllEvents}
+							class="mt-2 text-xs text-primary hover:text-primary/80 transition-colors">
+							{showAllEvents ? 'Show less' : `Show all ${data.events.length} events`}
+						</button>
+					{/if}
 				</div>
 			{/if}
 
