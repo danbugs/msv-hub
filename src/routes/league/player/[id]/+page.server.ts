@@ -10,9 +10,10 @@ export const load: PageServerLoad = async ({ params, url }) => {
 	if (!season) return { stats: null, seasonId, seasonParam, seasonName: null };
 
 	const config = await getLeagueConfig();
-	const stats = getPlayerStats(season, params.id, config);
+	const rankConfig = seasonId === 0 ? { ...config, attendanceBonus: 0 } : config;
+	const stats = getPlayerStats(season, params.id, rankConfig);
 
-	const rankings = getRankings(season, config);
+	const rankings = getRankings(season, rankConfig);
 	const rankEntry = rankings.find((r) => r.playerId === params.id);
 	const adjustedPoints = rankEntry?.points ?? stats?.player.points ?? 0;
 	const tier = stats ? getPlayerTier(adjustedPoints) : null;
@@ -20,7 +21,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
 	return {
 		stats,
 		adjustedPoints,
-		attendanceBonus: config.attendanceBonus,
+		attendanceBonus: rankConfig.attendanceBonus,
 		seasonId,
 		seasonParam,
 		seasonName: season.name,
