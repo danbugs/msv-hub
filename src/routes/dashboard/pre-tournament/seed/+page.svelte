@@ -61,7 +61,7 @@
 		if (seasonsRes.ok) {
 			const seasons = await seasonsRes.json();
 			leagueSeasons = seasons;
-			if (seasons.length) leagueSeasonId = String(seasons[seasons.length - 1].id);
+			if (seasons.length) leagueSeasonId = String(Math.max(...seasons.map((s: { id: number }) => s.id)));
 		}
 	});
 

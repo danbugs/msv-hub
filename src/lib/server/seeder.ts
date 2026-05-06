@@ -283,13 +283,15 @@ function parseEntrants(rawEntrants: Record<string, any>[]): Entrant[] {
 	return entrants;
 }
 
-async function estimateNewcomerElo(playerId: number, signal?: AbortSignal): Promise<number> {
+const TRUESKILL_START = 5000;
+
+async function estimateNewcomerRating(playerId: number, base: number, range: number, signal?: AbortSignal): Promise<number> {
 	const data = await gql<{ player: { recentStandings: { placement: number; entrant: { event: { numEntrants: number } } }[] } }>(
 		PLAYER_RECENT_STANDINGS_QUERY,
 		{ playerId },
 		signal
 	);
-	if (!data?.player?.recentStandings?.length) return ELO_START;
+	if (!data?.player?.recentStandings?.length) return base;
 
 	const percentiles: number[] = [];
 	for (const standing of data.player.recentStandings) {
@@ -300,9 +302,9 @@ async function estimateNewcomerElo(playerId: number, signal?: AbortSignal): Prom
 		}
 	}
 
-	if (!percentiles.length) return ELO_START;
+	if (!percentiles.length) return base;
 	const avg = percentiles.reduce((a, b) => a + b, 0) / percentiles.length;
-	return ELO_START + (avg - 0.5) * 400;
+	return base + (avg - 0.5) * range;
 }
 
 async function assignEloRatings(
@@ -317,7 +319,7 @@ async function assignEloRatings(
 			e.elo = known;
 		} else {
 			log(`  Estimating Elo for newcomer: ${e.gamerTag}...`);
-			e.elo = await estimateNewcomerElo(e.playerId, signal);
+			e.elo = await estimateNewcomerRating(e.playerId, ELO_START, 400, signal);
 			e.isNewcomer = true;
 		}
 	}
@@ -352,10 +354,18 @@ function computeSeedOrder(entrants: Entrant[]): void {
 // ── Swiss R1 pairing & matchup avoidance ────────────────────────────────
 
 function predictSwissR1Pairings(entrants: Entrant[]): [Entrant, Entrant][] {
-	const half = Math.floor(entrants.length / 2);
+	const n = entrants.length;
 	const pairings: [Entrant, Entrant][] = [];
-	for (let i = 0; i < half; i++) {
-		pairings.push([entrants[i], entrants[i + half]]);
+	if (n % 2 === 1) {
+		const half = (n + 1) / 2;
+		for (let i = 0; i < half - 1; i++) {
+			pairings.push([entrants[i], entrants[i + half]]);
+		}
+	} else {
+		const half = n / 2;
+		for (let i = 0; i < half; i++) {
+			pairings.push([entrants[i], entrants[i + half]]);
+		}
 	}
 	return pairings;
 }
@@ -406,9 +416,10 @@ function pairKey(a: number, b: number): string {
 
 function avoidMatchups(entrants: Entrant[], toAvoid: Set<string>): void {
 	const n = entrants.length;
-	const half = Math.floor(n / 2);
+	const half = n % 2 === 1 ? (n + 1) / 2 : n / 2;
+	const pairCount = n % 2 === 1 ? half - 1 : half;
 
-	for (let i = 0; i < half; i++) {
+	for (let i = 0; i < pairCount; i++) {
 		const topPid = entrants[i].playerId;
 		const botIdx = i + half;
 		const botPid = entrants[botIdx].playerId;
@@ -536,7 +547,7 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback, signal?
 		const season = await getLeagueSeason(input.leagueSeasonId);
 		if (season) {
 			const config = await getLeagueConfig();
-			const rankings = getRankings(season, config);
+			const rankings = getRankings(season, { ...config, minEvents: 1 });
 			leagueRatings = new Map();
 			for (const r of rankings) {
 				leagueRatings.set(parseInt(r.playerId, 10), r.points);
@@ -595,7 +606,7 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback, signal?
 				leagueCount++;
 			} else {
 				log(`  Estimating rating for newcomer: ${e.gamerTag}...`);
-				e.elo = await estimateNewcomerElo(e.playerId, signal);
+				e.elo = await estimateNewcomerRating(e.playerId, TRUESKILL_START, 1000, signal);
 				e.isNewcomer = true;
 			}
 		}
