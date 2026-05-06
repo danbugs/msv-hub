@@ -11,7 +11,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	if (!season) return { season: null, rankings: [], seasonId, seasonParam, events: [], awards: [], seasons };
 
 	const config = await getLeagueConfig();
-	const rankConfig = seasonId === 0 ? { ...config, attendanceBonus: 0 } : config;
+	const rankConfig = seasonId === 0 ? { ...config, attendanceBonus: 5 } : config;
 	const rankings = getRankings(season, rankConfig);
 
 	const playerMatchCounts = new Map<string, { wins: number; losses: number; events: Set<string> }>();

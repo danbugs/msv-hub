@@ -10,7 +10,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
 	if (!season) return { stats: null, seasonId, seasonParam, seasonName: null };
 
 	const config = await getLeagueConfig();
-	const rankConfig = seasonId === 0 ? { ...config, attendanceBonus: 0 } : config;
+	const rankConfig = seasonId === 0 ? { ...config, attendanceBonus: 5 } : config;
 	const stats = getPlayerStats(season, params.id, rankConfig);
 
 	const rankings = getRankings(season, rankConfig);

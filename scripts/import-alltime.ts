@@ -375,14 +375,10 @@ async function main() {
 		console.log(`\nApplied ${Object.keys(mergeMap).length} player merge(s)`);
 	}
 
-	// Two-pass TrueSkill
-	console.log(`\nPass 1: computing ratings across ${events.length} events, ${allMatches.length} matches...`);
-	const pass1 = computeRatings(events, allMatches, allTags);
-	console.log(`Pass 1 complete: ${pass1.ratings.size} players`);
-
-	console.log('Pass 2: refining with seeded ratings...');
-	const pass2 = computeRatings(events, allMatches, allTags, pass1.ratings, DEFAULT_SIGMA / 2);
-	console.log(`Pass 2 complete: ${pass2.players.size} players`);
+	// Single-pass TrueSkill (single pass lets ratings naturally track improvement over time)
+	console.log(`\nComputing ratings across ${events.length} events, ${allMatches.length} matches...`);
+	const result = computeRatings(events, allMatches, allTags);
+	console.log(`Complete: ${result.ratings.size} players`);
 
 	// Build season
 	const season: LeagueSeason = {
@@ -391,7 +387,7 @@ async function main() {
 		startDate: events[0]?.date ?? '',
 		endDate: events[events.length - 1]?.date ?? '',
 		events,
-		players: Object.fromEntries(pass2.players),
+		players: Object.fromEntries(result.players),
 		matches: allMatches
 	};
 
@@ -410,10 +406,10 @@ async function main() {
 		await redis.set('league:seasons', JSON.stringify(index));
 	}
 
-	console.log(`\nDone! ${events.length} events, ${pass2.players.size} players, ${allMatches.length} matches`);
+	console.log(`\nDone! ${events.length} events, ${result.players.size} players, ${allMatches.length} matches`);
 
 	// Print top 20
-	const ranked = [...pass2.players.values()]
+	const ranked = [...result.players.values()]
 		.sort((a, b) => b.points - a.points)
 		.slice(0, 20);
 	console.log('\nTop 20 All-Time:');

@@ -26,7 +26,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	if (!season) return Response.json({ error: 'Season not found' }, { status: 404 });
 
 	const config = await getLeagueConfig();
-	const rankConfig = seasonId === 0 ? { ...config, attendanceBonus: 0 } : config;
+	const rankConfig = seasonId === 0 ? { ...config, attendanceBonus: 5 } : config;
 	const stats = getPlayerStats(season, playerId, rankConfig);
 	if (!stats) return Response.json({ error: 'Player not found' }, { status: 404 });
 
