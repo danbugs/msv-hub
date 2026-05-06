@@ -2,6 +2,7 @@ const DEFAULT_MU = 25;
 const DEFAULT_SIGMA = DEFAULT_MU / 3;
 const BETA = DEFAULT_SIGMA / 2;
 const TAU = DEFAULT_SIGMA / 100;
+const SIGMA_FLOOR = DEFAULT_SIGMA / 3;
 const POINTS_SCALE = 200;
 
 export interface Rating {
@@ -80,8 +81,8 @@ export function rate1v1(winner: Rating, loser: Rating): { winner: Rating; loser:
 	const lSigma = Math.sqrt(lSigma2 * (1 - (lSigma2 / (c * c)) * w));
 
 	return {
-		winner: { mu: wMu, sigma: Math.max(wSigma, 0.01) },
-		loser: { mu: lMu, sigma: Math.max(lSigma, 0.01) }
+		winner: { mu: wMu, sigma: Math.max(wSigma, SIGMA_FLOOR) },
+		loser: { mu: lMu, sigma: Math.max(lSigma, SIGMA_FLOOR) }
 	};
 }
 
@@ -91,4 +92,4 @@ export function matchQuality(a: Rating, b: Rating): number {
 	return Math.exp((-muDiff * muDiff) / (2 * totalSigma2)) * Math.sqrt((2 * BETA * BETA) / totalSigma2);
 }
 
-export { DEFAULT_MU, DEFAULT_SIGMA, BETA, TAU, POINTS_SCALE };
+export { DEFAULT_MU, DEFAULT_SIGMA, BETA, TAU, SIGMA_FLOOR, POINTS_SCALE };

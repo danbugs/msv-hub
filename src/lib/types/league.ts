@@ -114,6 +114,8 @@ export interface LeagueMatch {
 	phase: string;
 	roundLabel: string;
 	date: string;
+	p1Delta?: number;
+	p2Delta?: number;
 }
 
 export interface AwardCandidate {

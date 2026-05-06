@@ -417,6 +417,8 @@ export async function importSeason(
 			eventPlayerIds.add(match.player2Id);
 			const r1 = ratings.get(match.player1Id)!;
 			const r2 = ratings.get(match.player2Id)!;
+			const p1Before = ratingToPoints(r1);
+			const p2Before = ratingToPoints(r2);
 			const result = match.winnerId === match.player1Id ? rate1v1(r1, r2) : rate1v1(r2, r1);
 			if (match.winnerId === match.player1Id) {
 				ratings.set(match.player1Id, result.winner);
@@ -425,6 +427,8 @@ export async function importSeason(
 				ratings.set(match.player2Id, result.winner);
 				ratings.set(match.player1Id, result.loser);
 			}
+			match.p1Delta = ratingToPoints(ratings.get(match.player1Id)!) - p1Before;
+			match.p2Delta = ratingToPoints(ratings.get(match.player2Id)!) - p2Before;
 		}
 
 		const ranked = [...ratings.entries()]
