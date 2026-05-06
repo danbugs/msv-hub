@@ -108,6 +108,7 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 	const season = await getLeagueSeason(seasonId);
 	if (!season) return null;
 	const mergeMap = await getMergeMap();
+	const twoPass = seasonId !== 0;
 
 	function resolve(id: string): string { return mergeMap[id] ?? id; }
 
@@ -137,50 +138,74 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 		}
 	}
 
-	const ratings = new Map<string, Rating>();
-	const players = new Map<string, LeaguePlayer>();
+	function computeRatings(
+		initialRatings?: Map<string, Rating>, resetSigma?: number
+	): { ratings: Map<string, Rating>; players: Map<string, LeaguePlayer> } {
+		const ratings = new Map<string, Rating>();
+		const players = new Map<string, LeaguePlayer>();
 
-	for (const evt of season.events) {
-		const eventMatches = season.matches.filter((m) => m.eventSlug === evt.slug);
-		const weight = evt.weight ?? 1.0;
-
-		for (const m of eventMatches) {
-			if (m.isDQ) { m.p1Delta = 0; m.p2Delta = 0; continue; }
-			const w = ratings.get(m.winnerId) ?? createRating();
-			const l = ratings.get(m.winnerId === m.player1Id ? m.player2Id : m.player1Id) ?? createRating();
-			const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
-			const result = weight < 1.0 ? rate1v1Weighted(w, l, weight) : rate1v1(w, l);
-			const wPrev = ratingToPoints(w);
-			const lPrev = ratingToPoints(l);
-			ratings.set(m.winnerId, result.winner);
-			ratings.set(loserId, result.loser);
-			const wDelta = ratingToPoints(result.winner) - wPrev;
-			const lDelta = ratingToPoints(result.loser) - lPrev;
-			if (m.player1Id === m.winnerId) { m.p1Delta = Math.round(wDelta); m.p2Delta = Math.round(lDelta); }
-			else { m.p1Delta = Math.round(lDelta); m.p2Delta = Math.round(wDelta); }
-		}
-
-		const ranked = [...ratings.entries()]
-			.sort(([, a], [, b]) => ratingToPoints(b) - ratingToPoints(a));
-		for (let i = 0; i < ranked.length; i++) {
-			const [pid, r] = ranked[i];
-			const tags = allTags.get(pid) ?? new Set();
-			const existing = players.get(pid);
-			const gamerTag = [...tags][0] ?? pid;
-			const aliases = [...tags].filter((t) => t !== gamerTag);
-			const snap = { eventSlug: evt.slug, eventNumber: evt.eventNumber, rank: i + 1, points: ratingToPoints(r), mu: r.mu, sigma: r.sigma };
-			if (existing) {
-				existing.mu = r.mu; existing.sigma = r.sigma; existing.points = ratingToPoints(r);
-				existing.rankHistory.push(snap);
-				for (const a of aliases) if (!existing.aliases.includes(a)) existing.aliases.push(a);
-			} else {
-				players.set(pid, { id: pid, gamerTag, aliases, mu: r.mu, sigma: r.sigma, points: ratingToPoints(r), rankHistory: [snap] });
+		if (initialRatings && resetSigma) {
+			for (const [id, r] of initialRatings) {
+				ratings.set(id, createRating(r.mu, resetSigma));
 			}
 		}
+
+		for (const evt of season!.events) {
+			const eventMatches = season!.matches.filter((m) => m.eventSlug === evt.slug);
+			const weight = evt.weight ?? 1.0;
+
+			for (const m of eventMatches) {
+				if (m.isDQ) { m.p1Delta = 0; m.p2Delta = 0; continue; }
+				const w = ratings.get(m.winnerId) ?? createRating();
+				const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
+				const l = ratings.get(loserId) ?? createRating();
+				const result = weight < 1.0 ? rate1v1Weighted(w, l, weight) : rate1v1(w, l);
+				const wPrev = ratingToPoints(w);
+				const lPrev = ratingToPoints(l);
+				ratings.set(m.winnerId, result.winner);
+				ratings.set(loserId, result.loser);
+				const wDelta = ratingToPoints(result.winner) - wPrev;
+				const lDelta = ratingToPoints(result.loser) - lPrev;
+				if (m.player1Id === m.winnerId) { m.p1Delta = Math.round(wDelta); m.p2Delta = Math.round(lDelta); }
+				else { m.p1Delta = Math.round(lDelta); m.p2Delta = Math.round(wDelta); }
+			}
+
+			const ranked = [...ratings.entries()]
+				.sort(([, a], [, b]) => ratingToPoints(b) - ratingToPoints(a));
+			for (let i = 0; i < ranked.length; i++) {
+				const [pid, r] = ranked[i];
+				const tags = allTags.get(pid) ?? new Set();
+				const existing = players.get(pid);
+				const gamerTag = [...tags][0] ?? pid;
+				const aliases = [...tags].filter((t) => t !== gamerTag);
+				const snap = { eventSlug: evt.slug, eventNumber: evt.eventNumber, rank: i + 1, points: ratingToPoints(r), mu: r.mu, sigma: r.sigma };
+				if (existing) {
+					existing.mu = r.mu; existing.sigma = r.sigma; existing.points = ratingToPoints(r);
+					existing.rankHistory.push(snap);
+					for (const a of aliases) if (!existing.aliases.includes(a)) existing.aliases.push(a);
+				} else {
+					players.set(pid, { id: pid, gamerTag, aliases, mu: r.mu, sigma: r.sigma, points: ratingToPoints(r), rankHistory: [snap] });
+				}
+			}
+		}
+		return { ratings, players };
 	}
 
-	season.players = Object.fromEntries(players);
-	log(`Recomputed: ${season.events.length} events, ${players.size} players, ${season.matches.length} matches`);
+	let finalPlayers: Map<string, LeaguePlayer>;
+	if (twoPass) {
+		log('Pass 1: computing initial ratings...');
+		const pass1 = computeRatings();
+		log(`Pass 1 complete: ${pass1.ratings.size} players`);
+		log('Pass 2: refining with seeded ratings...');
+		const pass2 = computeRatings(pass1.ratings, DEFAULT_SIGMA / 2);
+		finalPlayers = pass2.players;
+	} else {
+		const result = computeRatings();
+		finalPlayers = result.players;
+	}
+
+	season.players = Object.fromEntries(finalPlayers);
+	log(`Recomputed: ${season.events.length} events, ${finalPlayers.size} players, ${season.matches.length} matches`);
 
 	await saveLeagueSeason(season);
 	await clearBioCache(seasonId);

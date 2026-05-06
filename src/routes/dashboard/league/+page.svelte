@@ -221,22 +221,19 @@
 	}
 
 	async function recomputeRatings() {
-		if (!season?.events.length) return;
-		await runImportWithSlugs(getAllSeasonSlugs(), false);
-	}
-
-	async function recomputeAllTime() {
 		importing = true;
 		error = '';
+		importLogs = [];
 		try {
 			const res = await fetch('/api/league/recompute', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ seasonId: 0 })
+				body: JSON.stringify({ seasonId: getSeasonId() })
 			});
 			const data = await res.json();
 			if (res.ok) {
 				importLogs = data.logs ?? [];
+				await loadSeason();
 			} else {
 				error = data.error ?? 'Recompute failed';
 			}
@@ -659,10 +656,6 @@
 			<button onclick={recomputeRatings} disabled={importing}
 				class="rounded-lg border border-primary bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors disabled:opacity-50">
 				{importing ? 'Recomputing...' : 'Recompute ratings'}
-			</button>
-			<button onclick={recomputeAllTime} disabled={importing}
-				class="rounded-lg border border-primary bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors disabled:opacity-50">
-				{importing ? 'Recomputing...' : 'Recompute All-Time'}
 			</button>
 			<button onclick={fullReimport} disabled={importing}
 				class="rounded-lg border border-warning-border bg-warning-muted px-4 py-2 text-sm font-medium text-warning hover:bg-warning-muted/80 transition-colors disabled:opacity-50">
