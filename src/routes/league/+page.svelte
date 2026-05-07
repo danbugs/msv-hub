@@ -129,16 +129,15 @@
 
 			{#if data.stats}
 				<div class="mt-6">
-					<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Season Stats</h2>
 					<div class="grid gap-3 sm:grid-cols-2">
 						{#if data.stats.mainWins.length}
 							<div class="rounded-xl border border-border bg-card p-4">
-								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Main Bracket Wins</div>
+								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Hall of Fame</div>
 								<div class="space-y-1">
 									{#each data.stats.mainWins as w}
 										<div class="flex items-center justify-between text-sm">
 											<span class="text-foreground">{w.tag}</span>
-											<span class="text-muted-foreground font-mono">{w.count}</span>
+											<span class="text-muted-foreground font-mono">{w.count} {w.count === 1 ? 'win' : 'wins'}</span>
 										</div>
 									{/each}
 								</div>
@@ -152,19 +151,6 @@
 										<div class="flex items-center justify-between text-sm">
 											<span class="text-foreground">{s.tag}</span>
 											<span class="text-muted-foreground font-mono">{s.streak} in a row</span>
-										</div>
-									{/each}
-								</div>
-							</div>
-						{/if}
-						{#if data.stats.topOpponents.length}
-							<div class="rounded-xl border border-border bg-card p-4">
-								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Most Unique Opponents Beaten</div>
-								<div class="space-y-1">
-									{#each data.stats.topOpponents as o}
-										<div class="flex items-center justify-between text-sm">
-											<span class="text-foreground">{o.tag}</span>
-											<span class="text-muted-foreground font-mono">{o.count} players</span>
 										</div>
 									{/each}
 								</div>

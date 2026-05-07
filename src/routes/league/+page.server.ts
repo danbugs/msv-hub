@@ -94,7 +94,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		e.count++;
 		mainWinCounts.set(winner.playerId, e);
 	}
-	const mainWins = [...mainWinCounts.values()].sort((a, b) => b.count - a.count).slice(0, 10);
+	const mainWins = [...mainWinCounts.values()].sort((a, b) => b.count - a.count);
 
 	// Consecutive micro event wins (placement 1, excluding macrospacing)
 	const eventWinners: string[] = [];
@@ -120,20 +120,6 @@ export const load: PageServerLoad = async ({ url }) => {
 		.sort((a, b) => b.streak - a.streak)
 		.slice(0, 5);
 
-	// Most unique opponents beaten
-	const opponentsBeaten = new Map<string, Set<string>>();
-	for (const m of season.matches) {
-		if (m.isDQ) continue;
-		const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
-		const set = opponentsBeaten.get(m.winnerId) ?? new Set();
-		set.add(loserId);
-		opponentsBeaten.set(m.winnerId, set);
-	}
-	const topOpponents = [...opponentsBeaten.entries()]
-		.map(([pid, set]) => ({ tag: season.players[pid]?.gamerTag ?? pid, count: set.size }))
-		.sort((a, b) => b.count - a.count)
-		.slice(0, 5);
-
 	return {
 		season: {
 			id: season.id,
@@ -144,7 +130,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		},
 		rankings: enrichedRankings,
 		events: eventTiers.reverse(),
-		stats: { mainWins, topStreaks, topOpponents },
+		stats: { mainWins, topStreaks },
 		seasonId,
 		seasonParam,
 		seasons
