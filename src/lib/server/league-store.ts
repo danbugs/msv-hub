@@ -607,12 +607,16 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 	// Biggest Upset (highest rating gap at time of match, bracket only, non-DQ)
 	const MIN_EVENTS_FOR_UPSET = 5;
 	const preEventRatings = new Map<string, Map<string, number>>();
+	const preEventCounts = new Map<string, Map<string, number>>();
 	for (const p of players) {
 		const byEvent = new Map<string, number>();
+		const byCounts = new Map<string, number>();
 		for (let i = 0; i < p.rankHistory.length; i++) {
 			byEvent.set(p.rankHistory[i].eventSlug, i > 0 ? p.rankHistory[i - 1].points : 5000);
+			byCounts.set(p.rankHistory[i].eventSlug, i);
 		}
 		preEventRatings.set(p.id, byEvent);
+		preEventCounts.set(p.id, byCounts);
 	}
 	let biggestUpset: { winnerId: string; loserId: string; gap: number; event: string } | null = null;
 	for (const m of season.matches) {
@@ -622,7 +626,9 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		const winner = season.players[m.winnerId];
 		const loser = season.players[loserId];
 		if (!winner || !loser) continue;
-		if (winner.rankHistory.length < MIN_EVENTS_FOR_UPSET || loser.rankHistory.length < MIN_EVENTS_FOR_UPSET) continue;
+		const winnerPriorEvents = preEventCounts.get(m.winnerId)?.get(m.eventSlug) ?? 0;
+		const loserPriorEvents = preEventCounts.get(loserId)?.get(m.eventSlug) ?? 0;
+		if (winnerPriorEvents < MIN_EVENTS_FOR_UPSET || loserPriorEvents < MIN_EVENTS_FOR_UPSET) continue;
 		const winnerPre = preEventRatings.get(m.winnerId)?.get(m.eventSlug);
 		const loserPre = preEventRatings.get(loserId)?.get(m.eventSlug);
 		if (winnerPre == null || loserPre == null) continue;
@@ -637,7 +643,7 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		const upsetEvent = season.events.find((e) => e.slug === biggestUpset!.event);
 		if (w && l) awards.push({
 			title: 'Biggest Upset',
-			description: `Largest rating gap at time of match in micro brackets (non-Swiss, non-DQ, no macros). Min ${MIN_EVENTS_FOR_UPSET} events for both players.`,
+			description: `Largest rating gap at time of match in micro brackets (non-Swiss, non-DQ, no macros). Both players must have ${MIN_EVENTS_FOR_UPSET}+ prior events.`,
 			playerId: w.id, playerTag: w.gamerTag,
 			secondPlayerId: l.id, secondPlayerTag: l.gamerTag,
 			value: `+${biggestUpset.gap} pts gap vs ${l.gamerTag}${upsetEvent ? ` at ${upsetEvent.name}` : ''}`
