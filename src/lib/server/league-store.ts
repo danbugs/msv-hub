@@ -151,11 +151,13 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 	}
 
 	const allTags = new Map<string, Set<string>>();
+	const latestTag = new Map<string, string>();
 	for (const m of season.matches) {
 		for (const [id, tag] of [[m.player1Id, m.player1Tag], [m.player2Id, m.player2Tag]] as const) {
 			const tags = allTags.get(id) ?? new Set();
 			tags.add(tag);
 			allTags.set(id, tags);
+			latestTag.set(id, tag);
 		}
 	}
 
@@ -204,7 +206,7 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 				const [pid, r] = ranked[i];
 				const tags = allTags.get(pid) ?? new Set();
 				const existing = players.get(pid);
-				const gamerTag = [...tags][0] ?? pid;
+				const gamerTag = latestTag.get(pid) ?? [...tags][0] ?? pid;
 				const aliases = [...tags].filter((t) => t !== gamerTag);
 				const snap = { eventSlug: evt.slug, eventNumber: evt.eventNumber, rank: i + 1, points: ratingToPoints(r), mu: r.mu, sigma: r.sigma };
 				if (existing) {
