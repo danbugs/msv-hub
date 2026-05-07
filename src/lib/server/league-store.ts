@@ -566,9 +566,9 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		}
 	}
 
-	// Biggest Up and Comer (outside top 17, sustained growth after sigma stabilizes)
-	const rankings = getRankings(season, config);
-	const topIds = new Set(rankings.slice(0, 17).map((r) => r.playerId));
+	// Biggest Up and Comer (outside top 17 by raw skill, sustained growth after sigma stabilizes)
+	const topBySkill = [...players].sort((a, b) => b.points - a.points).slice(0, 17);
+	const topIds = new Set(topBySkill.map((p) => p.id));
 	const upComerScores: { pid: string; gain: number }[] = [];
 	for (const p of players) {
 		if (topIds.has(p.id)) continue;
@@ -614,12 +614,13 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 	if (biggestUpset) {
 		const w = season.players[biggestUpset.winnerId];
 		const l = season.players[biggestUpset.loserId];
+		const upsetEvent = season.events.find((e) => e.slug === biggestUpset!.event);
 		if (w && l) awards.push({
 			title: 'Biggest Upset',
 			description: 'Largest rating gap win in bracket (non-Swiss, non-DQ). Higher gap = bigger upset.',
 			playerId: w.id, playerTag: w.gamerTag,
 			secondPlayerId: l.id, secondPlayerTag: l.gamerTag,
-			value: `+${biggestUpset.gap} pts gap vs ${l.gamerTag}`
+			value: `+${biggestUpset.gap} pts gap vs ${l.gamerTag}${upsetEvent ? ` at ${upsetEvent.name}` : ''}`
 		});
 	}
 
