@@ -131,15 +131,22 @@
 				<div class="mt-6">
 					<div class="grid gap-3 sm:grid-cols-2">
 						{#if data.stats.mainWins.length}
+							{@const multiWins = data.stats.mainWins.filter((w: { count: number }) => w.count >= 2)}
+							{@const singleWinCount = data.stats.mainWins.length - multiWins.length}
 							<div class="rounded-xl border border-border bg-card p-4">
 								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Hall of Fame</div>
 								<div class="space-y-1">
-									{#each data.stats.mainWins as w}
+									{#each multiWins as w}
 										<div class="flex items-center justify-between text-sm">
 											<span class="text-foreground">{w.tag}</span>
-											<span class="text-muted-foreground font-mono">{w.count} {w.count === 1 ? 'win' : 'wins'}</span>
+											<span class="text-muted-foreground font-mono">{w.count} wins</span>
 										</div>
 									{/each}
+									{#if singleWinCount > 0}
+										<div class="text-xs text-muted-foreground pt-1">
+											+{singleWinCount} other {singleWinCount === 1 ? 'player' : 'players'} with 1 win
+										</div>
+									{/if}
 								</div>
 							</div>
 						{/if}
