@@ -610,6 +610,7 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 	let biggestUpset: { winnerId: string; loserId: string; gap: number; event: string } | null = null;
 	for (const m of season.matches) {
 		if (m.phase === 'swiss' || m.isDQ) continue;
+		if (m.eventSlug.startsWith('macrospacing-')) continue;
 		const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
 		const winner = season.players[m.winnerId];
 		const loser = season.players[loserId];
@@ -629,7 +630,7 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		const upsetEvent = season.events.find((e) => e.slug === biggestUpset!.event);
 		if (w && l) awards.push({
 			title: 'Biggest Upset',
-			description: `Largest rating gap at time of match in bracket (non-Swiss, non-DQ). Min ${MIN_EVENTS_FOR_UPSET} events for both players.`,
+			description: `Largest rating gap at time of match in micro brackets (non-Swiss, non-DQ, no macros). Min ${MIN_EVENTS_FOR_UPSET} events for both players.`,
 			playerId: w.id, playerTag: w.gamerTag,
 			secondPlayerId: l.id, secondPlayerTag: l.gamerTag,
 			value: `+${biggestUpset.gap} pts gap vs ${l.gamerTag}${upsetEvent ? ` at ${upsetEvent.name}` : ''}`
