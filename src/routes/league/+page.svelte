@@ -128,42 +128,44 @@
 			</div>
 
 			{#if data.stats}
-				<div class="mt-6">
-					<div class="grid gap-3 sm:grid-cols-2">
-						{#if data.stats.mainWins.length}
-							{@const multiWins = data.stats.mainWins.filter((w: { count: number }) => w.count >= 2)}
-							{@const singleWinCount = data.stats.mainWins.length - multiWins.length}
-							<div class="rounded-xl border border-border bg-card p-4">
-								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Hall of Fame</div>
-								<div class="space-y-1">
+				<div class="mt-6 space-y-3">
+					{#if data.stats.mainWins.length}
+						{@const multiWins = data.stats.mainWins.filter((w: { count: number }) => w.count >= 2)}
+						{@const singleWins = data.stats.mainWins.filter((w: { count: number }) => w.count === 1)}
+						<div class="rounded-xl border border-border bg-card p-4">
+							<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-3">Hall of Fame</div>
+							{#if multiWins.length}
+								<div class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 mb-3">
 									{#each multiWins as w}
 										<div class="flex items-center justify-between text-sm">
-											<span class="text-foreground">{w.tag}</span>
-											<span class="text-muted-foreground font-mono">{w.count} wins</span>
-										</div>
-									{/each}
-									{#if singleWinCount > 0}
-										<div class="text-xs text-muted-foreground pt-1">
-											+{singleWinCount} other {singleWinCount === 1 ? 'player' : 'players'} with 1 win
-										</div>
-									{/if}
-								</div>
-							</div>
-						{/if}
-						{#if data.stats.topStreaks.length}
-							<div class="rounded-xl border border-border bg-card p-4">
-								<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Event Win Streaks</div>
-								<div class="space-y-1">
-									{#each data.stats.topStreaks as s}
-										<div class="flex items-center justify-between text-sm">
-											<span class="text-foreground">{s.tag}</span>
-											<span class="text-muted-foreground font-mono">{s.streak} in a row</span>
+											<span class="text-foreground font-medium">{w.tag}</span>
+											<span class="text-muted-foreground font-mono text-xs">{w.count}x</span>
 										</div>
 									{/each}
 								</div>
+							{/if}
+							{#if singleWins.length}
+								<div class="flex flex-wrap gap-1.5 {multiWins.length ? 'pt-2 border-t border-border' : ''}">
+									{#each singleWins as w}
+										<span class="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-md">{w.tag}</span>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{/if}
+					{#if data.stats.topStreaks.length}
+						<div class="rounded-xl border border-border bg-card p-4">
+							<div class="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Event Win Streaks</div>
+							<div class="space-y-1">
+								{#each data.stats.topStreaks as s}
+									<div class="flex items-center justify-between text-sm">
+										<span class="text-foreground">{s.tag}</span>
+										<span class="text-muted-foreground font-mono">{s.streak} in a row</span>
+									</div>
+								{/each}
 							</div>
-						{/if}
-					</div>
+						</div>
+					{/if}
 				</div>
 			{/if}
 
