@@ -8,6 +8,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	const season = await getLeagueSeason(seasonId);
 	if (!season) return Response.json({ error: 'Season not found' }, { status: 404 });
 	const config = await getLeagueConfig();
+	const rankConfig = seasonId === 0 ? { ...config, attendanceBonus: 5 } : config;
 	const minEventsParam = url.searchParams.get('minEvents');
 	const minEvents = minEventsParam ? parseInt(minEventsParam, 10) : undefined;
 
@@ -20,5 +21,5 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		}
 	}
 
-	return Response.json(computeSeasonAwards(season, minEvents, config, toIds));
+	return Response.json(computeSeasonAwards(season, minEvents, rankConfig, toIds));
 };
