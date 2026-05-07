@@ -200,10 +200,17 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 				else { m.p1Delta = Math.round(lDelta); m.p2Delta = Math.round(wDelta); }
 			}
 
+			const eventPlayerIds = new Set<string>();
+			for (const m of eventMatches) {
+				eventPlayerIds.add(m.player1Id);
+				eventPlayerIds.add(m.player2Id);
+			}
+
 			const ranked = [...ratings.entries()]
 				.sort(([, a], [, b]) => ratingToPoints(b) - ratingToPoints(a));
 			for (let i = 0; i < ranked.length; i++) {
 				const [pid, r] = ranked[i];
+				if (!eventPlayerIds.has(pid)) continue;
 				const tags = allTags.get(pid) ?? new Set();
 				const existing = players.get(pid);
 				const gamerTag = latestTag.get(pid) ?? [...tags][0] ?? pid;
