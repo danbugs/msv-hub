@@ -596,17 +596,27 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		});
 	}
 
-	// Biggest Upset (highest points gap win, bracket only, non-DQ)
+	// Biggest Upset (highest points gap win, bracket only, non-DQ, using pre-event ratings)
+	const preEventRatings = new Map<string, Map<string, number>>();
+	for (const p of players) {
+		const eventMap = new Map<string, number>();
+		let prevPoints = 5000;
+		for (const snap of p.rankHistory) {
+			eventMap.set(snap.eventSlug, prevPoints);
+			prevPoints = snap.points;
+		}
+		preEventRatings.set(p.id, eventMap);
+	}
 	let biggestUpset: { winnerId: string; loserId: string; gap: number; event: string } | null = null;
 	for (const m of season.matches) {
 		if (m.phase === 'swiss' || m.isDQ) continue;
-		const winner = season.players[m.winnerId];
-		const loser = season.players[m.winnerId === m.player1Id ? m.player2Id : m.player1Id];
-		if (!winner || !loser) continue;
-		if (loser.points <= winner.points) continue;
-		const gap = loser.points - winner.points;
+		const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
+		const winnerPts = preEventRatings.get(m.winnerId)?.get(m.eventSlug) ?? 5000;
+		const loserPts = preEventRatings.get(loserId)?.get(m.eventSlug) ?? 5000;
+		if (loserPts <= winnerPts) continue;
+		const gap = Math.round(loserPts - winnerPts);
 		if (!biggestUpset || gap > biggestUpset.gap)
-			biggestUpset = { winnerId: winner.id, loserId: loser.id, gap, event: m.eventSlug };
+			biggestUpset = { winnerId: m.winnerId, loserId, gap, event: m.eventSlug };
 	}
 	if (biggestUpset) {
 		const w = season.players[biggestUpset.winnerId];
