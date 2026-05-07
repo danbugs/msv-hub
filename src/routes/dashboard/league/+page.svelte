@@ -42,6 +42,13 @@
 
 	function getSeasonId() { return currentSeasonId; }
 
+	function syncSeasonToUrl() {
+		const param = currentSeasonId === 0 ? 'all-time' : String(currentSeasonId);
+		const url = new URL(window.location.href);
+		url.searchParams.set('season', param);
+		history.replaceState(null, '', url.toString());
+	}
+
 	onMount(async () => {
 		loading = true;
 		const seasonsRes = await fetch('/api/league/seasons');
@@ -49,6 +56,12 @@
 			seasonsList = (await seasonsRes.json()).sort((a: { id: number }, b: { id: number }) => a.id - b.id);
 			if (seasonsList.length > 0) currentSeasonId = seasonsList[seasonsList.length - 1].id;
 		}
+		const urlSeason = new URLSearchParams(window.location.search).get('season');
+		if (urlSeason) {
+			const parsed = urlSeason === 'all-time' ? 0 : parseInt(urlSeason, 10);
+			if (seasonsList.some((s) => s.id === parsed)) currentSeasonId = parsed;
+		}
+		syncSeasonToUrl();
 		await loadSeason();
 		loading = false;
 	});
@@ -187,6 +200,7 @@
 		if (!confirm(`Create Season ${newId} (${label})?`)) return;
 
 		currentSeasonId = newId;
+		syncSeasonToUrl();
 		showCreateSeason = false;
 		const planOnly = newSeasonPlanOnly;
 		newSeasonId = '';
@@ -352,7 +366,7 @@
 			<div class="mt-1 flex items-center gap-2">
 				{#if seasonsList.length > 1}
 					<select bind:value={currentSeasonId}
-						onchange={() => { loading = true; loadSeason().then(() => { loading = false; }); }}
+						onchange={() => { syncSeasonToUrl(); loading = true; loadSeason().then(() => { loading = false; }); }}
 						class="rounded-lg border border-input bg-secondary px-2 py-1 text-sm text-foreground focus:border-ring focus:outline-none">
 						{#each seasonsList as s}
 							<option value={s.id}>{s.name}</option>
@@ -369,9 +383,9 @@
 				class="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors">
 				+ New Season
 			</button>
-			<a href="/league?season={currentSeasonId}" target="_blank"
+			<a href="/league?season={currentSeasonId === 0 ? 'all-time' : currentSeasonId}"
 				class="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors">
-				Public View ↗
+				Public View
 			</a>
 		</div>
 	</div>
