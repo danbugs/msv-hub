@@ -597,8 +597,16 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		});
 	}
 
-	// Biggest Upset (highest final-rating gap win, bracket only, non-DQ)
+	// Biggest Upset (highest rating gap at time of match, bracket only, non-DQ)
 	const MIN_EVENTS_FOR_UPSET = 5;
+	const preEventRatings = new Map<string, Map<string, number>>();
+	for (const p of players) {
+		const byEvent = new Map<string, number>();
+		for (let i = 0; i < p.rankHistory.length; i++) {
+			byEvent.set(p.rankHistory[i].eventSlug, i > 0 ? p.rankHistory[i - 1].points : 5000);
+		}
+		preEventRatings.set(p.id, byEvent);
+	}
 	let biggestUpset: { winnerId: string; loserId: string; gap: number; event: string } | null = null;
 	for (const m of season.matches) {
 		if (m.phase === 'swiss' || m.isDQ) continue;
@@ -607,8 +615,11 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		const loser = season.players[loserId];
 		if (!winner || !loser) continue;
 		if (winner.rankHistory.length < MIN_EVENTS_FOR_UPSET || loser.rankHistory.length < MIN_EVENTS_FOR_UPSET) continue;
-		if (loser.points <= winner.points) continue;
-		const gap = Math.round(loser.points - winner.points);
+		const winnerPre = preEventRatings.get(m.winnerId)?.get(m.eventSlug);
+		const loserPre = preEventRatings.get(loserId)?.get(m.eventSlug);
+		if (winnerPre == null || loserPre == null) continue;
+		if (loserPre <= winnerPre) continue;
+		const gap = Math.round(loserPre - winnerPre);
 		if (!biggestUpset || gap > biggestUpset.gap)
 			biggestUpset = { winnerId: winner.id, loserId: loser.id, gap, event: m.eventSlug };
 	}
@@ -618,7 +629,7 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		const upsetEvent = season.events.find((e) => e.slug === biggestUpset!.event);
 		if (w && l) awards.push({
 			title: 'Biggest Upset',
-			description: 'Largest rating gap win in bracket (non-Swiss, non-DQ). Higher gap = bigger upset.',
+			description: `Largest rating gap at time of match in bracket (non-Swiss, non-DQ). Min ${MIN_EVENTS_FOR_UPSET} events for both players.`,
 			playerId: w.id, playerTag: w.gamerTag,
 			secondPlayerId: l.id, secondPlayerTag: l.gamerTag,
 			value: `+${biggestUpset.gap} pts gap vs ${l.gamerTag}${upsetEvent ? ` at ${upsetEvent.name}` : ''}`
