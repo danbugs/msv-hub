@@ -68,7 +68,7 @@
 		if (configRes.ok) {
 			const cfg = await configRes.json();
 			minEvents = cfg.minEvents ?? 2;
-			attendanceBonus = cfg.attendanceBonus ?? 50;
+			attendanceBonus = sid === 0 ? 5 : (cfg.attendanceBonus ?? 50);
 		}
 		if (!awardsMinEvents && season) {
 			awardsMinEvents = String(Math.max(2, Math.floor(season.events.length * 0.4)));
