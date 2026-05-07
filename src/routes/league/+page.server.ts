@@ -116,6 +116,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		if (streakLen > (eventStreaks.get(pid) ?? 0)) eventStreaks.set(pid, streakLen);
 	}
 	const topStreaks = [...eventStreaks.entries()]
+		.filter(([, streak]) => streak >= 2)
 		.map(([pid, streak]) => ({ tag: season.players[pid]?.gamerTag ?? pid, streak }))
 		.sort((a, b) => b.streak - a.streak)
 		.slice(0, 5);

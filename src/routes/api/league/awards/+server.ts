@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
 import { getLeagueSeason, getLeagueConfig, computeSeasonAwards } from '$lib/server/league-store';
+import { getEventConfig } from '$lib/server/store';
 
 export const GET: RequestHandler = async ({ locals, url }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -9,5 +10,15 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	const config = await getLeagueConfig();
 	const minEventsParam = url.searchParams.get('minEvents');
 	const minEvents = minEventsParam ? parseInt(minEventsParam, 10) : undefined;
-	return Response.json(computeSeasonAwards(season, minEvents, config));
+
+	const eventConfig = await getEventConfig();
+	const toNames = new Set(eventConfig.tos.map((t) => t.name.toLowerCase()));
+	const toIds = new Set<string>();
+	for (const p of Object.values(season.players)) {
+		if (toNames.has(p.gamerTag.toLowerCase()) || p.aliases.some((a) => toNames.has(a.toLowerCase()))) {
+			toIds.add(p.id);
+		}
+	}
+
+	return Response.json(computeSeasonAwards(season, minEvents, config, toIds));
 };

@@ -469,19 +469,21 @@ function computeCharacterStats(matches: LeagueMatch[], playerId: string): { name
 		.sort((a, b) => b.count - a.count);
 }
 
-export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: number, config?: { minEvents?: number; attendanceBonus?: number }): SeasonAward[] {
+export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: number, config?: { minEvents?: number; attendanceBonus?: number }, excludeIds?: Set<string>): SeasonAward[] {
 	const awards: SeasonAward[] = [];
 	const players = Object.values(season.players);
 	const MIN_EVENTS = overrideMinEvents ?? Math.max(2, Math.floor(season.events.length * 0.4));
 
-	// Most Attended (show all tied)
+	// Most Attended (show all tied, excluding TOs)
 	const attendance = new Map<string, number>();
 	for (const evt of season.events) {
 		for (const p of evt.placements) {
 			attendance.set(p.playerId, (attendance.get(p.playerId) ?? 0) + 1);
 		}
 	}
-	const sortedAttendance = [...attendance.entries()].sort((a, b) => b[1] - a[1]);
+	const sortedAttendance = [...attendance.entries()]
+		.filter(([pid]) => !excludeIds?.has(pid))
+		.sort((a, b) => b[1] - a[1]);
 	const maxAttendance = sortedAttendance[0]?.[1] ?? 0;
 	const tied = sortedAttendance.filter(([, count]) => count === maxAttendance);
 	if (tied.length > 0) {
