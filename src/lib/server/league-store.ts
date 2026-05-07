@@ -566,13 +566,13 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		}
 	}
 
-	// Biggest Up and Comer (bottom half of ranked players, sustained growth after sigma stabilizes)
+	// Biggest Up and Comer (outside top third, sustained growth after sigma stabilizes)
 	const rankings = getRankings(season, config);
 	const qualifiedCount = rankings.length;
-	const topHalfIds = new Set(rankings.slice(0, Math.floor(qualifiedCount / 2)).map((r) => r.playerId));
+	const topThirdIds = new Set(rankings.slice(0, Math.floor(qualifiedCount / 3)).map((r) => r.playerId));
 	const upComerScores: { pid: string; gain: number }[] = [];
 	for (const p of players) {
-		if (topHalfIds.has(p.id)) continue;
+		if (topThirdIds.has(p.id)) continue;
 		if ((attendance.get(p.id) ?? 0) < MIN_EVENTS) continue;
 		if (p.rankHistory.length < 4) continue;
 		const stableStart = p.rankHistory[2].points;
@@ -586,7 +586,7 @@ export function computeSeasonAwards(season: LeagueSeason, overrideMinEvents?: nu
 		const p = season.players[top.pid];
 		if (p) awards.push({
 			title: 'Biggest Up and Comer',
-			description: `Total rating gain from 3rd event onward (after initial uncertainty settles), bottom half of ${qualifiedCount} ranked players. Min ${MIN_EVENTS} events.`,
+			description: `Total rating gain from 3rd event onward (after initial uncertainty settles), outside top third of ${qualifiedCount} ranked players. Min ${MIN_EVENTS} events.`,
 			playerId: p.id, playerTag: p.gamerTag,
 			value: `+${top.gain} pts`,
 			candidates: upComerScores.slice(1, 6).map((c) => ({
