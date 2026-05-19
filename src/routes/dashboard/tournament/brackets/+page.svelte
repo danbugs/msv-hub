@@ -619,35 +619,6 @@
 							<pre class="mt-1 text-xs text-success whitespace-pre-wrap">{syncResult}</pre>
 						{/if}
 
-						{#if placingBracket === bracketName}
-							<div class="mt-2 rounded-lg border border-dashed border-border p-3 space-y-2">
-								<div class="grid gap-2 sm:grid-cols-4">
-									<select bind:value={placeMatchId} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground">
-										<option value="">Match...</option>
-										{#each bracket.matches.filter((m) => !m.winnerId).sort((a, b) => { const aR = Math.abs(a.round); const bR = Math.abs(b.round); if (aR !== bR) return aR - bR; return a.matchIndex - b.matchIndex; }) as m}
-											<option value={m.id}>{m.id.replace(`${bracketName}-`, '')} ({getEntrant(m.topPlayerId)?.gamerTag ?? '—'} vs {getEntrant(m.bottomPlayerId)?.gamerTag ?? '—'})</option>
-										{/each}
-									</select>
-									<select bind:value={placeSlot} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground">
-										<option value="top">Top</option>
-										<option value="bottom">Bottom</option>
-									</select>
-									<select bind:value={placeEntrantId} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground">
-										<option value="">Player...</option>
-										{#each tournament!.entrants.sort((a, b) => a.gamerTag.localeCompare(b.gamerTag)) as e}
-											<option value={e.id}>{e.gamerTag}</option>
-										{/each}
-									</select>
-									<Button variant="outline" size="sm" onclick={submitPlacement} disabled={placingPlayer || !placeMatchId || !placeEntrantId}>
-										{placingPlayer ? 'Placing...' : 'Place'}
-									</Button>
-								</div>
-								{#if placeResult}
-									<p class="text-xs {placeResult.startsWith('Placed') ? 'text-success' : 'text-destructive'}">{placeResult}</p>
-								{/if}
-							</div>
-						{/if}
-
 						<div class="mt-3 overflow-x-auto">
 							<BracketView
 								bracket={bracket}
@@ -931,3 +902,39 @@
 	{/if}
 	{/if}
 </main>
+
+{#if placingBracket && tournament?.brackets}
+	{@const bracket = tournament.brackets[placingBracket]}
+	{#if bracket}
+		<div class="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card p-3 shadow-lg">
+			<div class="mx-auto max-w-4xl flex flex-wrap items-center gap-2">
+				<span class="text-xs font-medium text-foreground shrink-0">Fix Slot ({placingBracket}):</span>
+				<select bind:value={placeMatchId} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground min-w-0 flex-1">
+					<option value="">Match...</option>
+					{#each bracket.matches.filter((m) => !m.winnerId).sort((a, b) => { const aR = Math.abs(a.round); const bR = Math.abs(b.round); if (aR !== bR) return aR - bR; return a.matchIndex - b.matchIndex; }) as m}
+						<option value={m.id}>{m.id.replace(`${placingBracket}-`, '')} ({getEntrant(m.topPlayerId)?.gamerTag ?? '—'} vs {getEntrant(m.bottomPlayerId)?.gamerTag ?? '—'})</option>
+					{/each}
+				</select>
+				<select bind:value={placeSlot} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground w-20">
+					<option value="top">Top</option>
+					<option value="bottom">Bottom</option>
+				</select>
+				<select bind:value={placeEntrantId} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground min-w-0 flex-1">
+					<option value="">Player...</option>
+					{#each tournament.entrants.sort((a, b) => a.gamerTag.localeCompare(b.gamerTag)) as e}
+						<option value={e.id}>{e.gamerTag}</option>
+					{/each}
+				</select>
+				<Button variant="default" size="sm" onclick={submitPlacement} disabled={placingPlayer || !placeMatchId || !placeEntrantId}>
+					{placingPlayer ? 'Placing...' : 'Place'}
+				</Button>
+				<Button variant="outline" size="sm" onclick={() => { placingBracket = null; placeResult = ''; }}>
+					Close
+				</Button>
+				{#if placeResult}
+					<span class="text-xs {placeResult.startsWith('Placed') ? 'text-success' : 'text-destructive'} w-full">{placeResult}</span>
+				{/if}
+			</div>
+		</div>
+	{/if}
+{/if}
