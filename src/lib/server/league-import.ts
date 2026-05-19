@@ -90,7 +90,7 @@ query EventStandings($eventId: ID!, $page: Int!, $perPage: Int!) {
 }`;
 
 const API_DELAY = 800;
-const SETS_PER_PAGE = 50;
+const SETS_PER_PAGE = 25;
 
 async function fetchLeagueSets(eventId: number): Promise<GqlRecord[]> {
 	const all: GqlRecord[] = [];
