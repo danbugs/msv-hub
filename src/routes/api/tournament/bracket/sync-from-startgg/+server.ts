@@ -237,8 +237,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				}
 			}
 			// Propagate loser
-			if (m.loserNextMatchId && !m.loserId) {
-				const loserId = m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId;
+			if (m.loserNextMatchId) {
+				const loserId = m.loserId ?? (m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId);
 				if (loserId) {
 					const next = bracket.matches.find((n) => n.id === m.loserNextMatchId);
 					if (next) {
