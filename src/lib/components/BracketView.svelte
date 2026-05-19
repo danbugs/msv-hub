@@ -390,8 +390,8 @@
 			{@const accent = called ? 'var(--accent-called)' : match.isStream && ready ? 'var(--accent-stream)' : ready ? 'var(--accent-ready)' : match.winnerId ? 'var(--accent-completed)' : 'var(--accent-waiting)'}
 			{@const waveInfo = waveMap?.get(match.id)}
 
-			<div class="absolute rounded-lg border border-border overflow-hidden bg-card match-card {called ? 'msv-pulse accent-glow-called' : ''} {ready ? 'match-card-interactive' : ''}"
-				style="left: {x}px; top: {y}px; width: {CARD_W}px; border-left: 3px solid {accent}; {waveInfo && !match.winnerId ? `background: ${waveInfo.color}` : ''}"
+			<div class="absolute rounded-lg border border-border bg-card match-card {editingSlot?.matchId === match.id ? '' : 'overflow-hidden'} {called ? 'msv-pulse accent-glow-called' : ''} {ready ? 'match-card-interactive' : ''}"
+				style="left: {x}px; top: {y}px; width: {CARD_W}px; border-left: 3px solid {accent}; {waveInfo && !match.winnerId ? `background: ${waveInfo.color}` : ''}{editingSlot?.matchId === match.id ? '; z-index: 60;' : ''}"
 			>
 
 				<!-- Top player -->
