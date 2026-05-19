@@ -264,6 +264,103 @@ describe('generateBracket', () => {
 		);
 		expect(byeMatches.length).toBeGreaterThan(0);
 	});
+
+	it('LR4 drops WR3 losers reversed (opposite side) for 24-player bracket', () => {
+		const entrants24: Entrant[] = Array.from({ length: 24 }, (_, i) => ({
+			id: `p-${i + 1}`,
+			gamerTag: `Player${i + 1}`,
+			initialSeed: i + 1
+		}));
+		const standings24 = entrants24.map((e) => ({
+			rank: e.initialSeed, entrantId: e.id, gamerTag: e.gamerTag,
+			wins: 0, losses: 0, initialSeed: e.initialSeed, totalScore: 0,
+			basePoints: 0, winPoints: 0, lossPoints: 0, cinderellaBonus: 0,
+			expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
+		}));
+		const players24 = entrants24.map((e) => ({ entrantId: e.id, seed: e.initialSeed }));
+		let bracket = generateBracket('main', players24, standings24);
+
+		function playReady(round: number) {
+			const ready = bracket.matches.filter(
+				(m) => m.round === round && m.topPlayerId && m.bottomPlayerId && !m.winnerId
+			);
+			for (const m of ready) {
+				const topSeed = entrants24.find((e) => e.id === m.topPlayerId)?.initialSeed ?? 999;
+				const botSeed = entrants24.find((e) => e.id === m.bottomPlayerId)?.initialSeed ?? 999;
+				bracket = reportBracketMatch(bracket, m.id, topSeed < botSeed ? m.topPlayerId! : m.bottomPlayerId!);
+			}
+		}
+
+		// Play through to populate LR4: WR1→WR2→WR3, LR1→LR2→LR3
+		playReady(1);   // WR1
+		playReady(-1);  // LR1
+		playReady(2);   // WR2
+		playReady(-2);  // LR2
+		playReady(3);   // WR3
+		playReady(-3);  // LR3
+
+		// LR4 matches should now have both players
+		const lr4 = bracket.matches
+			.filter((m) => m.round === -4)
+			.sort((a, b) => a.matchIndex - b.matchIndex);
+		expect(lr4.length).toBe(4);
+
+		// WR3 matches (sorted by matchIndex)
+		const wr3 = bracket.matches
+			.filter((m) => m.round === 3)
+			.sort((a, b) => a.matchIndex - b.matchIndex);
+		expect(wr3.length).toBe(4);
+
+		// Verify reversed drops: WR3[i] loser → LR4[numMatches-1-i]
+		for (let i = 0; i < wr3.length; i++) {
+			const wr3Match = wr3[i];
+			const loserId = wr3Match.topPlayerId === wr3Match.winnerId
+				? wr3Match.bottomPlayerId
+				: wr3Match.topPlayerId;
+			const expectedTarget = lr4[lr4.length - 1 - i];
+			expect(expectedTarget.bottomPlayerId).toBe(loserId);
+		}
+
+		// No player appears in multiple LR4 matches
+		const lr4Players = lr4.flatMap((m) => [m.topPlayerId, m.bottomPlayerId].filter(Boolean));
+		expect(new Set(lr4Players).size).toBe(lr4Players.length);
+	});
+
+	it('no player appears in two matches after full bracket generation with byes', () => {
+		const entrants20: Entrant[] = Array.from({ length: 20 }, (_, i) => ({
+			id: `p-${i + 1}`,
+			gamerTag: `Player${i + 1}`,
+			initialSeed: i + 1
+		}));
+		const standings20 = entrants20.map((e) => ({
+			rank: e.initialSeed, entrantId: e.id, gamerTag: e.gamerTag,
+			wins: 0, losses: 0, initialSeed: e.initialSeed, totalScore: 0,
+			basePoints: 0, winPoints: 0, lossPoints: 0, cinderellaBonus: 0,
+			expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
+		}));
+		const players20 = entrants20.map((e) => ({ entrantId: e.id, seed: e.initialSeed }));
+		const bracket = generateBracket('main', players20, standings20);
+
+		// After generation (with bye auto-advancement), no player should be in 2+ matches
+		const playerMatches = new Map<string, string[]>();
+		for (const m of bracket.matches) {
+			for (const pid of [m.topPlayerId, m.bottomPlayerId].filter(Boolean) as string[]) {
+				if (!playerMatches.has(pid)) playerMatches.set(pid, []);
+				playerMatches.get(pid)!.push(m.id);
+			}
+		}
+		for (const [pid, matchIds] of playerMatches) {
+			if (matchIds.length > 1) {
+				// A player can appear in a completed match (has winnerId) and their next match
+				const completedCount = matchIds.filter((mid) => {
+					const m = bracket.matches.find((x) => x.id === mid);
+					return m?.winnerId;
+				}).length;
+				const pendingCount = matchIds.length - completedCount;
+				expect(pendingCount).toBeLessThanOrEqual(1);
+			}
+		}
+	});
 });
 
 describe('Full tournament integration', () => {
