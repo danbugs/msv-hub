@@ -313,6 +313,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 			if (msvWinner && (msvWinner === msvE1 || msvWinner === msvE2)) {
 				m.winnerId = msvWinner;
+				m.loserId = msvWinner === msvE1 ? msvE2 : msvE1;
 				const { topScore, bottomScore } = parseScores(s, msvE1!, m.topPlayerId);
 				m.topScore = topScore;
 				m.bottomScore = bottomScore;
@@ -331,6 +332,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Final propagation after all rounds are synced
 	propagateAndAdvance();
+
+	// Defensive: detect and clear duplicate players in any match.
+	for (const m of bracket.matches) {
+		if (m.topPlayerId && m.bottomPlayerId && m.topPlayerId === m.bottomPlayerId) {
+			debug.push(`SYNC: duplicate player ${m.topPlayerId} in ${m.id} — clearing bottom`);
+			m.bottomPlayerId = undefined;
+			m.winnerId = undefined;
+			m.topScore = undefined;
+			m.bottomScore = undefined;
+		}
+	}
 
 	const totalReported = (sets as GqlRecord[]).filter((s) => s.winnerId).length;
 	const notFound = totalReported - synced;
