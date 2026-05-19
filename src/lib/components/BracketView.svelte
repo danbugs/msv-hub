@@ -16,10 +16,37 @@
 		onCall?: (match: BracketMatch) => void;
 		/** If provided, a stream button appears on ready match cards. */
 		onStream?: (match: BracketMatch) => void;
+		/** If provided, player names in unreported matches are clickable to swap. */
+		onPlacePlayer?: (matchId: string, slot: 'top' | 'bottom', entrantId: string) => Promise<void>;
 		waveMap?: WaveMap;
 	}
 
-	let { bracket, entrants, onReport, onCall, onStream, waveMap }: Props = $props();
+	let { bracket, entrants, onReport, onCall, onStream, onPlacePlayer, waveMap }: Props = $props();
+
+	let editingSlot = $state<{ matchId: string; slot: 'top' | 'bottom' } | null>(null);
+	let editSearch = $state('');
+
+	function startEdit(matchId: string, slot: 'top' | 'bottom') {
+		if (!onPlacePlayer) return;
+		editingSlot = { matchId, slot };
+		editSearch = '';
+	}
+
+	async function pickPlayer(entrantId: string) {
+		if (!editingSlot || !onPlacePlayer) return;
+		const { matchId, slot } = editingSlot;
+		editingSlot = null;
+		await onPlacePlayer(matchId, slot, entrantId);
+	}
+
+	const editFilteredEntrants = $derived.by(() => {
+		if (!editingSlot) return [];
+		const q = editSearch.toLowerCase();
+		return entrants
+			.filter((e) => !q || e.gamerTag.toLowerCase().includes(q))
+			.sort((a, b) => a.gamerTag.localeCompare(b.gamerTag))
+			.slice(0, 12);
+	});
 
 	let showProjected = $state(false);
 	let now = $state(Date.now());
@@ -374,9 +401,30 @@
 					<span class="text-[10px] font-mono text-muted-foreground w-5 text-right shrink-0 tabular-nums">
 						{top ? top.initialSeed : ''}
 					</span>
-					<span class="flex-1 truncate text-sm {topIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.topPlayerId ? 'text-bracket-winner font-semibold' : 'text-foreground font-medium'}">
-						{top?.gamerTag ?? (match.topPlayerId ? '?' : '—')}
-					</span>
+					{#if !match.winnerId && onPlacePlayer && editingSlot?.matchId === match.id && editingSlot?.slot === 'top'}
+						<div class="flex-1 relative">
+							<input type="text" bind:value={editSearch} placeholder="Search..."
+								class="w-full rounded border border-input bg-secondary px-1 py-0.5 text-xs text-foreground"
+								autofocus
+								onkeydown={(e) => { if (e.key === 'Escape') editingSlot = null; }}
+							/>
+							<div class="absolute left-0 top-full z-50 mt-0.5 w-44 max-h-40 overflow-y-auto rounded border border-border bg-card shadow-lg">
+								{#each editFilteredEntrants as e}
+									<button onclick={() => pickPlayer(e.id)}
+										class="block w-full text-left px-2 py-1 text-xs text-foreground hover:bg-accent truncate">
+										{e.gamerTag}
+									</button>
+								{/each}
+							</div>
+						</div>
+					{:else}
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<span class="flex-1 truncate text-sm {topIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.topPlayerId ? 'text-bracket-winner font-semibold' : 'text-foreground font-medium'} {!match.winnerId && onPlacePlayer ? 'cursor-pointer hover:underline' : ''}"
+							onclick={() => { if (!match.winnerId && onPlacePlayer) startEdit(match.id, 'top'); }}>
+							{top?.gamerTag ?? (match.topPlayerId ? '?' : '—')}
+						</span>
+					{/if}
 					{#if match.topScore !== undefined}
 						<span class="text-xs font-mono tabular-nums {match.winnerId === match.topPlayerId ? 'text-bracket-winner font-bold' : 'text-muted-foreground'} shrink-0">
 							{match.topScore}
@@ -395,9 +443,30 @@
 					<span class="text-[10px] font-mono text-muted-foreground w-5 text-right shrink-0 tabular-nums">
 						{bot ? bot.initialSeed : ''}
 					</span>
-					<span class="flex-1 truncate text-sm {botIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.bottomPlayerId ? 'text-bracket-winner font-semibold' : 'text-foreground font-medium'}">
-						{bot?.gamerTag ?? (match.bottomPlayerId ? '?' : '—')}
-					</span>
+					{#if !match.winnerId && onPlacePlayer && editingSlot?.matchId === match.id && editingSlot?.slot === 'bottom'}
+						<div class="flex-1 relative">
+							<input type="text" bind:value={editSearch} placeholder="Search..."
+								class="w-full rounded border border-input bg-secondary px-1 py-0.5 text-xs text-foreground"
+								autofocus
+								onkeydown={(e) => { if (e.key === 'Escape') editingSlot = null; }}
+							/>
+							<div class="absolute left-0 top-full z-50 mt-0.5 w-44 max-h-40 overflow-y-auto rounded border border-border bg-card shadow-lg">
+								{#each editFilteredEntrants as e}
+									<button onclick={() => pickPlayer(e.id)}
+										class="block w-full text-left px-2 py-1 text-xs text-foreground hover:bg-accent truncate">
+											{e.gamerTag}
+									</button>
+								{/each}
+							</div>
+						</div>
+					{:else}
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<span class="flex-1 truncate text-sm {botIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.bottomPlayerId ? 'text-bracket-winner font-semibold' : 'text-foreground font-medium'} {!match.winnerId && onPlacePlayer ? 'cursor-pointer hover:underline' : ''}"
+							onclick={() => { if (!match.winnerId && onPlacePlayer) startEdit(match.id, 'bottom'); }}>
+							{bot?.gamerTag ?? (match.bottomPlayerId ? '?' : '—')}
+						</span>
+					{/if}
 					{#if match.bottomScore !== undefined}
 						<span class="text-xs font-mono tabular-nums {match.winnerId === match.bottomPlayerId ? 'text-bracket-winner font-bold' : 'text-muted-foreground'} shrink-0">
 							{match.bottomScore}

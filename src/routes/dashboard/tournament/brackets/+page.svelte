@@ -356,35 +356,6 @@
 		await loadTournament();
 	}
 
-	// Manual player placement
-	let placingBracket = $state<'main' | 'redemption' | null>(null);
-	let placeMatchId = $state('');
-	let placeSlot = $state<'top' | 'bottom'>('top');
-	let placeEntrantId = $state('');
-	let placingPlayer = $state(false);
-	let placeResult = $state('');
-
-	async function submitPlacement() {
-		if (!placingBracket || !placeMatchId || !placeEntrantId || placingPlayer) return;
-		placingPlayer = true;
-		placeResult = '';
-		const res = await fetch('/api/tournament/bracket/place-player', {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				bracketName: placingBracket,
-				matchId: placeMatchId,
-				slot: placeSlot,
-				entrantId: placeEntrantId
-			})
-		});
-		const data = await res.json();
-		if (res.ok) placeResult = `Placed ${data.placedTag} in ${placeSlot} slot of ${placeMatchId}`;
-		else placeResult = data.error ?? 'Failed';
-		placingPlayer = false;
-		await loadTournament();
-	}
-
 	async function submitReport() {
 		if (!reportingMatch || !reportWinnerId || !reportScore || submittingReport) return;
 		error = '';
@@ -591,14 +562,9 @@
 							<h2 class="text-sm font-bold {bracketName === 'main' ? 'text-primary' : 'text-destructive'}">
 								{bracketName === 'main' ? 'Main Bracket' : 'Redemption Bracket'}
 							</h2>
-							<div class="flex items-center gap-2">
-								<Button variant="outline" size="sm" onclick={() => { placingBracket = placingBracket === bracketName ? null : bracketName as 'main' | 'redemption'; placeResult = ''; }}>
-									{placingBracket === bracketName ? 'Cancel' : 'Fix Slot'}
-								</Button>
-								<Button variant="outline" size="sm" onclick={() => { activeBracket = bracketName as 'main' | 'redemption'; syncFromStartGG(); }} disabled={syncingFromStartGG}>
-									{syncingFromStartGG && activeBracket === bracketName ? 'Syncing...' : 'Sync'}
-								</Button>
-							</div>
+							<Button variant="outline" size="sm" onclick={() => { activeBracket = bracketName as 'main' | 'redemption'; syncFromStartGG(); }} disabled={syncingFromStartGG}>
+								{syncingFromStartGG && activeBracket === bracketName ? 'Syncing...' : 'Sync'}
+							</Button>
 						</div>
 
 						<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -626,6 +592,16 @@
 								onReport={(m) => { activeBracket = bracketName as 'main' | 'redemption'; openReport(m); }}
 								onCall={(m) => { activeBracket = bracketName as 'main' | 'redemption'; callMatch(m); }}
 								onStream={(m) => { activeBracket = bracketName as 'main' | 'redemption'; setStreamMatch(m); }}
+								onPlacePlayer={async (matchId, slot, entrantId) => {
+									const res = await fetch('/api/tournament/bracket/place-player', {
+										method: 'PATCH',
+										headers: { 'Content-Type': 'application/json' },
+										body: JSON.stringify({ bracketName, matchId, slot, entrantId })
+									});
+									const data = await res.json();
+									if (!res.ok) error = data.error ?? 'Failed to place player';
+									await loadTournament();
+								}}
 								{waveMap} />
 						</div>
 					</section>
@@ -903,38 +879,3 @@
 	{/if}
 </main>
 
-{#if placingBracket && tournament?.brackets}
-	{@const bracket = tournament.brackets[placingBracket]}
-	{#if bracket}
-		<div class="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card p-3 shadow-lg">
-			<div class="mx-auto max-w-4xl flex flex-wrap items-center gap-2">
-				<span class="text-xs font-medium text-foreground shrink-0">Fix Slot ({placingBracket}):</span>
-				<select bind:value={placeMatchId} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground min-w-0 flex-1">
-					<option value="">Match...</option>
-					{#each bracket.matches.filter((m) => !m.winnerId).sort((a, b) => { const aR = Math.abs(a.round); const bR = Math.abs(b.round); if (aR !== bR) return aR - bR; return a.matchIndex - b.matchIndex; }) as m}
-						<option value={m.id}>{m.id.replace(`${placingBracket}-`, '')} ({getEntrant(m.topPlayerId)?.gamerTag ?? '—'} vs {getEntrant(m.bottomPlayerId)?.gamerTag ?? '—'})</option>
-					{/each}
-				</select>
-				<select bind:value={placeSlot} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground w-20">
-					<option value="top">Top</option>
-					<option value="bottom">Bottom</option>
-				</select>
-				<select bind:value={placeEntrantId} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground min-w-0 flex-1">
-					<option value="">Player...</option>
-					{#each tournament.entrants.sort((a, b) => a.gamerTag.localeCompare(b.gamerTag)) as e}
-						<option value={e.id}>{e.gamerTag}</option>
-					{/each}
-				</select>
-				<Button variant="default" size="sm" onclick={submitPlacement} disabled={placingPlayer || !placeMatchId || !placeEntrantId}>
-					{placingPlayer ? 'Placing...' : 'Place'}
-				</Button>
-				<Button variant="outline" size="sm" onclick={() => { placingBracket = null; placeResult = ''; }}>
-					Close
-				</Button>
-				{#if placeResult}
-					<span class="text-xs {placeResult.startsWith('Placed') ? 'text-success' : 'text-destructive'} w-full">{placeResult}</span>
-				{/if}
-			</div>
-		</div>
-	{/if}
-{/if}
