@@ -59,9 +59,7 @@
 			}
 		}
 		if (seasonsRes.ok) {
-			const seasons = await seasonsRes.json();
-			leagueSeasons = seasons;
-			if (seasons.length) leagueSeasonId = String(Math.max(...seasons.map((s: { id: number }) => s.id)));
+			leagueSeasons = await seasonsRes.json();
 		}
 	});
 

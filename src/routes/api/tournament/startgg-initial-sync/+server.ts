@@ -79,14 +79,34 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// Resolve Swiss event ID from slug if not stored
 	if (!swissEventId) {
 		const slug = eventSlug.replace(/^https?:\/\/[^/]+\//i, '').replace(/^\/+|\/+$/g, '');
-		const eventData = await gql<{ event: { id: number } }>(EVENT_BY_SLUG_QUERY, { slug });
-		if (!eventData?.event) {
-			return Response.json({ error: `Event not found: ${slug}` }, { status: 404 });
+
+		if (slug.includes('/event/')) {
+			const eventData = await gql<{ event: { id: number } }>(EVENT_BY_SLUG_QUERY, { slug });
+			if (!eventData?.event) {
+				return Response.json({ error: `Event not found: ${slug}` }, { status: 404 });
+			}
+			swissEventId = eventData.event.id;
+			tournament.startggEventSlug = slug;
+		} else {
+			const tournSlug = slug.match(/tournament\/([^/]+)/)?.[1] ?? slug.replace(/^tournament\//, '');
+			const tData = await gql<{ tournament: { events: { id: number; name: string; slug: string; numEntrants: number }[] } }>(
+				TOURNAMENT_QUERY, { slug: tournSlug }
+			);
+			const events = tData?.tournament?.events ?? [];
+			if (!events.length) {
+				return Response.json({ error: `No events found for tournament: ${tournSlug}` }, { status: 404 });
+			}
+			const isGauntletMode = tournament.mode === 'gauntlet';
+			let target = isGauntletMode
+				? events.find((e) => /main/i.test(e.name))
+				: events.find((e) => /swiss/i.test(e.name));
+			if (!target) target = events.find((e) => (e.numEntrants ?? 0) > 0) ?? events[0];
+			swissEventId = target.id;
+			tournament.startggEventSlug = target.slug;
 		}
-		swissEventId = eventData.event.id;
+
 		tournament.startggEventId = swissEventId;
-		tournament.startggEventSlug = slug;
-		eventSlug = slug;
+		eventSlug = tournament.startggEventSlug!;
 	}
 
 	if (!tournament.attendance?.length && swissEventId) {
