@@ -356,6 +356,35 @@
 		await loadTournament();
 	}
 
+	// Manual player placement
+	let placingBracket = $state<'main' | 'redemption' | null>(null);
+	let placeMatchId = $state('');
+	let placeSlot = $state<'top' | 'bottom'>('top');
+	let placeEntrantId = $state('');
+	let placingPlayer = $state(false);
+	let placeResult = $state('');
+
+	async function submitPlacement() {
+		if (!placingBracket || !placeMatchId || !placeEntrantId || placingPlayer) return;
+		placingPlayer = true;
+		placeResult = '';
+		const res = await fetch('/api/tournament/bracket/place-player', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				bracketName: placingBracket,
+				matchId: placeMatchId,
+				slot: placeSlot,
+				entrantId: placeEntrantId
+			})
+		});
+		const data = await res.json();
+		if (res.ok) placeResult = `Placed ${data.placedTag} in ${placeSlot} slot of ${placeMatchId}`;
+		else placeResult = data.error ?? 'Failed';
+		placingPlayer = false;
+		await loadTournament();
+	}
+
 	async function submitReport() {
 		if (!reportingMatch || !reportWinnerId || !reportScore || submittingReport) return;
 		error = '';
@@ -583,6 +612,44 @@
 
 						{#if syncResult && activeBracket === bracketName}
 							<pre class="mt-1 text-xs text-success whitespace-pre-wrap">{syncResult}</pre>
+						{/if}
+
+						{#if placingBracket === bracketName}
+							<div class="mt-2 rounded-lg border border-dashed border-border p-3 space-y-2">
+								<div class="flex items-center justify-between">
+									<span class="text-xs font-medium text-muted-foreground">Manual Slot Placement</span>
+									<button onclick={() => { placingBracket = null; placeResult = ''; }} class="text-xs text-muted-foreground hover:text-foreground">&times;</button>
+								</div>
+								<div class="grid gap-2 sm:grid-cols-4">
+									<select bind:value={placeMatchId} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground">
+										<option value="">Match...</option>
+										{#each bracket.matches.filter((m) => !m.winnerId).sort((a, b) => { const aR = Math.abs(a.round); const bR = Math.abs(b.round); if (aR !== bR) return aR - bR; return a.matchIndex - b.matchIndex; }) as m}
+											<option value={m.id}>{m.id.replace(`${bracketName}-`, '')} ({getEntrant(m.topPlayerId)?.gamerTag ?? '—'} vs {getEntrant(m.bottomPlayerId)?.gamerTag ?? '—'})</option>
+										{/each}
+									</select>
+									<select bind:value={placeSlot} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground">
+										<option value="top">Top</option>
+										<option value="bottom">Bottom</option>
+									</select>
+									<select bind:value={placeEntrantId} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground">
+										<option value="">Player...</option>
+										{#each tournament!.entrants.sort((a, b) => a.gamerTag.localeCompare(b.gamerTag)) as e}
+											<option value={e.id}>{e.gamerTag}</option>
+										{/each}
+									</select>
+									<Button variant="outline" size="sm" onclick={submitPlacement} disabled={placingPlayer || !placeMatchId || !placeEntrantId}>
+										{placingPlayer ? 'Placing...' : 'Place'}
+									</Button>
+								</div>
+								{#if placeResult}
+									<p class="text-xs {placeResult.startsWith('Placed') ? 'text-success' : 'text-destructive'}">{placeResult}</p>
+								{/if}
+							</div>
+						{:else}
+							<button onclick={() => { placingBracket = bracketName as 'main' | 'redemption'; placeResult = ''; }}
+								class="mt-1 text-xs text-muted-foreground hover:text-foreground">
+								Fix slot...
+							</button>
 						{/if}
 
 						<div class="mt-3 overflow-x-auto">
