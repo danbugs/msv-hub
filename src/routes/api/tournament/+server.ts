@@ -65,7 +65,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json(state);
 	}
 
-	const numRounds = numRoundsOverride ?? (mode === 'experimental1' ? 3 : calculateRecommendedRounds(entrants.length, numStations));
+	const numRounds = mode === 'experimental1' ? 3 : (numRoundsOverride ?? calculateRecommendedRounds(entrants.length, numStations));
 	if (numRounds === null) {
 		return Response.json({ error: 'Too few stations for this number of players' }, { status: 400 });
 	}

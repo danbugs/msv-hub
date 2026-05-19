@@ -288,7 +288,7 @@
 				{#if tournament.currentRound === 0 || isRoundComplete()}
 					<button onclick={() => startNextRound()} disabled={loading}
 						class="rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
-						{loading ? 'Generating...' : tournament.currentRound === 0 ? 'Start Round 1' : (isSwissComplete() || isFinalRoundComplete()) ? 'Generate Bracket Split →' : `Start Round ${tournament.currentRound + 1}`}
+						{loading ? 'Generating...' : tournament.currentRound === 0 ? 'Start Round 1' : (isSwissComplete() || isFinalRoundComplete()) ? (tournament.mode === 'experimental1' ? 'Generate Bracket →' : 'Generate Bracket Split →') : `Start Round ${tournament.currentRound + 1}`}
 					</button>
 					<select bind:value={roundAnnounceChannel}
 						class="rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none">

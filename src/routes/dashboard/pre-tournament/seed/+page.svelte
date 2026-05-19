@@ -540,13 +540,15 @@
 					<input id="num-stations" type="number" bind:value={numStations} min="1"
 						class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground focus:border-ring focus:outline-none" />
 				</div>
-				{#if tournamentMode !== 'gauntlet'}
+				{#if tournamentMode === 'default'}
 					<div>
 						<label for="swiss-rounds" class="block text-xs text-muted-foreground">Swiss rounds</label>
 						<input id="swiss-rounds" type="number" bind:value={swissRounds} min="1" max="5"
 							placeholder="auto"
 							class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 					</div>
+				{:else if tournamentMode === 'experimental1'}
+					<span class="self-end pb-2 text-xs text-muted-foreground">3 Swiss rounds (fixed)</span>
 				{/if}
 				<button onclick={startSwiss} disabled={startingSwiss || !numStations}
 					class="rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
@@ -610,13 +612,15 @@
 						<input id="fe-stations" type="number" bind:value={numStations} min="1"
 							class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground focus:border-ring focus:outline-none" />
 					</div>
-					{#if tournamentMode !== 'gauntlet'}
+					{#if tournamentMode === 'default'}
 						<div>
 							<label for="fe-rounds" class="block text-xs text-muted-foreground">Swiss rounds</label>
 							<input id="fe-rounds" type="number" bind:value={swissRounds} min="1" max="5"
-								placeholder={tournamentMode === 'experimental1' ? '3' : 'auto'}
+								placeholder="auto"
 								class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 						</div>
+					{:else if tournamentMode === 'experimental1'}
+						<span class="self-end pb-2 text-xs text-muted-foreground">3 rounds</span>
 					{/if}
 					<button onclick={startFromEvent} disabled={loadingEvent || !eventUrl.trim()}
 						class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
