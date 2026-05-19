@@ -80,14 +80,11 @@ function getNextMondayTimestamps(): { startAt: number; endAt: number } {
 	return { startAt, endAt };
 }
 
-async function handleCreateEvent(request: Request) {
+async function handleCreateEvent(request: Request, user?: { email: string }) {
 	const cronSecret = env.CRON_SECRET;
-	if (!cronSecret) {
-		return Response.json({ ok: false, steps: [], error: 'CRON_SECRET not configured' }, { status: 500 });
-	}
-
 	const authHeader = request.headers.get('Authorization') ?? '';
-	if (authHeader !== `Bearer ${cronSecret}`) {
+	const cronAuth = cronSecret && authHeader === `Bearer ${cronSecret}`;
+	if (!user && !cronAuth) {
 		return Response.json({ ok: false, steps: [], error: 'Unauthorized' }, { status: 401 });
 	}
 
@@ -243,13 +240,13 @@ async function handleCreateEvent(request: Request) {
 
 	// Step 9: Trigger pre-tournament Discord setup (uses CRON_SECRET auth)
 	await step('Trigger Discord pre-tournament setup', async () => {
-		const appUrl = env.APP_URL ?? 'http://localhost:5173';
+		let appUrl = env.APP_URL ?? 'http://localhost:5173';
+		if (!/^https?:\/\//i.test(appUrl)) appUrl = `https://${appUrl}`;
+		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+		if (cronSecret) headers['Authorization'] = `Bearer ${cronSecret}`;
 		const res = await fetch(`${appUrl}/api/discord/pre-tournament-setup`, {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'Authorization': `Bearer ${cronSecret}`
-			}
+			headers
 		});
 		if (!res.ok) {
 			const body = await res.text().catch(() => '');
@@ -277,5 +274,5 @@ async function handleCreateEvent(request: Request) {
 	return Response.json({ ok: !anyFailed, steps: log });
 }
 
-export const GET: RequestHandler = async ({ request }) => handleCreateEvent(request);
-export const POST: RequestHandler = async ({ request }) => handleCreateEvent(request);
+export const GET: RequestHandler = async ({ request, locals }) => handleCreateEvent(request, locals.user);
+export const POST: RequestHandler = async ({ request, locals }) => handleCreateEvent(request, locals.user);

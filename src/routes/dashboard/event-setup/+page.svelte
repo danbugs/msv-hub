@@ -163,10 +163,7 @@
 		if (!confirm('Manually trigger event creation? This will create a real event on StartGG.')) return;
 		triggering = true;
 		triggerResult = null;
-		const res = await fetch('/api/event/create-cron', {
-			method: 'POST',
-			headers: { 'Authorization': `Bearer ${prompt('Enter CRON_SECRET:') ?? ''}` }
-		});
+		const res = await fetch('/api/event/create-cron', { method: 'POST' });
 		triggerResult = await res.json();
 		triggering = false;
 		// Reload config to get updated state
