@@ -591,9 +591,14 @@
 							<h2 class="text-sm font-bold {bracketName === 'main' ? 'text-primary' : 'text-destructive'}">
 								{bracketName === 'main' ? 'Main Bracket' : 'Redemption Bracket'}
 							</h2>
-							<Button variant="outline" size="sm" onclick={() => { activeBracket = bracketName as 'main' | 'redemption'; syncFromStartGG(); }} disabled={syncingFromStartGG}>
-								{syncingFromStartGG && activeBracket === bracketName ? 'Syncing...' : 'Sync'}
-							</Button>
+							<div class="flex items-center gap-2">
+								<Button variant="outline" size="sm" onclick={() => { placingBracket = placingBracket === bracketName ? null : bracketName as 'main' | 'redemption'; placeResult = ''; }}>
+									{placingBracket === bracketName ? 'Cancel' : 'Fix Slot'}
+								</Button>
+								<Button variant="outline" size="sm" onclick={() => { activeBracket = bracketName as 'main' | 'redemption'; syncFromStartGG(); }} disabled={syncingFromStartGG}>
+									{syncingFromStartGG && activeBracket === bracketName ? 'Syncing...' : 'Sync'}
+								</Button>
+							</div>
 						</div>
 
 						<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -616,10 +621,6 @@
 
 						{#if placingBracket === bracketName}
 							<div class="mt-2 rounded-lg border border-dashed border-border p-3 space-y-2">
-								<div class="flex items-center justify-between">
-									<span class="text-xs font-medium text-muted-foreground">Manual Slot Placement</span>
-									<button onclick={() => { placingBracket = null; placeResult = ''; }} class="text-xs text-muted-foreground hover:text-foreground">&times;</button>
-								</div>
 								<div class="grid gap-2 sm:grid-cols-4">
 									<select bind:value={placeMatchId} class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-xs text-foreground">
 										<option value="">Match...</option>
@@ -645,11 +646,6 @@
 									<p class="text-xs {placeResult.startsWith('Placed') ? 'text-success' : 'text-destructive'}">{placeResult}</p>
 								{/if}
 							</div>
-						{:else}
-							<button onclick={() => { placingBracket = bracketName as 'main' | 'redemption'; placeResult = ''; }}
-								class="mt-1 text-xs text-muted-foreground hover:text-foreground">
-								Fix slot...
-							</button>
 						{/if}
 
 						<div class="mt-3 overflow-x-auto">
