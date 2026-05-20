@@ -18,7 +18,7 @@
 
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { getEventConfig, saveEventConfig, saveDiscordConfig } from '$lib/server/store';
+import { getEventConfig, saveEventConfig, getDiscordConfig, saveDiscordConfig } from '$lib/server/store';
 import {
 	cloneTournament,
 	publishHomepage,
@@ -223,25 +223,33 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 		return `Next event will be #${eventNumber + 1}`;
 	});
 
-	// Step 8: Discover the Swiss event slug and update Discord config
+	// Step 8: Discover the registration event slug and update Discord config.
+	// Micro (cap 32) → Swiss event; Macro (cap 64) → main bracket event.
 	let eventSlug = '';
 
 	if (tournamentId) {
-		await step('Discover Swiss event slug', async () => {
+		await step('Discover registration event slug', async () => {
+			const discordConfig = await getDiscordConfig();
+			const isMacro = discordConfig.attendeeCap === 64;
+
 			type TData = { tournament: { events: { id: number; slug: string }[] } };
 			const data = await gql<TData>(
 				'query($id:ID!){tournament(id:$id){events{id slug}}}',
 				{ id: tournamentId }
 			);
 			const events = data?.tournament?.events ?? [];
-			const swiss = events.find((e) => /swiss/i.test(e.slug));
-			if (swiss) {
-				eventSlug = swiss.slug;
-				return `Found Swiss event: ${eventSlug}`;
+
+			const target = isMacro
+				? events.find((e) => /main.bracket/i.test(e.slug))
+				: events.find((e) => /swiss/i.test(e.slug));
+
+			if (target) {
+				eventSlug = target.slug;
+				return `Found ${isMacro ? 'main bracket' : 'Swiss'} event: ${eventSlug}`;
 			}
 			if (events.length > 0) {
 				eventSlug = events[0].slug;
-				return `No Swiss event found, using first event: ${eventSlug}`;
+				return `No matching event found, using first event: ${eventSlug}`;
 			}
 			throw new Error('No events found on cloned tournament');
 		});
