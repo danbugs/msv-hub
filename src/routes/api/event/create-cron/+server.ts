@@ -30,6 +30,7 @@ import {
 	registerTOForTournament
 } from '$lib/server/startgg-admin';
 import { sendMessage } from '$lib/server/discord';
+import { gql } from '$lib/server/startgg';
 import type { TOConfig } from '$lib/server/store';
 
 interface StepResult {
@@ -222,10 +223,29 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 		return `Next event will be #${eventNumber + 1}`;
 	});
 
-	// Step 8: Update Discord config with new event slug
-	const eventSlug = tournamentSlug
-		? `tournament/${tournamentSlug}/event/ultimate-singles`
-		: '';
+	// Step 8: Discover the Swiss event slug and update Discord config
+	let eventSlug = '';
+
+	if (tournamentId) {
+		await step('Discover Swiss event slug', async () => {
+			type TData = { tournament: { events: { id: number; slug: string }[] } };
+			const data = await gql<TData>(
+				'query($id:ID!){tournament(id:$id){events{id slug}}}',
+				{ id: tournamentId }
+			);
+			const events = data?.tournament?.events ?? [];
+			const swiss = events.find((e) => /swiss/i.test(e.slug));
+			if (swiss) {
+				eventSlug = swiss.slug;
+				return `Found Swiss event: ${eventSlug}`;
+			}
+			if (events.length > 0) {
+				eventSlug = events[0].slug;
+				return `No Swiss event found, using first event: ${eventSlug}`;
+			}
+			throw new Error('No events found on cloned tournament');
+		});
+	}
 
 	if (eventSlug) {
 		await step('Update Discord config', async () => {
