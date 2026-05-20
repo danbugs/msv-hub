@@ -2,14 +2,14 @@
  * GET/POST /api/discord/motivational-cron
  *
  * Called by QStash on a schedule (every 3 days at ~12 PM PDT).
- * Posts an AI-generated community message to #general.
+ * Posts a data-driven league stat message to #general.
  * Protected by Authorization: Bearer <CRON_SECRET>.
  */
 
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { sendMessage } from '$lib/server/discord';
-import { generateMotivationalMessage } from '$lib/server/ai';
+import { generateStatMessage } from '$lib/server/league-stats-messages';
 
 const GENERAL_CHANNEL_ID = '1066863005591162961';
 
@@ -25,7 +25,7 @@ async function handleMotivational(request: Request) {
 	}
 
 	try {
-		const message = await generateMotivationalMessage();
+		const message = await generateStatMessage();
 		await sendMessage(GENERAL_CHANNEL_ID, message);
 		return Response.json({ ok: true, message });
 	} catch (e) {

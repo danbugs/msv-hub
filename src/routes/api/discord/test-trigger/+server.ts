@@ -20,7 +20,8 @@ import {
 } from '$lib/server/store';
 import { exportAttendees } from '$lib/server/startgg-admin';
 import { gql } from '$lib/server/startgg';
-import { generateFastestRegMessage, generateMotivationalMessage } from '$lib/server/ai';
+import { generateFastestRegMessage } from '$lib/server/ai';
+import { generateStatMessage } from '$lib/server/league-stats-messages';
 import { env } from '$env/dynamic/private';
 
 const STARTGG_API = 'https://api.start.gg/gql/alpha';
@@ -115,11 +116,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// -----------------------------------------------------------------------
-	// Test AI motivational (Haiku-generated, posts to talk-to-balrog)
+	// Test stat message (league data, posts to talk-to-balrog)
 	// -----------------------------------------------------------------------
 	if (action === 'motivational-ai') {
-		const message = await generateMotivationalMessage();
-		await sendMessage(TALK_TO_BALROG, (message));
+		const message = await generateStatMessage();
+		await sendMessage(TALK_TO_BALROG, message);
 		return Response.json({ ok: true, action: 'motivational-ai', message });
 	}
 
