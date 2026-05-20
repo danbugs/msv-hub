@@ -167,6 +167,8 @@
 						</div>
 					{/if}
 				</div>
+				<a href="/live/{data.slug}/projector" target="_blank"
+					class="text-xs text-primary hover:text-primary/80 shrink-0">projector ↗</a>
 				<a href="https://twitch.tv/microspacing" target="_blank"
 					class="text-xs text-primary hover:text-primary/80 shrink-0">twitch ↗</a>
 			</div>

@@ -431,7 +431,10 @@
 		<h1 class="text-2xl font-bold text-foreground">Brackets</h1>
 		{#if tournament}
 			<a href="/live/{tournament.slug}" target="_blank" class="text-xs text-muted-foreground hover:text-primary">
-				Live: /live/{tournament.slug} ↗
+				Live ↗
+			</a>
+			<a href="/live/{tournament.slug}/projector" target="_blank" class="text-xs text-muted-foreground hover:text-primary">
+				Projector ↗
 			</a>
 			<a href="/api/tournament/export?slug={tournament.slug}" target="_blank"
 				class="ml-auto text-xs text-muted-foreground hover:text-primary">

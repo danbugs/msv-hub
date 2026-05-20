@@ -198,10 +198,12 @@
 										· {tournament.rounds.filter(r => r.status === 'completed').length} round{tournament.rounds.filter(r => r.status === 'completed').length !== 1 ? 's' : ''} done
 									{/if}
 								</p>
-								<a href="/live/{tournament.slug}" target="_blank"
-									class="mt-1 block text-xs text-muted-foreground hover:text-primary min-w-0 truncate">
-									Live: /live/{tournament.slug} ↗
-								</a>
+								<div class="mt-1 flex gap-3">
+									<a href="/live/{tournament.slug}" target="_blank"
+										class="text-xs text-muted-foreground hover:text-primary">Live ↗</a>
+									<a href="/live/{tournament.slug}/projector" target="_blank"
+										class="text-xs text-muted-foreground hover:text-primary">Projector ↗</a>
+								</div>
 							</div>
 							<div class="flex flex-wrap items-center gap-2">
 								{#if tournament.phase === 'swiss'}

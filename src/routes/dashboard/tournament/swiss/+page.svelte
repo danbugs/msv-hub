@@ -278,7 +278,10 @@
 			</span>
 			<span class="text-xs text-muted-foreground">{tournament.entrants.length} players · {tournament.settings.numStations} stations</span>
 			<a href="/live/{tournament.slug}" target="_blank" class="ml-auto text-xs text-muted-foreground hover:text-primary">
-				Live: /live/{tournament.slug} ↗
+				Live ↗
+			</a>
+			<a href="/live/{tournament.slug}/projector" target="_blank" class="text-xs text-muted-foreground hover:text-primary">
+				Projector ↗
 			</a>
 		</div>
 
