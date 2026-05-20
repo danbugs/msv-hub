@@ -28,6 +28,7 @@ const STARTGG_API = 'https://api.start.gg/gql/alpha';
 const WAITLIST_CHANNEL_ID = '1193295598166737118';
 const ANNOUNCE_CHANNEL_ID = '1066863301885173800';
 const FASTEST_REG_FORUM_ID = '1193306596332290088';
+const TALK_TO_BALROG = '1317322917129879562';
 
 const ENTRANTS_QUERY = `
 query getEventEntrants($slug: String!) {
@@ -283,6 +284,10 @@ async function handleAttendeeCheck(request: Request) {
 
 	const numEntrants = await fetchNumEntrants(config.eventSlug);
 	if (numEntrants === null) {
+		await sendMessage(
+			TALK_TO_BALROG,
+			`⚠️ Attendee check failed: couldn't fetch entrants from StartGG for \`${config.eventSlug}\``
+		).catch(() => {});
 		return Response.json({ ok: false, fired: false, reason: 'failed to fetch entrants from StartGG' }, { status: 502 });
 	}
 
@@ -347,9 +352,22 @@ async function handleAttendeeCheck(request: Request) {
 			`📢 **${shortSlugStr}** just capped! Add yourself to the waitlist: <#${WAITLIST_CHANNEL_ID}>`
 		).catch(() => { /* best-effort */ });
 
+		await sendMessage(
+			TALK_TO_BALROG,
+			`✅ Waitlist created for **${shortenSlug(config.eventSlug)}** (${numEntrants}/${config.attendeeCap})`
+		).catch(() => {});
+
 		fired = true;
 		results.push('waitlist thread created');
 	} else {
+		const threshold = Math.ceil(config.attendeeCap * 0.75);
+		if (numEntrants >= threshold && !config.nearCapAlerted) {
+			await sendMessage(
+				TALK_TO_BALROG,
+				`📊 Attendee check: **${numEntrants}/${config.attendeeCap}** for \`${config.eventSlug}\` — monitoring for cap`
+			).catch(() => {});
+			await saveDiscordConfig({ nearCapAlerted: true });
+		}
 		results.push(`waitlist: ${numEntrants}/${config.attendeeCap}`);
 	}
 

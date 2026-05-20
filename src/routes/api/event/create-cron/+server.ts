@@ -232,6 +232,7 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 			await saveDiscordConfig({
 				eventSlug,
 				waitlistCreated: false,
+				nearCapAlerted: false,
 				fastestRegPosted: false
 			});
 			return `Discord event slug set to "${eventSlug}"`;

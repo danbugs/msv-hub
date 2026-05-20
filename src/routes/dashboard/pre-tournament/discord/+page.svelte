@@ -235,7 +235,7 @@
 		const res = await fetch('/api/discord/config', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ waitlistCreated: false })
+			body: JSON.stringify({ waitlistCreated: false, nearCapAlerted: false })
 		});
 		if (res.ok) {
 			config = await res.json();
