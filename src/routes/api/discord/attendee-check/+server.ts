@@ -37,23 +37,42 @@ query getEventEntrants($slug: String!) {
   }
 }`;
 
-async function fetchNumEntrants(slug: string): Promise<number | null> {
+type EntrantResult = { ok: true; count: number } | { ok: false; reason: string };
+
+async function fetchNumEntrants(slug: string): Promise<EntrantResult> {
 	const token = env.STARTGG_TOKEN;
-	if (!token) throw new Error('STARTGG_TOKEN must be set');
+	if (!token) return { ok: false, reason: 'STARTGG_TOKEN not set' };
 
-	const res = await fetch(STARTGG_API, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${token}`
-		},
-		body: JSON.stringify({ query: ENTRANTS_QUERY, variables: { slug } })
-	});
+	let res: Response;
+	try {
+		res = await fetch(STARTGG_API, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			},
+			body: JSON.stringify({ query: ENTRANTS_QUERY, variables: { slug } })
+		});
+	} catch (e) {
+		return { ok: false, reason: `fetch error: ${e instanceof Error ? e.message : String(e)}` };
+	}
 
-	if (!res.ok) return null;
+	if (!res.ok) {
+		const body = await res.text().catch(() => '');
+		return { ok: false, reason: `HTTP ${res.status}: ${body.slice(0, 200)}` };
+	}
+
 	const json = await res.json();
-	if (json.errors) return null;
-	return (json.data?.event?.numEntrants as number | null | undefined) ?? null;
+	if (json.errors) {
+		return { ok: false, reason: `GQL errors: ${JSON.stringify(json.errors).slice(0, 300)}` };
+	}
+
+	const count = json.data?.event?.numEntrants;
+	if (typeof count !== 'number') {
+		return { ok: false, reason: `unexpected response: ${JSON.stringify(json.data).slice(0, 300)}` };
+	}
+
+	return { ok: true, count };
 }
 
 /** Resolve tournament ID from event slug. */
@@ -282,14 +301,15 @@ async function handleAttendeeCheck(request: Request) {
 		return Response.json({ ok: true, fired: false, entrants: 0, reason: 'bot is paused' });
 	}
 
-	const numEntrants = await fetchNumEntrants(config.eventSlug);
-	if (numEntrants === null) {
+	const entrantResult = await fetchNumEntrants(config.eventSlug);
+	if (!entrantResult.ok) {
 		await sendMessage(
 			TALK_TO_BALROG,
-			`⚠️ Attendee check failed: couldn't fetch entrants from StartGG for \`${config.eventSlug}\``
+			`⚠️ Attendee check failed for \`${config.eventSlug}\`: ${entrantResult.reason}`
 		).catch(() => {});
-		return Response.json({ ok: false, fired: false, reason: 'failed to fetch entrants from StartGG' }, { status: 502 });
+		return Response.json({ ok: false, fired: false, reason: entrantResult.reason }, { status: 502 });
 	}
+	const numEntrants = entrantResult.count;
 
 	const results: string[] = [];
 	let fired = false;
