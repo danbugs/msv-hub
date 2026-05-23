@@ -39,6 +39,34 @@ interface StepResult {
 	detail: string;
 }
 
+interface CreateEventOverrides {
+	name?: string;
+	startDate?: string;
+	startHour?: number;
+	shortSlug?: string;
+	srcTournamentId?: number;
+	skipCounterIncrement?: boolean;
+	attendeeCap?: 32 | 64;
+}
+
+function getTimestampsForDate(dateStr: string, hour: number): { startAt: number; endAt: number } {
+	const timeStr = `${dateStr}T${String(hour).padStart(2, '0')}:00:00`;
+
+	const formatter = new Intl.DateTimeFormat('en-US', {
+		timeZone: 'America/Los_Angeles',
+		timeZoneName: 'shortOffset'
+	});
+	const parts = formatter.formatToParts(new Date(`${timeStr}Z`));
+	const tzPart = parts.find((p) => p.type === 'timeZoneName')?.value ?? 'GMT-8';
+	const offsetMatch = tzPart.match(/GMT([+-]\d+)/);
+	const offsetHours = offsetMatch ? parseInt(offsetMatch[1]) : -8;
+
+	const startAt = Math.floor(new Date(`${timeStr}Z`).getTime() / 1000) - offsetHours * 3600;
+	const endAt = startAt + 5 * 3600;
+
+	return { startAt, endAt };
+}
+
 function getNextMondayTimestamps(): { startAt: number; endAt: number } {
 	const now = new Date();
 
@@ -89,6 +117,17 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 		return Response.json({ ok: false, steps: [], error: 'Unauthorized' }, { status: 401 });
 	}
 
+	let overrides: CreateEventOverrides = {};
+	try {
+		const contentType = request.headers.get('Content-Type') ?? '';
+		if (contentType.includes('application/json')) {
+			const body = await request.json();
+			if (body && typeof body === 'object') overrides = body;
+		}
+	} catch {
+		// No body or invalid JSON — use defaults
+	}
+
 	const log: StepResult[] = [];
 
 	async function step(name: string, fn: () => Promise<string>): Promise<boolean> {
@@ -104,16 +143,17 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 
 	const config = await getEventConfig();
 
-	if (config.paused) {
+	if (config.paused && !overrides.name) {
 		return Response.json({ ok: true, steps: [], reason: 'Event creation is paused' });
 	}
 
 	const eventNumber = config.nextEventNumber;
-	const eventName = `Microspacing Vancouver #${eventNumber}`;
-	const { startAt, endAt } = getNextMondayTimestamps();
+	const eventName = overrides.name ?? `Microspacing Vancouver #${eventNumber}`;
+	const { startAt, endAt } = overrides.startDate
+		? getTimestampsForDate(overrides.startDate, overrides.startHour ?? 18)
+		: getNextMondayTimestamps();
 
-	// Use last created tournament as template if available, otherwise default
-	const srcId = config.lastCreatedTournamentId ?? config.srcTournamentId;
+	const srcId = overrides.srcTournamentId ?? config.lastCreatedTournamentId ?? config.srcTournamentId;
 
 	// Step 1: Clone tournament
 	let tournamentId = 0;
@@ -142,16 +182,17 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 	await new Promise<void>((r) => setTimeout(r, 5000));
 
 	// Step 2: Update short slug and basic details
+	const slugToUse = overrides.shortSlug ?? config.shortSlug;
 	await step('Update short slug', async () => {
 		const result = await updateTournamentBasicDetails(tournamentId, {
 			name: eventName,
-			shortSlug: config.shortSlug,
+			shortSlug: slugToUse,
 			startAt,
 			endAt,
 			discordLink: config.discordLink
 		});
 		if (!result.ok) throw new Error(result.error ?? 'Failed');
-		return `Set short slug to "${config.shortSlug}"`;
+		return `Set short slug to "${slugToUse}"`;
 	});
 
 	// Step 3: Publish homepage
@@ -214,14 +255,18 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 	}
 
 	// Step 7: Increment counter and save last created tournament
-	await step('Update event config', async () => {
-		await saveEventConfig({
-			nextEventNumber: eventNumber + 1,
-			lastCreatedTournamentId: tournamentId,
-			lastCreatedTournamentSlug: tournamentSlug
+	if (overrides.skipCounterIncrement) {
+		log.push({ step: 'Update event config', ok: true, detail: 'Skipped — one-off event' });
+	} else {
+		await step('Update event config', async () => {
+			await saveEventConfig({
+				nextEventNumber: eventNumber + 1,
+				lastCreatedTournamentId: tournamentId,
+				lastCreatedTournamentSlug: tournamentSlug
+			});
+			return `Next event will be #${eventNumber + 1}`;
 		});
-		return `Next event will be #${eventNumber + 1}`;
-	});
+	}
 
 	// Step 8: Discover the registration event slug and update Discord config.
 	// Micro (cap 32) → Swiss event; Macro (cap 64) → main bracket event.
@@ -230,7 +275,7 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 	if (tournamentId) {
 		await step('Discover registration event slug', async () => {
 			const discordConfig = await getDiscordConfig();
-			const isMacro = discordConfig.attendeeCap === 64;
+			const isMacro = (overrides.attendeeCap ?? discordConfig.attendeeCap) === 64;
 
 			type TData = { tournament: { events: { id: number; slug: string }[] } };
 			const data = await gql<TData>(
@@ -257,13 +302,16 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 
 	if (eventSlug) {
 		await step('Update Discord config', async () => {
-			await saveDiscordConfig({
+			const discordUpdate: Record<string, unknown> = {
 				eventSlug,
 				waitlistCreated: false,
 				nearCapAlerted: false,
 				fastestRegPosted: false
-			});
-			return `Discord event slug set to "${eventSlug}"`;
+			};
+			if (overrides.attendeeCap) discordUpdate.attendeeCap = overrides.attendeeCap;
+			await saveDiscordConfig(discordUpdate);
+			const capNote = overrides.attendeeCap ? `, attendeeCap=${overrides.attendeeCap}` : '';
+			return `Discord event slug set to "${eventSlug}"${capNote}`;
 		});
 	}
 

@@ -44,6 +44,16 @@
 	let triggering = $state(false);
 	let triggerResult = $state<{ ok: boolean; steps: { step: string; ok: boolean; detail: string }[] } | null>(null);
 
+	// One-off event overrides
+	let useOverrides = $state(false);
+	let overrideName = $state('');
+	let overrideDate = $state('');
+	let overrideHour = $state(18);
+	let overrideShortSlug = $state('');
+	let overrideSrcTournamentId = $state('');
+	let overrideAttendeeCap = $state<32 | 64>(64);
+	let skipCounterIncrement = $state(true);
+
 	onMount(async () => {
 		const res = await fetch('/api/event/config');
 		if (res.ok) config = await res.json();
@@ -160,13 +170,29 @@
 	}
 
 	async function triggerCreateEvent() {
-		if (!confirm('Manually trigger event creation? This will create a real event on StartGG.')) return;
+		const label = useOverrides && overrideName ? overrideName : `Microspacing Vancouver #${config?.nextEventNumber}`;
+		if (!confirm(`Create "${label}" on StartGG? This is a real event.`)) return;
 		triggering = true;
 		triggerResult = null;
-		const res = await fetch('/api/event/create-cron', { method: 'POST' });
+
+		const body: Record<string, unknown> = {};
+		if (useOverrides) {
+			if (overrideName) body.name = overrideName;
+			if (overrideDate) body.startDate = overrideDate;
+			body.startHour = overrideHour;
+			if (overrideShortSlug) body.shortSlug = overrideShortSlug;
+			if (overrideSrcTournamentId) body.srcTournamentId = Number(overrideSrcTournamentId);
+			body.attendeeCap = overrideAttendeeCap;
+			body.skipCounterIncrement = skipCounterIncrement;
+		}
+
+		const res = await fetch('/api/event/create-cron', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		});
 		triggerResult = await res.json();
 		triggering = false;
-		// Reload config to get updated state
 		const configRes = await fetch('/api/event/config');
 		if (configRes.ok) config = await configRes.json();
 	}
@@ -337,12 +363,72 @@
 			<h2 class="text-lg font-semibold text-foreground mb-2">Manual Event Creation</h2>
 			<p class="text-sm text-muted-foreground mb-4">
 				Events are auto-created every Tuesday at 9 AM PST via QStash.
-				Use this to manually trigger the flow if the schedule missed.
+				Use this to manually trigger the flow or create a one-off event.
 			</p>
 
-			<button onclick={triggerCreateEvent} disabled={triggering}
+			<!-- One-off toggle -->
+			<div class="mb-4">
+				<label class="flex items-center gap-2 cursor-pointer">
+					<input type="checkbox" bind:checked={useOverrides}
+						class="rounded border-input" />
+					<span class="text-sm font-medium text-foreground">One-off event (custom name, date, etc.)</span>
+				</label>
+			</div>
+
+			{#if useOverrides}
+				<div class="rounded-lg border border-dashed border-border p-4 mb-4 space-y-3">
+					<div class="grid gap-3 sm:grid-cols-2">
+						<div>
+							<label class="block text-xs font-medium text-muted-foreground mb-1">Event Name</label>
+							<input type="text" bind:value={overrideName} placeholder="e.g. Macrospacing Vancouver #7"
+								class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground" />
+						</div>
+						<div>
+							<label class="block text-xs font-medium text-muted-foreground mb-1">Event Date</label>
+							<input type="date" bind:value={overrideDate}
+								class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
+						</div>
+						<div>
+							<label class="block text-xs font-medium text-muted-foreground mb-1">Start Hour (PST, 0-23)</label>
+							<input type="number" bind:value={overrideHour} min="0" max="23"
+								class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
+						</div>
+						<div>
+							<label class="block text-xs font-medium text-muted-foreground mb-1">Attendee Cap</label>
+							<select bind:value={overrideAttendeeCap}
+								class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground">
+								<option value={32}>32 (Micro)</option>
+								<option value={64}>64 (Macro)</option>
+							</select>
+						</div>
+						<div>
+							<label class="block text-xs font-medium text-muted-foreground mb-1">Short Slug (optional)</label>
+							<input type="text" bind:value={overrideShortSlug} placeholder={config?.shortSlug ?? ''}
+								class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground" />
+						</div>
+						<div>
+							<label class="block text-xs font-medium text-muted-foreground mb-1">Template Tournament ID (optional)</label>
+							<input type="text" bind:value={overrideSrcTournamentId} placeholder="Use default"
+								class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground" />
+						</div>
+					</div>
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input type="checkbox" bind:checked={skipCounterIncrement}
+							class="rounded border-input" />
+						<span class="text-sm text-muted-foreground">Don't increment Microspacing event counter</span>
+					</label>
+				</div>
+			{/if}
+
+			<button onclick={triggerCreateEvent} disabled={triggering || (useOverrides && !overrideName)}
 				class="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
-				{triggering ? 'Creating event...' : 'Trigger Event Creation'}
+				{#if triggering}
+					Creating event...
+				{:else if useOverrides && overrideName}
+					Create "{overrideName}"
+				{:else}
+					Trigger Event Creation
+				{/if}
 			</button>
 
 			{#if triggerResult}
