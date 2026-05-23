@@ -53,6 +53,7 @@
 	let overrideSrcTournamentId = $state('');
 	let overrideAttendeeCap = $state<32 | 64>(64);
 	let skipCounterIncrement = $state(true);
+	let skipDiscordSetup = $state(true);
 
 	onMount(async () => {
 		const res = await fetch('/api/event/config');
@@ -184,6 +185,7 @@
 			if (overrideSrcTournamentId) body.srcTournamentId = Number(overrideSrcTournamentId);
 			body.attendeeCap = overrideAttendeeCap;
 			body.skipCounterIncrement = skipCounterIncrement;
+			body.skipDiscordSetup = skipDiscordSetup;
 		}
 
 		const res = await fetch('/api/event/create-cron', {
@@ -412,11 +414,18 @@
 								class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground" />
 						</div>
 					</div>
-					<label class="flex items-center gap-2 cursor-pointer">
-						<input type="checkbox" bind:checked={skipCounterIncrement}
-							class="rounded border-input" />
-						<span class="text-sm text-muted-foreground">Don't increment Microspacing event counter</span>
-					</label>
+					<div class="space-y-2">
+						<label class="flex items-center gap-2 cursor-pointer">
+							<input type="checkbox" bind:checked={skipCounterIncrement}
+								class="rounded border-input" />
+							<span class="text-sm text-muted-foreground">Don't increment Microspacing event counter</span>
+						</label>
+						<label class="flex items-center gap-2 cursor-pointer">
+							<input type="checkbox" bind:checked={skipDiscordSetup}
+								class="rounded border-input" />
+							<span class="text-sm text-muted-foreground">Skip Discord pre-tournament setup (don't lock old threads)</span>
+						</label>
+					</div>
 				</div>
 			{/if}
 

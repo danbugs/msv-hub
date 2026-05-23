@@ -1,11 +1,11 @@
 /**
  * POST /api/discord/cron
  *
- * Called by GitHub Actions on a schedule (every 30 min).
+ * Called by QStash daily at 8:30 AM PST.
  * Protected by Authorization: Bearer <CRON_SECRET> — NOT by session auth.
  *
- * Checks if now (UTC) matches the configured PST announcement time within
- * a ±15 min window to handle cron drift. If so, fires the announcement.
+ * Checks if now (UTC) matches the configured PST announcement day+time within
+ * a ±15 min window. If so, fires the announcement.
  *
  * Also posts a random motivational message to #general if 48h have passed
  * since the last one.

@@ -46,6 +46,7 @@ interface CreateEventOverrides {
 	shortSlug?: string;
 	srcTournamentId?: number;
 	skipCounterIncrement?: boolean;
+	skipDiscordSetup?: boolean;
 	attendeeCap?: 32 | 64;
 }
 
@@ -316,22 +317,26 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 	}
 
 	// Step 9: Trigger pre-tournament Discord setup (uses CRON_SECRET auth)
-	await step('Trigger Discord pre-tournament setup', async () => {
-		let appUrl = env.APP_URL ?? 'http://localhost:5173';
-		if (!/^https?:\/\//i.test(appUrl)) appUrl = `https://${appUrl}`;
-		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-		if (cronSecret) headers['Authorization'] = `Bearer ${cronSecret}`;
-		const res = await fetch(`${appUrl}/api/discord/pre-tournament-setup`, {
-			method: 'POST',
-			headers
+	if (overrides.skipDiscordSetup) {
+		log.push({ step: 'Trigger Discord pre-tournament setup', ok: true, detail: 'Skipped — one-off event' });
+	} else {
+		await step('Trigger Discord pre-tournament setup', async () => {
+			let appUrl = env.APP_URL ?? 'http://localhost:5173';
+			if (!/^https?:\/\//i.test(appUrl)) appUrl = `https://${appUrl}`;
+			const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+			if (cronSecret) headers['Authorization'] = `Bearer ${cronSecret}`;
+			const res = await fetch(`${appUrl}/api/discord/pre-tournament-setup`, {
+				method: 'POST',
+				headers
+			});
+			if (!res.ok) {
+				const body = await res.text().catch(() => '');
+				throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
+			}
+			const data = await res.json();
+			return data.ok ? 'Pre-tournament setup completed' : `Partial: ${JSON.stringify(data.log?.filter((s: { ok: boolean }) => !s.ok))}`;
 		});
-		if (!res.ok) {
-			const body = await res.text().catch(() => '');
-			throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
-		}
-		const data = await res.json();
-		return data.ok ? 'Pre-tournament setup completed' : `Partial: ${JSON.stringify(data.log?.filter((s: { ok: boolean }) => !s.ok))}`;
-	});
+	}
 
 	const anyFailed = log.some((s) => !s.ok);
 
