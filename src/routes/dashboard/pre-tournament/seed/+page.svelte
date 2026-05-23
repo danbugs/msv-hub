@@ -11,7 +11,6 @@
 	let avoidEvents = $state('');
 	let jitter = $state('5');
 	let seed = $state('');
-	let showAdvanced = $state(false);
 	let leagueSeasons = $state<{ id: number; name: string }[]>([]);
 	let leagueSeasonId = $state('');
 
@@ -60,13 +59,15 @@
 		}
 		if (seasonsRes.ok) {
 			leagueSeasons = await seasonsRes.json();
+			const allTime = leagueSeasons.find((s) => /all.?time/i.test(s.name));
+			if (allTime) leagueSeasonId = String(allTime.id);
+			else if (leagueSeasons.length) leagueSeasonId = String(leagueSeasons[0].id);
 		}
 	});
 
-	// Auto-compute seasonStart when targetNumber changes (last 10 events)
 	function onTargetChange(val: string) {
 		targetNumber = val;
-		if (!showAdvanced && val) {
+		if (val) {
 			const n = Number(val);
 			if (n > 10) seasonStart = String(n - 10);
 		}
@@ -311,59 +312,13 @@
 					<div>
 						<label for="league-season" class="block text-sm font-medium text-foreground">Rating source</label>
 						<select id="league-season" bind:value={leagueSeasonId} class="mt-1 w-64 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground focus:border-ring focus:outline-none">
-							<option value="">Elo (compute from history)</option>
 							{#each leagueSeasons as s}
 								<option value={String(s.id)}>{s.name} (TrueSkill)</option>
 							{/each}
 						</select>
 						<p class="mt-1 text-xs text-muted-foreground">
-							{leagueSeasonId ? 'Uses league rankings for known players, estimates newcomers from StartGG history.' : 'Computes Elo from the previous 10 events.'}
+							Uses league rankings for known players, estimates newcomers from StartGG history.
 						</p>
-					</div>
-				{/if}
-
-				<button type="button" onclick={() => showAdvanced = !showAdvanced}
-					class="text-sm text-muted-foreground hover:text-primary transition-colors">
-					{showAdvanced ? '▾' : '▸'} Advanced
-				</button>
-
-				{#if showAdvanced}
-					<div class="grid gap-4 sm:grid-cols-2 rounded-lg border border-border bg-card/50 p-4">
-						<div>
-							<label for="mode" class="block text-sm font-medium text-foreground">Mode</label>
-							<select id="mode" bind:value={mode} class={inputClass}>
-								<option value="micro">Micro</option>
-								<option value="macro">Macro</option>
-							</select>
-						</div>
-						<div>
-							<label for="season-start" class="block text-sm font-medium text-foreground">Season Start</label>
-							<p class="text-xs text-muted-foreground mb-1">First event # for Elo. Default: target - 10.</p>
-							<input id="season-start" type="number" bind:value={seasonStart} placeholder="auto" class={inputClass} />
-						</div>
-						<div>
-							<label for="jitter" class="block text-sm font-medium text-foreground">Jitter (default 5)</label>
-							<p class="text-xs text-muted-foreground mb-1">Max Elo noise. Lower = more stable seeds.</p>
-							<input id="jitter" type="number" step="0.1" bind:value={jitter} class={inputClass} />
-						</div>
-						<div>
-							<label for="micro-end" class="block text-sm font-medium text-foreground">Micro End</label>
-							<input id="micro-end" type="number" bind:value={microEnd} placeholder="auto" class={inputClass} />
-						</div>
-						<div>
-							<label for="rng-seed" class="block text-sm font-medium text-foreground">RNG Seed</label>
-							<input id="rng-seed" type="number" bind:value={seed} placeholder="random" class={inputClass} />
-						</div>
-						<div>
-							<label for="macros" class="block text-sm font-medium text-foreground">Macros to include</label>
-							<input id="macros" type="text" bind:value={macros} placeholder="e.g. 6,7" class={inputClass} />
-						</div>
-						{#if mode === 'macro'}
-						<div>
-							<label for="avoid" class="block text-sm font-medium text-foreground">Avoid Events</label>
-							<input id="avoid" type="text" bind:value={avoidEvents} placeholder="tournament/slug" class={inputClass} />
-						</div>
-						{/if}
 					</div>
 				{/if}
 
