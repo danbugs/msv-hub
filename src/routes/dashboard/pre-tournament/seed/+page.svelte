@@ -300,12 +300,24 @@
 			<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Generate Seeding</p>
 
 			<form onsubmit={(e) => { e.preventDefault(); runSeeder(); }} class="space-y-4">
-				<div>
-					<label for="target" class="block text-sm font-medium text-foreground">Event number</label>
-					<input id="target" type="number"
-						value={targetNumber}
-						oninput={(e) => onTargetChange((e.target as HTMLInputElement).value)}
-						required placeholder="e.g. 134" class="mt-1 w-48 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
+				<div class="flex items-end gap-4">
+					<div>
+						<label for="target" class="block text-sm font-medium text-foreground">Event number</label>
+						<input id="target" type="number"
+							value={targetNumber}
+							oninput={(e) => onTargetChange((e.target as HTMLInputElement).value)}
+							required placeholder="e.g. 134" class="mt-1 w-48 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
+					</div>
+					<div class="flex gap-1 pb-0.5">
+						<button type="button" onclick={() => mode = 'micro'}
+							class="rounded-lg px-3 py-2 text-sm font-medium transition-colors {mode === 'micro' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
+							Micro
+						</button>
+						<button type="button" onclick={() => mode = 'macro'}
+							class="rounded-lg px-3 py-2 text-sm font-medium transition-colors {mode === 'macro' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
+							Macro
+						</button>
+					</div>
 				</div>
 
 				{#if leagueSeasons.length}
