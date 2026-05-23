@@ -11,7 +11,7 @@ import {
 	extractPlayerId,
 	extractGamerTag
 } from './startgg';
-import { getLeagueSeason, getRankings, getLeagueConfig } from './league-store';
+import { getLeagueSeason, getRankings, getLeagueConfig, getMergeMap } from './league-store';
 
 // ── Constants ───────────────────────────────────────────────────────────
 
@@ -598,9 +598,11 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback, signal?
 	// Step 3: Assign ratings
 	if (leagueRatings) {
 		log('Step 3: Assigning TrueSkill league ratings...');
+		const mergeMap = await getMergeMap();
 		let leagueCount = 0;
 		for (const e of entrants) {
-			const ts = leagueRatings.get(e.playerId);
+			const resolvedId = parseInt(mergeMap[String(e.playerId)] ?? String(e.playerId), 10);
+			const ts = leagueRatings.get(resolvedId);
 			if (ts !== undefined) {
 				e.elo = ts;
 				leagueCount++;
