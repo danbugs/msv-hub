@@ -542,7 +542,7 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback, signal?
 
 	// Step 1: Build ratings — prefer league TrueSkill, fall back to Elo history
 	let leagueRatings: Map<number, number> | null = null;
-	if (input.leagueSeasonId) {
+	if (input.leagueSeasonId !== undefined) {
 		log(`Step 1: Fetching league season ${input.leagueSeasonId} rankings...`);
 		const season = await getLeagueSeason(input.leagueSeasonId);
 		if (season) {
