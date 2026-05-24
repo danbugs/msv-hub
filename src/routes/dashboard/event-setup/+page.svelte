@@ -50,6 +50,10 @@
 		{ label: 'Macro', url: 'https://www.start.gg/tournament/macrospacing-vancouver-test', id: 915494 },
 	] as const;
 
+	// Config template choice (synced from stored srcTournamentId on mount)
+	let configTemplateChoice = $state<'micro' | 'macro' | 'custom'>('micro');
+	let configCustomUrl = $state('');
+
 	// One-off event overrides
 	let useOverrides = $state(false);
 	let overrideName = $state('');
@@ -63,11 +67,11 @@
 	let skipDiscordSetup = $state(true);
 	let resolvingUrl = $state(false);
 
-	async function resolveTemplateId(): Promise<number | null> {
-		if (overrideTemplateChoice === 'micro') return TEMPLATES[0].id;
-		if (overrideTemplateChoice === 'macro') return TEMPLATES[1].id;
-		if (!overrideCustomUrl.trim()) return null;
-		const slug = overrideCustomUrl.replace(/^https?:\/\/[^/]+\//, '').replace(/\/+$/, '');
+	async function resolveTemplate(choice: 'micro' | 'macro' | 'custom', customUrl: string): Promise<number | null> {
+		if (choice === 'micro') return TEMPLATES[0].id;
+		if (choice === 'macro') return TEMPLATES[1].id;
+		if (!customUrl.trim()) return null;
+		const slug = customUrl.replace(/^https?:\/\/[^/]+\//, '').replace(/\/+$/, '');
 		const tournSlug = slug.match(/tournament\/([^/]+)/)?.[1];
 		if (!tournSlug) { message = 'Invalid tournament URL'; return null; }
 		resolvingUrl = true;
@@ -88,6 +92,14 @@
 	onMount(async () => {
 		const res = await fetch('/api/event/config');
 		if (res.ok) config = await res.json();
+		if (config) {
+			const match = TEMPLATES.find(t => t.id === config!.srcTournamentId);
+			if (match) {
+				configTemplateChoice = match.label.startsWith('Micro') ? 'micro' : 'macro';
+			} else {
+				configTemplateChoice = 'custom';
+			}
+		}
 		loading = false;
 	});
 
@@ -95,6 +107,9 @@
 		if (!config) return;
 		saving = true;
 		message = '';
+		const templateId = await resolveTemplate(configTemplateChoice, configCustomUrl);
+		if (configTemplateChoice === 'custom' && !templateId) { saving = false; return; }
+		if (templateId) config.srcTournamentId = templateId;
 		const res = await fetch('/api/event/config', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -212,7 +227,7 @@
 			if (overrideDate) body.startDate = overrideDate;
 			body.startHour = overrideHour;
 			if (overrideShortSlug) body.shortSlug = overrideShortSlug;
-			const templateId = await resolveTemplateId();
+			const templateId = await resolveTemplate(overrideTemplateChoice, overrideCustomUrl);
 			if (overrideTemplateChoice === 'custom' && !templateId) { triggering = false; return; }
 			if (templateId) body.srcTournamentId = templateId;
 			body.attendeeCap = overrideAttendeeCap;
@@ -269,13 +284,21 @@
 						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
 				</div>
 				<div>
-					<label class="block text-xs font-medium text-muted-foreground mb-1">Template Tournament ID</label>
-					<input type="number" bind:value={config.srcTournamentId}
-						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
-					{#if TEMPLATES.find(t => t.id === config?.srcTournamentId)}
-						<p class="text-xs text-muted-foreground mt-1">{TEMPLATES.find(t => t.id === config?.srcTournamentId)?.label}</p>
-					{/if}
+					<label class="block text-xs font-medium text-muted-foreground mb-1">Template</label>
+					<select bind:value={configTemplateChoice}
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground">
+						<option value="micro">Micro (default)</option>
+						<option value="macro">Macro</option>
+						<option value="custom">Custom URL...</option>
+					</select>
 				</div>
+				{#if configTemplateChoice === 'custom'}
+					<div>
+						<label class="block text-xs font-medium text-muted-foreground mb-1">Template Tournament URL</label>
+						<input type="text" bind:value={configCustomUrl} placeholder="https://www.start.gg/tournament/..."
+							class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground" />
+					</div>
+				{/if}
 				<div>
 					<label class="block text-xs font-medium text-muted-foreground mb-1">Short Slug</label>
 					<input type="text" bind:value={config.shortSlug}
