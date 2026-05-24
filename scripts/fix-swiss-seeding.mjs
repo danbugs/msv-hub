@@ -12,7 +12,7 @@ const env = Object.fromEntries(
     .map(l => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; })
 );
 const STARTGG_TOKEN = env.STARTGG_TOKEN;
-const TOURNAMENT_SLUG = 'microspacing-vancouver-test';
+const TOURNAMENT_SLUG = process.argv[2] || 'microspacing-vancouver-test';
 
 const GQL_URL = 'https://api.start.gg/gql/alpha';
 

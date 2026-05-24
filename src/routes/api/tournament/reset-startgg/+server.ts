@@ -77,7 +77,14 @@ export const POST: RequestHandler = async ({ locals }) => {
 		const otherEvents = allEvents.filter((e) => e.id !== swissEventId);
 		if (!mainEventId) {
 			const mainEvt = otherEvents.find((e) => /main/i.test(e.name));
-			if (mainEvt) { mainEventId = mainEvt.id; log(`  Found main: ${mainEvt.name} (${mainEvt.id})`); }
+			if (mainEvt) {
+				mainEventId = mainEvt.id; log(`  Found main: ${mainEvt.name} (${mainEvt.id})`);
+			} else {
+				const sourceEvt = allEvents.find((e) => e.id === swissEventId);
+				if (sourceEvt && /main/i.test(sourceEvt.name)) {
+					mainEventId = sourceEvt.id; log(`  Found main (source event): ${sourceEvt.name} (${sourceEvt.id})`);
+				}
+			}
 		}
 		if (!redEventId) {
 			const redEvt = otherEvents.find((e) => /redemption/i.test(e.name));
@@ -109,64 +116,72 @@ export const POST: RequestHandler = async ({ locals }) => {
 	// Brief pause to let restarts fully propagate
 	await new Promise<void>((r) => setTimeout(r, 2000));
 
-	// Step 2: Clear entrants from Swiss phases except Round 1
-	log('Step 2: Clearing entrants from later Swiss phases...');
-	const swissPhaseData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
-		EVENT_PHASES_QUERY, { eventId: swissEventId }
-	);
-	const swissPhases = swissPhaseData?.event?.phases ?? [];
-	async function clearPhaseEntrants(eventId: number, phaseId: number, phaseName: string, groupType: number = 4) {
-		for (let attempt = 0; attempt < 3; attempt++) {
-			if (attempt > 0) {
-				log(`  Retry ${attempt} for ${phaseName}...`);
+	// When source event IS the main bracket (gauntlet launched from Main),
+	// skip the Swiss cleanup and participant shuffling — just restart and re-seed in place.
+	const sourceIsMain = tournament.mode === 'gauntlet' && mainEventId === swissEventId;
+
+	if (!sourceIsMain) {
+		// Step 2: Clear entrants from Swiss phases except Round 1
+		log('Step 2: Clearing entrants from later Swiss phases...');
+		const swissPhaseData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
+			EVENT_PHASES_QUERY, { eventId: swissEventId }
+		);
+		const swissPhases = swissPhaseData?.event?.phases ?? [];
+		async function clearPhaseEntrants(eventId: number, phaseId: number, phaseName: string, groupType: number = 4) {
+			for (let attempt = 0; attempt < 3; attempt++) {
+				if (attempt > 0) {
+					log(`  Retry ${attempt} for ${phaseName}...`);
+					await new Promise<void>((r) => setTimeout(r, 2000));
+				}
+				const result = await addEntrantsToPhase(eventId, phaseId, [], undefined, groupType).catch((e) => ({ ok: false, error: String(e) }));
+				if (result.ok) { log(`  ✓ ${phaseName} cleared`); return; }
+				log(`  ✗ ${phaseName}: ${(result as { error?: string }).error}`);
+				await restartPhase(phaseId).catch(() => {});
 				await new Promise<void>((r) => setTimeout(r, 2000));
 			}
-			const result = await addEntrantsToPhase(eventId, phaseId, [], undefined, groupType).catch((e) => ({ ok: false, error: String(e) }));
-			if (result.ok) { log(`  ✓ ${phaseName} cleared`); return; }
-			log(`  ✗ ${phaseName}: ${(result as { error?: string }).error}`);
-			await restartPhase(phaseId).catch(() => {});
-			await new Promise<void>((r) => setTimeout(r, 2000));
 		}
-	}
 
-	const r1Phase = swissPhases.find((p) => p.name.includes('Round 1'));
-	for (const phase of swissPhases) {
-		if (phase.id === r1Phase?.id) continue;
-		const isFinalStandings = phase.name.toLowerCase().includes('final');
-		await clearPhaseEntrants(swissEventId, phase.id, phase.name, isFinalStandings ? 6 : 4);
-		const restartResult = await restartPhase(phase.id).catch((e) => ({ ok: false, error: String(e) }));
-		log(`  ${restartResult.ok ? '✓' : '✗'} ${phase.name}: final restart`);
-	}
+		const r1Phase = swissPhases.find((p) => p.name.includes('Round 1'));
+		for (const phase of swissPhases) {
+			if (phase.id === r1Phase?.id) continue;
+			const isFinalStandings = phase.name.toLowerCase().includes('final');
+			await clearPhaseEntrants(swissEventId, phase.id, phase.name, isFinalStandings ? 6 : 4);
+			const restartResult = await restartPhase(phase.id).catch((e) => ({ ok: false, error: String(e) }));
+			log(`  ${restartResult.ok ? '✓' : '✗'} ${phase.name}: final restart`);
+		}
 
-	// Step 3: Ensure all participants are in Swiss.
-	// For gauntlet: move to Swiss only (step 5 re-adds to Main).
-	// For default/experimental1: ADD to Swiss but keep Main (step 5 needs Main seeds for cross-event mapping).
-	if (tournamentSlug && (mainEventId || redEventId)) {
-		const isGauntletOnly = tournament.mode === 'gauntlet';
-		log(`Step 3: ${isGauntletOnly ? 'Moving' : 'Adding'} participants to Swiss...`);
-		const participants = await getTournamentParticipants(tournamentSlug);
-		let cleaned = 0;
-		let failed = 0;
-		for (const p of participants) {
-			if (isGauntletOnly) {
-				const inMain = mainEventId ? p.currentEventIds.includes(mainEventId) : false;
-				const inRed = redEventId ? p.currentEventIds.includes(redEventId) : false;
-				if (!inMain && !inRed) continue;
-				const result = await updateParticipantEvents(p.participantId, [swissEventId], []);
-				if (result.ok) { cleaned++; } else { failed++; log(`  ✗ ${p.gamerTag}: ${result.error}`); }
-			} else {
-				if (p.currentEventIds.includes(swissEventId)) continue;
-				const targetEvents = [...new Set([...p.currentEventIds, swissEventId])];
-				const result = await updateParticipantEvents(p.participantId, targetEvents);
-				if (result.ok) { cleaned++; } else { failed++; log(`  ✗ ${p.gamerTag}: ${result.error}`); }
+		// Step 3: Ensure all participants are in Swiss.
+		// For gauntlet: move to Swiss only (step 5 re-adds to Main).
+		// For default/experimental1: ADD to Swiss but keep Main (step 5 needs Main seeds for cross-event mapping).
+		if (tournamentSlug && (mainEventId || redEventId)) {
+			const isGauntletOnly = tournament.mode === 'gauntlet';
+			log(`Step 3: ${isGauntletOnly ? 'Moving' : 'Adding'} participants to Swiss...`);
+			const participants = await getTournamentParticipants(tournamentSlug);
+			let cleaned = 0;
+			let failed = 0;
+			for (const p of participants) {
+				if (isGauntletOnly) {
+					const inMain = mainEventId ? p.currentEventIds.includes(mainEventId) : false;
+					const inRed = redEventId ? p.currentEventIds.includes(redEventId) : false;
+					if (!inMain && !inRed) continue;
+					const result = await updateParticipantEvents(p.participantId, [swissEventId], []);
+					if (result.ok) { cleaned++; } else { failed++; log(`  ✗ ${p.gamerTag}: ${result.error}`); }
+				} else {
+					if (p.currentEventIds.includes(swissEventId)) continue;
+					const targetEvents = [...new Set([...p.currentEventIds, swissEventId])];
+					const result = await updateParticipantEvents(p.participantId, targetEvents);
+					if (result.ok) { cleaned++; } else { failed++; log(`  ✗ ${p.gamerTag}: ${result.error}`); }
+				}
 			}
-		}
-		log(`  ${isGauntletOnly ? 'Moved' : 'Added'} ${cleaned} to Swiss${failed > 0 ? `, ${failed} failed` : ''}`);
+			log(`  ${isGauntletOnly ? 'Moved' : 'Added'} ${cleaned} to Swiss${failed > 0 ? `, ${failed} failed` : ''}`);
 
-		// Refresh stored entrant IDs — after restart+re-add, players have NEW IDs
-		await new Promise<void>((r) => setTimeout(r, 2000));
-		log('  Refreshing entrant IDs from Swiss event...');
-		await refreshEntrantIds(tournament, swissEventId, log);
+			// Refresh stored entrant IDs — after restart+re-add, players have NEW IDs
+			await new Promise<void>((r) => setTimeout(r, 2000));
+			log('  Refreshing entrant IDs from Swiss event...');
+			await refreshEntrantIds(tournament, swissEventId, log);
+		}
+	} else {
+		log('Step 2-3: Source event is Main bracket — skipping Swiss cleanup and participant shuffle.');
 	}
 
 	// Step 4: Reset MSV Hub tournament state
@@ -196,8 +211,34 @@ export const POST: RequestHandler = async ({ locals }) => {
 	}
 
 	// Step 5: Re-sync players and seeding on StartGG
-	// Uses the 3-step pattern: add to target (keep source) → push seeding + update IDs → remove from source
-	if (tournament.mode === 'gauntlet' && mainEventId && tournamentSlug) {
+	if (sourceIsMain && mainEventId) {
+		// Source event IS the Main bracket — just re-push seeding in place, no event shuffling needed.
+		log('Step 5: Re-pushing seeding to Main bracket (source-is-main)...');
+
+		const mainPhase = await resolveEventPhase(mainEventId);
+		const mainPhaseId = mainPhase?.phaseId;
+		const mainPgId = mainPhase?.pgId;
+
+		if (mainPhaseId && mainPgId && tournament.brackets?.main) {
+			const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+			const rankedEntrantIds = tournament.brackets.main.players
+				.sort((a, b) => a.seed - b.seed)
+				.map((p) => entrantMap.get(p.entrantId)?.startggEntrantId)
+				.filter((id): id is number => id !== undefined);
+
+			if (rankedEntrantIds.length) {
+				const result = await pushFinalStandingsSeeding(mainPhaseId, mainPgId, rankedEntrantIds)
+					.catch((e) => ({ ok: false as const, error: String(e) }));
+				log(`  Seeding: ${result.ok ? '✓' : '✗ ' + result.error}`);
+			}
+		} else {
+			if (!mainPgId) log('  ✗ Could not resolve Main bracket phase group for seeding');
+		}
+
+		log('  Refreshing entrant IDs...');
+		await refreshEntrantIds(tournament, mainEventId, log);
+	} else if (tournament.mode === 'gauntlet' && mainEventId && tournamentSlug) {
+		// Gauntlet with separate Swiss and Main events — full shuffle dance
 		log('Step 5: Re-syncing gauntlet players + seeding to StartGG...');
 
 		const mainPhase = await resolveEventPhase(mainEventId);
