@@ -283,7 +283,6 @@ function parseEntrants(rawEntrants: Record<string, any>[]): Entrant[] {
 	return entrants;
 }
 
-const TRUESKILL_START = 5000;
 
 async function estimateNewcomerRating(playerId: number, base: number, range: number, signal?: AbortSignal): Promise<number> {
 	const data = await gql<{ player: { recentStandings: { placement: number; entrant: { event: { numEntrants: number } } }[] } }>(
@@ -599,6 +598,11 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback, signal?
 	if (leagueRatings) {
 		log('Step 3: Assigning TrueSkill league ratings...');
 		const mergeMap = await getMergeMap();
+		const vals = [...leagueRatings.values()];
+		const leagueMin = Math.min(...vals);
+		const leagueMax = Math.max(...vals);
+		const newcomerBase = (leagueMax + leagueMin) / 2;
+		const newcomerRange = leagueMax - leagueMin;
 		let leagueCount = 0;
 		for (const e of entrants) {
 			const resolvedId = parseInt(mergeMap[String(e.playerId)] ?? String(e.playerId), 10);
@@ -608,7 +612,7 @@ export async function runSeeder(input: SeederInput, onLog?: LogCallback, signal?
 				leagueCount++;
 			} else {
 				log(`  Estimating rating for newcomer: ${e.gamerTag}...`);
-				e.elo = await estimateNewcomerRating(e.playerId, TRUESKILL_START, 1000, signal);
+				e.elo = await estimateNewcomerRating(e.playerId, newcomerBase, newcomerRange, signal);
 				e.isNewcomer = true;
 			}
 		}
