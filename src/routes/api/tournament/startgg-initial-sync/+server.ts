@@ -134,7 +134,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// Auto-link bracket events
 	if (!tournament.startggMainBracketEventId) {
 		const mainEvt = otherEvents.find((e) => /main/i.test(e.name));
-		if (mainEvt) { tournament.startggMainBracketEventId = mainEvt.id; log(`Linked main: ${mainEvt.name} (${mainEvt.id})`); }
+		if (mainEvt) {
+			tournament.startggMainBracketEventId = mainEvt.id;
+			log(`Linked main: ${mainEvt.name} (${mainEvt.id})`);
+		} else {
+			const sourceEvt = allEvents.find((e) => e.id === swissEventId);
+			if (sourceEvt && /main/i.test(sourceEvt.name)) {
+				tournament.startggMainBracketEventId = sourceEvt.id;
+				log(`Linked main (source event): ${sourceEvt.name} (${sourceEvt.id})`);
+			}
+		}
 	}
 	if (!tournament.startggRedemptionBracketEventId) {
 		const redEvt = otherEvents.find((e) => /redemption/i.test(e.name));

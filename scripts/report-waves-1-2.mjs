@@ -1,13 +1,14 @@
 /**
- * Report the first three waves of a 32-player Main bracket on StartGG,
+ * Report the first three waves of a DE Main bracket on StartGG,
  * minus 1 match (last LR2 match left unreported so redemption doesn't fully trigger).
  *
- * Wave 1: WR1 (16 matches)
- * Wave 2: WR2 + LR1 (8 + 8 = 16 matches)
- * Wave 3: LR2 minus last (7 matches)
- * Total: 39 matches reported. Higher seed always wins, 2-0.
+ * Wave 1: WR1
+ * Wave 2: WR2 + LR1
+ * Wave 3: LR2 minus last
+ * Higher seed always wins, 2-0.
  *
- * Usage: node scripts/report-waves-1-2.mjs
+ * Usage: node scripts/report-waves-1-2.mjs [EVENT_ID]
+ *   EVENT_ID defaults to 1590950 (micro test Main bracket)
  */
 import { readFileSync } from 'fs';
 const env = Object.fromEntries(
@@ -18,7 +19,7 @@ const env = Object.fromEntries(
 const TOKEN = env.STARTGG_TOKEN;
 const EMAIL = env.STARTGG_EMAIL;
 const PASSWORD = env.STARTGG_PASSWORD;
-const MAIN_EVENT_ID = 1590950;
+const MAIN_EVENT_ID = Number(process.argv[2]) || 1590950;
 
 const GQL_URL = 'https://api.start.gg/gql/alpha';
 const PROD_GQL = 'https://www.start.gg/api/-/gql';
@@ -113,15 +114,21 @@ async function completeSet(pgId, e1Id, e2Id, winnerId, winScore, loseScore) {
   return { ok: false, error: 'Max retries exceeded' };
 }
 
-// Fetch entrant seeds to determine "higher seed"
+// Fetch entrant seeds to determine "higher seed" (paginated for >64 players)
 async function getEntrantSeeds(phaseId) {
-  const data = await gql(
-    `query($phaseId:ID!,$page:Int!,$perPage:Int!){phase(id:$phaseId){seeds(query:{page:$page,perPage:$perPage}){nodes{seedNum entrant{id}}}}}`,
-    { phaseId, page: 1, perPage: 64 }
-  );
   const map = new Map();
-  for (const s of data?.phase?.seeds?.nodes ?? []) {
-    if (s.entrant?.id) map.set(Number(s.entrant.id), s.seedNum);
+  let page = 1;
+  while (true) {
+    const data = await gql(
+      `query($phaseId:ID!,$page:Int!,$perPage:Int!){phase(id:$phaseId){seeds(query:{page:$page,perPage:$perPage}){pageInfo{totalPages}nodes{seedNum entrant{id}}}}}`,
+      { phaseId, page, perPage: 64 }
+    );
+    const seeds = data?.phase?.seeds;
+    for (const s of seeds?.nodes ?? []) {
+      if (s.entrant?.id) map.set(Number(s.entrant.id), s.seedNum);
+    }
+    if (page >= (seeds?.pageInfo?.totalPages ?? 1)) break;
+    page++;
   }
   return map;
 }
