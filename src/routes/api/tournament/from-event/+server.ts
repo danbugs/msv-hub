@@ -151,7 +151,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
 		}));
 		let mainBracket = generateBracket('main', players, fakeStandings);
-		mainBracket = assignBracketStations(mainBracket, settings);
+		mainBracket = assignBracketStations(mainBracket, settings, 'main');
 
 		const state: TournamentState = {
 			slug: tourneySlug, name: eventName, mode: 'gauntlet',

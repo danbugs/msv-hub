@@ -494,16 +494,14 @@ export function assignBracketStations(
 		}
 	}
 
-	// Assign remaining stations — use bracket-specific station ranges, skip already-used
-	const half = Math.floor(settings.numStations / 2);
-	const startStation = bracketName === 'redemption' ? half + 1 : 1;
-	const endStation = bracketName === 'redemption' ? settings.numStations : half;
-
 	// Build station pool for this bracket (excluding stream station)
 	const allRegular = Array.from({ length: settings.numStations }, (_, i) => i + 1)
 		.filter((s) => s !== settings.streamStation);
 	const halfIdx = Math.floor(allRegular.length / 2);
-	const stationPool = bracketName === 'redemption' ? allRegular.slice(halfIdx) : allRegular.slice(0, halfIdx);
+	const otherBracketActive = externalOccupiedStations && externalOccupiedStations.size > 0;
+	const stationPool = bracketName === 'redemption'
+		? allRegular.slice(halfIdx)
+		: otherBracketActive ? allRegular.slice(0, halfIdx) : allRegular;
 
 	// Collect stations already in use by active (unreported) matches + other bracket
 	const usedStations = new Set(
@@ -515,30 +513,14 @@ export function assignBracketStations(
 		for (const s of externalOccupiedStations) usedStations.add(s);
 	}
 
-	// If our bracket's pool is exhausted, overflow into the other bracket's half
-	// (so every active match still gets a unique station rather than going blank or duplicate).
-	const fullPool = allRegular;
-
 	for (let i = 0; i < updated.matches.length; i++) {
 		const m = updated.matches[i];
 		if (!m.topPlayerId || !m.bottomPlayerId || m.winnerId || m.station !== undefined) continue;
-		let assigned = false;
 		for (const s of stationPool) {
 			if (usedStations.has(s)) continue;
 			updated.matches[i] = { ...m, station: s };
 			usedStations.add(s);
-			assigned = true;
 			break;
-		}
-		if (!assigned) {
-			// Bracket's half is full — try any unused station across the whole tournament
-			for (const s of fullPool) {
-				if (usedStations.has(s)) continue;
-				updated.matches[i] = { ...m, station: s };
-				usedStations.add(s);
-				assigned = true;
-				break;
-			}
 		}
 	}
 

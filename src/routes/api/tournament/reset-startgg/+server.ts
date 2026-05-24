@@ -200,7 +200,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 			expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
 		}));
 		let mainBracket = generateBracket('main', players, fakeStandings);
-		mainBracket = assignBracketStations(mainBracket, tournament.settings);
+		mainBracket = assignBracketStations(mainBracket, tournament.settings, 'main');
 		tournament.phase = 'brackets';
 		tournament.brackets = { main: mainBracket };
 		log('MSV Hub reset to fresh Gauntlet bracket');
