@@ -44,16 +44,46 @@
 	let triggering = $state(false);
 	let triggerResult = $state<{ ok: boolean; steps: { step: string; ok: boolean; detail: string }[] } | null>(null);
 
+	// Template presets
+	const TEMPLATES = [
+		{ label: 'Micro (default)', url: 'https://www.start.gg/tournament/microspacing-vancouver-test', id: 895482 },
+		{ label: 'Macro', url: 'https://www.start.gg/tournament/macrospacing-vancouver-test', id: 915494 },
+	] as const;
+
 	// One-off event overrides
 	let useOverrides = $state(false);
 	let overrideName = $state('');
 	let overrideDate = $state('');
 	let overrideHour = $state(18);
 	let overrideShortSlug = $state('');
-	let overrideSrcTournamentId = $state('');
+	let overrideTemplateChoice = $state<'micro' | 'macro' | 'custom'>('macro');
+	let overrideCustomUrl = $state('');
 	let overrideAttendeeCap = $state<32 | 64>(64);
 	let skipCounterIncrement = $state(true);
 	let skipDiscordSetup = $state(true);
+	let resolvingUrl = $state(false);
+
+	async function resolveTemplateId(): Promise<number | null> {
+		if (overrideTemplateChoice === 'micro') return TEMPLATES[0].id;
+		if (overrideTemplateChoice === 'macro') return TEMPLATES[1].id;
+		if (!overrideCustomUrl.trim()) return null;
+		const slug = overrideCustomUrl.replace(/^https?:\/\/[^/]+\//, '').replace(/\/+$/, '');
+		const tournSlug = slug.match(/tournament\/([^/]+)/)?.[1];
+		if (!tournSlug) { message = 'Invalid tournament URL'; return null; }
+		resolvingUrl = true;
+		try {
+			const res = await fetch('/api/startgg/resolve-tournament', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ slug: tournSlug })
+			});
+			const data = await res.json();
+			if (!data.id) { message = `Could not find tournament: ${tournSlug}`; return null; }
+			return data.id;
+		} finally {
+			resolvingUrl = false;
+		}
+	}
 
 	onMount(async () => {
 		const res = await fetch('/api/event/config');
@@ -182,7 +212,9 @@
 			if (overrideDate) body.startDate = overrideDate;
 			body.startHour = overrideHour;
 			if (overrideShortSlug) body.shortSlug = overrideShortSlug;
-			if (overrideSrcTournamentId) body.srcTournamentId = Number(overrideSrcTournamentId);
+			const templateId = await resolveTemplateId();
+			if (overrideTemplateChoice === 'custom' && !templateId) { triggering = false; return; }
+			if (templateId) body.srcTournamentId = templateId;
 			body.attendeeCap = overrideAttendeeCap;
 			body.skipCounterIncrement = skipCounterIncrement;
 			body.skipDiscordSetup = skipDiscordSetup;
@@ -237,9 +269,13 @@
 						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
 				</div>
 				<div>
-					<label class="block text-xs font-medium text-muted-foreground mb-1">Template Tournament ID</label>
-					<input type="number" bind:value={config.srcTournamentId}
-						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
+					<label class="block text-xs font-medium text-muted-foreground mb-1">Template Tournament</label>
+					<select bind:value={config.srcTournamentId}
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground">
+						{#each TEMPLATES as t}
+							<option value={t.id}>{t.label} ({t.id})</option>
+						{/each}
+					</select>
 				</div>
 				<div>
 					<label class="block text-xs font-medium text-muted-foreground mb-1">Short Slug</label>
@@ -409,10 +445,22 @@
 								class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground" />
 						</div>
 						<div>
-							<label class="block text-xs font-medium text-muted-foreground mb-1">Template Tournament ID (optional)</label>
-							<input type="text" bind:value={overrideSrcTournamentId} placeholder="Use default"
-								class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground" />
+							<label class="block text-xs font-medium text-muted-foreground mb-1">Template</label>
+							<select bind:value={overrideTemplateChoice}
+								class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground">
+								{#each TEMPLATES as t}
+									<option value={t.label.split(' ')[0].toLowerCase()}>{t.label}</option>
+								{/each}
+								<option value="custom">Custom URL...</option>
+							</select>
 						</div>
+						{#if overrideTemplateChoice === 'custom'}
+							<div>
+								<label class="block text-xs font-medium text-muted-foreground mb-1">Template Tournament URL</label>
+								<input type="text" bind:value={overrideCustomUrl} placeholder="https://www.start.gg/tournament/..."
+									class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground" />
+							</div>
+						{/if}
 					</div>
 					<div class="space-y-2">
 						<label class="flex items-center gap-2 cursor-pointer">
@@ -429,9 +477,11 @@
 				</div>
 			{/if}
 
-			<button onclick={triggerCreateEvent} disabled={triggering || (useOverrides && !overrideName)}
+			<button onclick={triggerCreateEvent} disabled={triggering || resolvingUrl || (useOverrides && !overrideName)}
 				class="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
-				{#if triggering}
+				{#if resolvingUrl}
+					Resolving template...
+				{:else if triggering}
 					Creating event...
 				{:else if useOverrides && overrideName}
 					Create "{overrideName}"
