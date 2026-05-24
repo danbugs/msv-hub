@@ -155,8 +155,8 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Reassign stations on the OTHER bracket when a match frees a station
-	// (applies to both gauntlet and experimental1 modes — they share stations across brackets)
-	if (hasAutoRedemption && tournament.brackets.redemption) {
+	let otherBracketReassigned = false;
+	if (tournament.brackets.redemption) {
 		const otherName = bracketName === 'main' ? 'redemption' : 'main';
 		const otherBracket = tournament.brackets[otherName];
 		if (otherBracket) {
@@ -173,6 +173,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 					otherBracket, tournament.settings, otherName as 'main' | 'redemption',
 					false, undefined, thisBracketOccupied
 				);
+				otherBracketReassigned = true;
 			}
 		}
 	}
@@ -247,6 +248,9 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			// Reset splitConfirmed so match reports queue until redemption sync completes
 			if (!fresh.startggSync) fresh.startggSync = { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
 			else fresh.startggSync.splitConfirmed = false;
+		} else if (otherBracketReassigned) {
+			const otherName = bracketName === 'main' ? 'redemption' : 'main';
+			fresh.brackets![otherName] = tournament.brackets[otherName]!;
 		}
 		// Merge pending bracket match IDs (union of fresh + ours)
 		if (tournament.startggSync) {
