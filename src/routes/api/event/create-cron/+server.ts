@@ -205,7 +205,11 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 
 	// Step 4: Publish events (makes events visible on tournament page)
 	await step('Publish events', async () => {
-		const result = await publishEvents(tournamentId);
+		let result = await publishEvents(tournamentId);
+		if (!result.ok && result.error === 'No events found') {
+			await new Promise<void>((r) => setTimeout(r, 5000));
+			result = await publishEvents(tournamentId);
+		}
 		if (!result.ok) throw new Error(result.error ?? 'Failed');
 		return 'Events set to public';
 	});
@@ -278,16 +282,16 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 			const discordConfig = await getDiscordConfig();
 			const isMacro = (overrides.attendeeCap ?? discordConfig.attendeeCap) === 64;
 
-			type TData = { tournament: { events: { id: number; slug: string }[] } };
+			type TData = { tournament: { events: { id: number; name: string; slug: string }[] } };
 			const data = await gql<TData>(
-				'query($id:ID!){tournament(id:$id){events{id slug}}}',
+				'query($id:ID!){tournament(id:$id){events{id name slug}}}',
 				{ id: tournamentId }
 			);
 			const events = data?.tournament?.events ?? [];
 
 			const target = isMacro
-				? events.find((e) => /main.bracket/i.test(e.slug))
-				: events.find((e) => /swiss/i.test(e.slug));
+				? events.find((e) => /main/i.test(e.name))
+				: events.find((e) => /swiss/i.test(e.name));
 
 			if (target) {
 				eventSlug = target.slug;
