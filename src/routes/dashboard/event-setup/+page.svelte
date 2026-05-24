@@ -94,11 +94,7 @@
 		if (res.ok) config = await res.json();
 		if (config) {
 			const match = TEMPLATES.find(t => t.id === config!.srcTournamentId);
-			if (match) {
-				configTemplateChoice = match.label.startsWith('Micro') ? 'micro' : 'macro';
-			} else {
-				configTemplateChoice = 'custom';
-			}
+			configTemplateChoice = match?.label.startsWith('Macro') ? 'macro' : 'micro';
 		}
 		loading = false;
 	});
