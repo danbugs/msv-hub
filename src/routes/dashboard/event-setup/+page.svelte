@@ -269,13 +269,12 @@
 						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
 				</div>
 				<div>
-					<label class="block text-xs font-medium text-muted-foreground mb-1">Template Tournament</label>
-					<select bind:value={config.srcTournamentId}
-						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground">
-						{#each TEMPLATES as t}
-							<option value={t.id}>{t.label} ({t.id})</option>
-						{/each}
-					</select>
+					<label class="block text-xs font-medium text-muted-foreground mb-1">Template Tournament ID</label>
+					<input type="number" bind:value={config.srcTournamentId}
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
+					{#if TEMPLATES.find(t => t.id === config?.srcTournamentId)}
+						<p class="text-xs text-muted-foreground mt-1">{TEMPLATES.find(t => t.id === config?.srcTournamentId)?.label}</p>
+					{/if}
 				</div>
 				<div>
 					<label class="block text-xs font-medium text-muted-foreground mb-1">Short Slug</label>
