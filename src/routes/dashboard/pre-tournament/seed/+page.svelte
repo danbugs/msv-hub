@@ -26,8 +26,34 @@
 	let loadingEvent = $state(false);
 	let tournamentMode = $state<'default' | 'gauntlet' | 'experimental1'>('default');
 	let showModeInfo = $state(false);
-	let quickPreview = $state<{ seedNum: number; gamerTag: string; elo: number; jitteredElo: number; isNewcomer: boolean }[] | null>(null);
+	let quickPreview = $state<{ seedNum: number; gamerTag: string; playerId?: number; elo: number; jitteredElo: number; isNewcomer: boolean }[] | null>(null);
 	let loadingPreview = $state(false);
+
+	// Bracket collision predictions
+	interface BracketCollision { seed1: number; seed2: number; tag1: string; tag2: string; round: string; bracket: string; event: string }
+	let bracketCollisions = $state<BracketCollision[]>([]);
+	let loadingCollisions = $state(false);
+
+	async function fetchBracketCollisions(entrants: { seedNum: number; gamerTag: string; playerId?: number }[]) {
+		if (!targetNumber || tournamentMode === 'default') return;
+		loadingCollisions = true;
+		const res = await fetch('/api/tournament/bracket-collisions', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ entrants, targetNumber: Number(targetNumber) })
+		});
+		if (res.ok) {
+			const data = await res.json();
+			bracketCollisions = data.collisions;
+		}
+		loadingCollisions = false;
+	}
+
+	function findCollision(tag1: string, tag2: string): BracketCollision | undefined {
+		return bracketCollisions.find((c) =>
+			(c.tag1 === tag1 && c.tag2 === tag2) || (c.tag1 === tag2 && c.tag2 === tag1)
+		);
+	}
 
 	// Drag state
 	let dragIdx = $state<number | null>(null);
@@ -148,7 +174,10 @@
 			}
 		} catch (err) { if (signal.aborted) return; throw err; }
 		loading = false; abortController = null;
-		if (result) currentStep = 2;
+		if (result) {
+			currentStep = 2;
+			fetchBracketCollisions(result.entrants);
+		}
 	}
 
 	// ── Drag & drop reorder ──
@@ -452,6 +481,7 @@
 		const data = await res.json();
 		quickPreview = data.entrants;
 		loadingPreview = false;
+		fetchBracketCollisions(data.entrants);
 	}
 
 	async function startFromEvent() {
@@ -667,8 +697,9 @@
 					<h3 class="text-sm font-medium text-foreground mb-2">{tournamentMode === 'gauntlet' || tournamentMode === 'experimental1' ? 'R1 Bracket Matchups' : 'R1 Pairings'}</h3>
 					<div class="space-y-1 max-h-[28rem] overflow-y-auto">
 						{#each displayPairings as { top, bottom }}
+							{@const r1Collision = findCollision(top.gamerTag, bottom.gamerTag)}
 							<div class="flex items-center gap-2 rounded px-3 py-1.5 text-sm
-								{isCollision(top.playerId, bottom.playerId) ? 'bg-destructive-muted border border-destructive-border' : 'bg-card'}">
+								{isCollision(top.playerId, bottom.playerId) ? 'bg-destructive-muted border border-destructive-border' : r1Collision ? 'bg-orange-950/30 border border-orange-700/40' : 'bg-card'}">
 								<span class="w-6 text-right font-mono text-xs text-muted-foreground">{top.seedNum}</span>
 								<span class="flex-1 text-foreground truncate">{top.gamerTag}</span>
 								<span class="text-muted-foreground text-xs">vs</span>
@@ -676,6 +707,8 @@
 								<span class="w-6 font-mono text-xs text-muted-foreground">{bottom.seedNum}</span>
 								{#if isCollision(top.playerId, bottom.playerId)}
 									<span class="text-xs text-destructive" title="Rematch from last week">⚠</span>
+								{:else if r1Collision}
+									<span class="text-xs text-orange-400" title="Played recently at {r1Collision.event}">⚠</span>
 								{/if}
 							</div>
 						{/each}
@@ -691,6 +724,28 @@
 					{#if collisionCount > 0}
 						<div class="mt-3 rounded-lg border border-warning-border bg-warning-muted p-3 text-xs text-warning">
 							⚠ {collisionCount} rematch{collisionCount > 1 ? 'es' : ''} from last week — drag seeds to resolve
+						</div>
+					{/if}
+					{#if bracketCollisions.length > 0}
+						<div class="mt-3 rounded-lg border border-orange-700/40 bg-orange-950/20 p-3">
+							<p class="text-xs font-medium text-orange-400 mb-2">
+								Predicted rematches ({bracketCollisions.length})
+							</p>
+							<div class="space-y-1">
+								{#each bracketCollisions as c}
+									<div class="flex items-center gap-2 text-xs">
+										<span class="text-orange-400 font-mono w-16 shrink-0">{c.round}</span>
+										<span class="text-foreground truncate">{c.tag1}</span>
+										<span class="text-muted-foreground">vs</span>
+										<span class="text-foreground truncate">{c.tag2}</span>
+										<span class="text-orange-400/70 ml-auto shrink-0 truncate max-w-[10rem]" title={c.event}>@ {c.event}</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{:else if loadingCollisions}
+						<div class="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+							<div class="h-2 w-2 rounded-full bg-orange-500 animate-pulse"></div>Checking for bracket rematches...
 						</div>
 					{/if}
 				</div>
@@ -886,12 +941,17 @@
 							<h3 class="text-sm font-medium text-foreground mb-2">{tournamentMode === 'gauntlet' || tournamentMode === 'experimental1' ? 'R1 Bracket Matchups' : 'R1 Pairings'}</h3>
 							<div class="space-y-1 max-h-[28rem] overflow-y-auto">
 								{#each quickPairings as { top, bottom }}
-									<div class="flex items-center gap-2 rounded px-3 py-1.5 text-sm bg-card">
+									{@const qCollision = findCollision(top.gamerTag, bottom.gamerTag)}
+									<div class="flex items-center gap-2 rounded px-3 py-1.5 text-sm
+										{qCollision ? 'bg-orange-950/30 border border-orange-700/40' : 'bg-card'}">
 										<span class="w-6 text-right font-mono text-xs text-muted-foreground">{top.seedNum}</span>
 										<span class="flex-1 text-foreground truncate">{top.gamerTag}</span>
 										<span class="text-muted-foreground text-xs">vs</span>
 										<span class="flex-1 text-right text-foreground truncate">{bottom.gamerTag}</span>
 										<span class="w-6 font-mono text-xs text-muted-foreground">{bottom.seedNum}</span>
+										{#if qCollision}
+											<span class="text-xs text-orange-400" title="Played recently at {qCollision.event}">⚠</span>
+										{/if}
 									</div>
 								{/each}
 								{#if quickPreview.length % 2 === 1}
@@ -903,6 +963,28 @@
 									</div>
 								{/if}
 							</div>
+							{#if bracketCollisions.length > 0}
+								<div class="mt-3 rounded-lg border border-orange-700/40 bg-orange-950/20 p-3">
+									<p class="text-xs font-medium text-orange-400 mb-2">
+										Predicted rematches ({bracketCollisions.length})
+									</p>
+									<div class="space-y-1">
+										{#each bracketCollisions as c}
+											<div class="flex items-center gap-2 text-xs">
+												<span class="text-orange-400 font-mono w-16 shrink-0">{c.round}</span>
+												<span class="text-foreground truncate">{c.tag1}</span>
+												<span class="text-muted-foreground">vs</span>
+												<span class="text-foreground truncate">{c.tag2}</span>
+												<span class="text-orange-400/70 ml-auto shrink-0 truncate max-w-[10rem]" title={c.event}>@ {c.event}</span>
+											</div>
+										{/each}
+									</div>
+								</div>
+							{:else if loadingCollisions}
+								<div class="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+									<div class="h-2 w-2 rounded-full bg-orange-500 animate-pulse"></div>Checking for bracket rematches...
+								</div>
+							{/if}
 						</div>
 					</div>
 				{/if}

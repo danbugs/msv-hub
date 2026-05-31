@@ -214,7 +214,7 @@ query PhaseSeedsWithTags($phaseId: ID!, $page: Int!, $perPage: Int!) {
         seedNum
         entrant {
           name
-          participants { player { gamerTag } }
+          participants { player { id gamerTag } }
         }
       }
     }
@@ -327,14 +327,15 @@ export async function fetchPhaseSeeds(phaseId: number, signal?: AbortSignal): Pr
 	}, signal);
 }
 
-export async function fetchPhaseSeedsWithTags(phaseId: number, signal?: AbortSignal): Promise<{ seedNum: number; gamerTag: string }[]> {
+export async function fetchPhaseSeedsWithTags(phaseId: number, signal?: AbortSignal): Promise<{ seedNum: number; gamerTag: string; playerId?: number }[]> {
 	const nodes = await fetchAllPages(PHASE_SEEDS_WITH_TAGS_QUERY, { phaseId }, (d) => {
 		const phase = d.phase as GqlRecord | undefined;
 		return phase?.seeds ?? null;
 	}, signal);
 	return (nodes as GqlRecord[]).map((n) => ({
 		seedNum: n.seedNum as number,
-		gamerTag: (n.entrant?.participants?.[0]?.player?.gamerTag ?? n.entrant?.name ?? 'Unknown') as string
+		gamerTag: (n.entrant?.participants?.[0]?.player?.gamerTag ?? n.entrant?.name ?? 'Unknown') as string,
+		playerId: (n.entrant?.participants?.[0]?.player?.id as number | undefined) ?? undefined
 	})).sort((a, b) => a.seedNum - b.seedNum);
 }
 

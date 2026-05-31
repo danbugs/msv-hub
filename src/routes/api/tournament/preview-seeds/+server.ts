@@ -91,6 +91,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const entrants = seeds.map((s) => ({
 		seedNum: s.seedNum,
 		gamerTag: s.gamerTag,
+		playerId: s.playerId,
 		elo: 0,
 		jitteredElo: 0,
 		isNewcomer: false
