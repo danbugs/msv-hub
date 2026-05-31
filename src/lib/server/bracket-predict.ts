@@ -4,7 +4,7 @@ import {
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
 
-const MATCHUP_CACHE_KEY = 'matchups:recent:v4';
+const MATCHUP_CACHE_KEY = 'matchups:recent:v5';
 const MATCHUP_CACHE_TTL = 6 * 60 * 60;
 const SCAN_DELAY = 400;
 
@@ -234,6 +234,13 @@ export function resolveCollisions(
 		);
 		if (collisions.length === 0) break;
 
+		// Prioritize resolving the most recent rematches first.
+		collisions.sort((a, b) => {
+			const ma = recentMatches.get(pairKey(a.playerId1!, a.playerId2!));
+			const mb = recentMatches.get(pairKey(b.playerId1!, b.playerId2!));
+			return (mb?.startAt ?? 0) - (ma?.startAt ?? 0);
+		});
+
 		let resolved = false;
 		for (const c of collisions) {
 			const idxA = fixed.findIndex(e => e.playerId === c.playerId1);
@@ -289,11 +296,12 @@ export interface HistoricalMatch {
 	tag1: string;
 	tag2: string;
 	event: string;
+	startAt: number;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parsePlayerSet(node: Record<string, any>): {
-	p1: number; p2: number; tag1: string; tag2: string; event: string;
+	p1: number; p2: number; tag1: string; tag2: string; event: string; startAt: number;
 } | null {
 	if (!node) return null;
 	const displayScore: string = node.displayScore ?? '';
@@ -314,7 +322,8 @@ function parsePlayerSet(node: Record<string, any>): {
 	return {
 		p1: players[0].playerId, p2: players[1].playerId,
 		tag1: players[0].tag, tag2: players[1].tag,
-		event: node.event?.tournament?.name ?? 'Unknown'
+		event: node.event?.tournament?.name ?? 'Unknown',
+		startAt: node.event?.tournament?.startAt ?? 0
 	};
 }
 
@@ -340,13 +349,15 @@ async function computeRecentMatchups(
 			if (!parsed) continue;
 
 			const key = pairKey(parsed.p1, parsed.p2);
-			if (!matches.has(key)) {
+			const existing = matches.get(key);
+			if (!existing || parsed.startAt > existing.startAt) {
 				matches.set(key, {
 					player1Id: Math.min(parsed.p1, parsed.p2),
 					player2Id: Math.max(parsed.p1, parsed.p2),
 					tag1: parsed.p1 < parsed.p2 ? parsed.tag1 : parsed.tag2,
 					tag2: parsed.p1 < parsed.p2 ? parsed.tag2 : parsed.tag1,
-					event: parsed.event
+					event: parsed.event,
+					startAt: parsed.startAt
 				});
 			}
 		}
