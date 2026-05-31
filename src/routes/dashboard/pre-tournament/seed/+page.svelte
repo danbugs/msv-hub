@@ -40,6 +40,8 @@
 	let touchRow: HTMLElement | null = null;
 	let tableBody: HTMLElement | null = null;
 	let scrollRaf: number | null = null;
+	let lastTouchY = 0;
+	let touchActive = false;
 	const SCROLL_EDGE = 60;
 	const SCROLL_SPEED = 8;
 
@@ -86,7 +88,7 @@
 	}
 
 	function cancelSeeder() { abortController?.abort(); abortController = null; loading = false; }
-	onDestroy(() => abortController?.abort());
+	onDestroy(() => { abortController?.abort(); handleDocTouchEnd(); });
 
 	async function runSeeder() {
 		loading = true; error = ''; result = null; liveLogs = [];
@@ -163,19 +165,58 @@
 	function onDragEnd() { dragIdx = null; dragOverIdx = null; }
 
 	// ── Touch reorder (mobile, long-press to drag) ──
+	function preventTouchScroll(e: TouchEvent) {
+		if (touchActive) e.preventDefault();
+	}
+
+	function handleDocTouchMove(e: TouchEvent) {
+		const y = e.touches[0].clientY;
+		if (touchDragIdx === null) {
+			if (touchHoldTimer && Math.abs(y - touchStartY) > 10) {
+				clearTimeout(touchHoldTimer);
+				touchHoldTimer = null;
+				touchPendingIdx = null;
+			}
+			return;
+		}
+		lastTouchY = y;
+		if (scrollRaf === null) scrollRaf = requestAnimationFrame(autoScrollLoop);
+	}
+
+	function handleDocTouchEnd() {
+		if (touchHoldTimer) { clearTimeout(touchHoldTimer); touchHoldTimer = null; }
+		if (scrollRaf !== null) { cancelAnimationFrame(scrollRaf); scrollRaf = null; }
+		if (touchDragIdx !== null && dragOverIdx !== null) {
+			onDrop(dragOverIdx);
+		}
+		touchDragIdx = null;
+		touchPendingIdx = null;
+		touchRow = null;
+		dragIdx = null;
+		dragOverIdx = null;
+		if (touchClone) { touchClone.remove(); touchClone = null; }
+		if (touchActive) {
+			touchActive = false;
+			document.removeEventListener('touchmove', preventTouchScroll);
+			document.removeEventListener('touchmove', handleDocTouchMove);
+			document.removeEventListener('touchend', handleDocTouchEnd);
+			document.removeEventListener('touchcancel', handleDocTouchEnd);
+		}
+	}
+
 	function activateTouchDrag() {
 		if (touchPendingIdx === null || !touchRow) return;
 		touchDragIdx = touchPendingIdx;
 		dragIdx = touchPendingIdx;
+		touchActive = true;
 		touchClone = touchRow.cloneNode(true) as HTMLElement;
 		const rect = touchRow.getBoundingClientRect();
 		touchClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;opacity:0.85;z-index:50;pointer-events:none;background:var(--color-card, #1a1a2e);`;
 		document.body.appendChild(touchClone);
-		document.body.style.overflow = 'hidden';
-	}
-
-	function stopAutoScroll() {
-		if (scrollRaf !== null) { cancelAnimationFrame(scrollRaf); scrollRaf = null; }
+		document.addEventListener('touchmove', preventTouchScroll, { passive: false });
+		document.addEventListener('touchmove', handleDocTouchMove);
+		document.addEventListener('touchend', handleDocTouchEnd);
+		document.addEventListener('touchcancel', handleDocTouchEnd);
 	}
 
 	function findClosestRow(y: number): number | null {
@@ -192,8 +233,6 @@
 		}
 		return closest;
 	}
-
-	let lastTouchY = 0;
 
 	function autoScrollLoop() {
 		const y = lastTouchY;
@@ -213,36 +252,6 @@
 		touchStartY = e.touches[0].clientY;
 		touchRow = e.currentTarget as HTMLElement;
 		touchHoldTimer = setTimeout(activateTouchDrag, 300);
-	}
-
-	function onTouchMove(e: TouchEvent) {
-		const y = e.touches[0].clientY;
-		if (touchDragIdx === null) {
-			if (touchHoldTimer && Math.abs(y - touchStartY) > 10) {
-				clearTimeout(touchHoldTimer);
-				touchHoldTimer = null;
-				touchPendingIdx = null;
-			}
-			return;
-		}
-		e.preventDefault();
-		lastTouchY = y;
-		if (scrollRaf === null) scrollRaf = requestAnimationFrame(autoScrollLoop);
-	}
-
-	function onTouchEnd() {
-		if (touchHoldTimer) { clearTimeout(touchHoldTimer); touchHoldTimer = null; }
-		stopAutoScroll();
-		if (touchDragIdx !== null && dragOverIdx !== null) {
-			onDrop(dragOverIdx);
-		}
-		touchDragIdx = null;
-		touchPendingIdx = null;
-		touchRow = null;
-		dragIdx = null;
-		dragOverIdx = null;
-		if (touchClone) { touchClone.remove(); touchClone = null; }
-		document.body.style.overflow = '';
 	}
 
 	function computePairings(entrants: NonNullable<typeof result>['entrants']) {
@@ -496,8 +505,6 @@
 										ondrop={() => onDrop(i)}
 										ondragend={onDragEnd}
 										ontouchstart={(ev) => onTouchStart(i, ev)}
-										ontouchmove={onTouchMove}
-										ontouchend={onTouchEnd}
 										class="border-b border-border cursor-grab active:cursor-grabbing transition-colors select-none
 											{dragOverIdx === i ? 'bg-violet-900/30 border-violet-600' : 'hover:bg-secondary/50'}
 											{dragIdx === i ? 'opacity-40' : ''}"
