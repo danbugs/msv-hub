@@ -192,8 +192,10 @@ query PlayerRecentStandings($playerId: ID!) {
       placement
       entrant {
         event {
+          id
           numEntrants
-          tournament { name }
+          isOnline
+          tournament { name startAt }
         }
       }
     }

@@ -1,5 +1,5 @@
 import {
-	gql, TOURNAMENT_QUERY, fetchAllSets, extractPlayerId, extractGamerTag
+	gql, TOURNAMENT_QUERY, PLAYER_RECENT_STANDINGS_QUERY, fetchAllSets, extractPlayerId, extractGamerTag
 } from './startgg';
 
 function getStandardBracketOrder(bracketSize: number): number[] {
@@ -234,9 +234,50 @@ export interface HistoricalMatch {
 	event: string;
 }
 
+function addMatch(
+	matches: Map<string, HistoricalMatch>,
+	parsed: { p1: number; p2: number; tag1: string; tag2: string; event: string },
+	playerIds: Set<number>
+) {
+	if (!playerIds.has(parsed.p1) && !playerIds.has(parsed.p2)) return;
+	const key = pairKey(parsed.p1, parsed.p2);
+	if (!matches.has(key)) {
+		matches.set(key, {
+			player1Id: Math.min(parsed.p1, parsed.p2),
+			player2Id: Math.max(parsed.p1, parsed.p2),
+			tag1: parsed.p1 < parsed.p2 ? parsed.tag1 : parsed.tag2,
+			tag2: parsed.p1 < parsed.p2 ? parsed.tag2 : parsed.tag1,
+			event: parsed.event
+		});
+	}
+}
+
+async function fetchSetsFromEvent(
+	eventId: number, tournamentName: string,
+	matches: Map<string, HistoricalMatch>, playerIds: Set<number>
+) {
+	const rawSets = await fetchAllSets(eventId);
+	for (const raw of rawSets) {
+		const parsed = parseSetBasic(raw, tournamentName);
+		if (parsed) addMatch(matches, parsed, playerIds);
+	}
+}
+
+interface StandingsResult {
+	player: {
+		id: number; gamerTag: string;
+		recentStandings: {
+			placement: number;
+			entrant: { event: { id: number; numEntrants: number; isOnline: boolean; tournament: { name: string; startAt: number } } };
+		}[];
+	};
+}
+
 /**
  * Fetch recent matchups for a set of player IDs.
- * Looks back ~1 month of weeklies + ~4 months of regionals (32+ entrants).
+ * - Last ~1 month of MSV weeklies
+ * - Last ~4 months of MSV macros (32+ entrants)
+ * - Last ~4 months of external offline regionals (32+ entrants) discovered via top players' recent standings
  */
 export async function fetchRecentMatchups(
 	targetNumber: number,
@@ -244,21 +285,21 @@ export async function fetchRecentMatchups(
 ): Promise<Map<string, HistoricalMatch>> {
 	const matches = new Map<string, HistoricalMatch>();
 
-	// Last 4 weeklies (~1 month)
+	const fourMonthsAgo = Date.now() / 1000 - 4 * 30 * 86400;
+	const oneMonthAgo = Date.now() / 1000 - 30 * 86400;
+
+	// ── 1. MSV weeklies (last 4) ──
 	const weeklyStart = Math.max(1, targetNumber - 4);
 	const weeklySlugs: string[] = [];
 	for (let n = weeklyStart; n < targetNumber; n++) {
 		weeklySlugs.push(`microspacing-vancouver-${n}`);
 	}
 
-	// Last ~4 months of macros (check last 4)
+	// ── 2. MSV macros (last 10, filtered by date) ──
 	const macroSlugs: string[] = [];
 	for (let n = 1; n <= 10; n++) {
 		macroSlugs.push(`macrospacing-vancouver-${n}`);
 	}
-
-	const fourMonthsAgo = Date.now() / 1000 - 4 * 30 * 86400;
-	const oneMonthAgo = Date.now() / 1000 - 30 * 86400;
 
 	interface TournamentQueryResult { tournament: { id: number; name: string; startAt: number; events: { id: number; name: string; numEntrants: number }[] } | null }
 
@@ -278,23 +319,39 @@ export async function fetchRecentMatchups(
 		}
 
 		for (const event of data.tournament.events ?? []) {
-			const rawSets = await fetchAllSets(event.id);
-			for (const raw of rawSets) {
-				const parsed = parseSetBasic(raw, `${data.tournament.name}`);
-				if (!parsed) continue;
-				if (!playerIds.has(parsed.p1) && !playerIds.has(parsed.p2)) continue;
-				const key = pairKey(parsed.p1, parsed.p2);
-				if (!matches.has(key)) {
-					matches.set(key, {
-						player1Id: Math.min(parsed.p1, parsed.p2),
-						player2Id: Math.max(parsed.p1, parsed.p2),
-						tag1: parsed.p1 < parsed.p2 ? parsed.tag1 : parsed.tag2,
-						tag2: parsed.p1 < parsed.p2 ? parsed.tag2 : parsed.tag1,
-						event: parsed.event
-					});
-				}
-			}
+			await fetchSetsFromEvent(event.id, data.tournament.name, matches, playerIds);
 		}
+	}
+
+	// ── 3. External regionals: query top 16 players' recent standings ──
+	const playerIdArr = [...playerIds].slice(0, 16);
+	const seenEventIds = new Set<number>();
+	const regionalEvents: { eventId: number; tournamentName: string }[] = [];
+
+	for (const pid of playerIdArr) {
+		const data = await gql<StandingsResult>(PLAYER_RECENT_STANDINGS_QUERY, { playerId: pid });
+		if (!data?.player?.recentStandings) continue;
+
+		for (const s of data.player.recentStandings) {
+			const evt = s.entrant?.event;
+			if (!evt) continue;
+			if (seenEventIds.has(evt.id)) continue;
+
+			const startAt = evt.tournament?.startAt ?? 0;
+			if (startAt < fourMonthsAgo) continue;
+			if ((evt.numEntrants ?? 0) < 32) continue;
+			if (evt.isOnline) continue;
+
+			const name = evt.tournament?.name ?? '';
+			if (/microspacing|macrospacing/i.test(name)) continue;
+
+			seenEventIds.add(evt.id);
+			regionalEvents.push({ eventId: evt.id, tournamentName: name });
+		}
+	}
+
+	for (const { eventId, tournamentName } of regionalEvents) {
+		await fetchSetsFromEvent(eventId, tournamentName, matches, playerIds);
 	}
 
 	return matches;
