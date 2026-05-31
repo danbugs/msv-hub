@@ -286,10 +286,10 @@ export async function fetchRecentMatchups(
 	const matches = new Map<string, HistoricalMatch>();
 
 	const fourMonthsAgo = Date.now() / 1000 - 4 * 30 * 86400;
-	const oneMonthAgo = Date.now() / 1000 - 30 * 86400;
+	const twoMonthsAgo = Date.now() / 1000 - 2 * 30 * 86400;
 
-	// ── 1. MSV weeklies (last 4) ──
-	const weeklyStart = Math.max(1, targetNumber - 4);
+	// ── 1. MSV weeklies (last 8, ~2 months) ──
+	const weeklyStart = Math.max(1, targetNumber - 8);
 	const weeklySlugs: string[] = [];
 	for (let n = weeklyStart; n < targetNumber; n++) {
 		weeklySlugs.push(`microspacing-vancouver-${n}`);
@@ -315,7 +315,7 @@ export async function fetchRecentMatchups(
 			const hasLargeEvent = data.tournament.events?.some((e) => (e.numEntrants ?? 0) >= 32);
 			if (!hasLargeEvent) continue;
 		} else {
-			if (startAt < oneMonthAgo) continue;
+			if (startAt < twoMonthsAgo) continue;
 		}
 
 		for (const event of data.tournament.events ?? []) {
