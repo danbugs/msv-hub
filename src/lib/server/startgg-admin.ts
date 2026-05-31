@@ -162,7 +162,7 @@ export async function getTournamentParticipants(
 	return (data?.tournament?.participants?.nodes ?? []).map((p) => ({
 		participantId: p.id,
 		gamerTag: p.gamerTag,
-		currentEventIds: p.events.map((e) => e.id)
+		currentEventIds: (p.events ?? []).map((e) => e.id)
 	}));
 }
 
