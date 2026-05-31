@@ -26,6 +26,8 @@
 	let loadingEvent = $state(false);
 	let tournamentMode = $state<'default' | 'gauntlet' | 'experimental1'>('default');
 	let showModeInfo = $state(false);
+	let quickPreview = $state<{ seedNum: number; gamerTag: string; elo: number; jitteredElo: number; isNewcomer: boolean }[] | null>(null);
+	let loadingPreview = $state(false);
 
 	// Drag state
 	let dragIdx = $state<number | null>(null);
@@ -307,6 +309,112 @@
 		return displayPairings.filter((p) => isCollision(p.top.playerId, p.bottom.playerId)).length;
 	});
 
+	let quickPairings = $derived.by(() => {
+		if (!quickPreview) return [];
+		return computePairings(quickPreview);
+	});
+
+	// Drag handlers for quick preview
+	let qDragIdx = $state<number | null>(null);
+	let qDragOverIdx = $state<number | null>(null);
+
+	function onQDragStart(idx: number) { qDragIdx = idx; }
+	function onQDragOver(idx: number, e: DragEvent) { e.preventDefault(); qDragOverIdx = idx; }
+	function onQDragLeave() { qDragOverIdx = null; }
+	function onQDrop(targetIdx: number) {
+		if (qDragIdx === null || qDragIdx === targetIdx || !quickPreview) { qDragIdx = null; qDragOverIdx = null; return; }
+		const e = [...quickPreview];
+		const [moved] = e.splice(qDragIdx, 1);
+		e.splice(targetIdx, 0, moved);
+		e.forEach((ent, i) => ent.seedNum = i + 1);
+		quickPreview = e;
+		qDragIdx = null; qDragOverIdx = null;
+	}
+	function onQDragEnd() { qDragIdx = null; qDragOverIdx = null; }
+
+	// Touch drag for quick preview
+	let qTouchDragIdx = $state<number | null>(null);
+	let qTouchPendingIdx: number | null = null;
+	let qTouchStartY = 0;
+	let qTouchHoldTimer: ReturnType<typeof setTimeout> | null = null;
+	let qTouchClone: HTMLElement | null = null;
+	let qTouchRow: HTMLElement | null = null;
+	let qTableBody: HTMLElement | null = null;
+	let qTouchActive = false;
+	let qLastTouchY = 0;
+	let qScrollRaf: number | null = null;
+
+	function qPreventTouchScroll(e: TouchEvent) { if (qTouchActive) e.preventDefault(); }
+
+	function qHandleDocTouchMove(e: TouchEvent) {
+		const y = e.touches[0].clientY;
+		if (qTouchDragIdx === null) {
+			if (qTouchHoldTimer && Math.abs(y - qTouchStartY) > 10) {
+				clearTimeout(qTouchHoldTimer); qTouchHoldTimer = null; qTouchPendingIdx = null;
+			}
+			return;
+		}
+		qLastTouchY = y;
+		if (qScrollRaf === null) qScrollRaf = requestAnimationFrame(qAutoScrollLoop);
+	}
+
+	function qHandleDocTouchEnd() {
+		if (qTouchHoldTimer) { clearTimeout(qTouchHoldTimer); qTouchHoldTimer = null; }
+		if (qScrollRaf !== null) { cancelAnimationFrame(qScrollRaf); qScrollRaf = null; }
+		if (qTouchDragIdx !== null && qDragOverIdx !== null) { onQDrop(qDragOverIdx); }
+		qTouchDragIdx = null; qTouchPendingIdx = null; qTouchRow = null;
+		qDragIdx = null; qDragOverIdx = null;
+		if (qTouchClone) { qTouchClone.remove(); qTouchClone = null; }
+		if (qTouchActive) {
+			qTouchActive = false;
+			document.removeEventListener('touchmove', qPreventTouchScroll);
+			document.removeEventListener('touchmove', qHandleDocTouchMove);
+			document.removeEventListener('touchend', qHandleDocTouchEnd);
+			document.removeEventListener('touchcancel', qHandleDocTouchEnd);
+		}
+	}
+
+	function qActivateTouchDrag() {
+		if (qTouchPendingIdx === null || !qTouchRow) return;
+		qTouchDragIdx = qTouchPendingIdx; qDragIdx = qTouchPendingIdx; qTouchActive = true;
+		qTouchClone = qTouchRow.cloneNode(true) as HTMLElement;
+		const rect = qTouchRow.getBoundingClientRect();
+		qTouchClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;opacity:0.85;z-index:50;pointer-events:none;background:var(--color-card, #1a1a2e);`;
+		document.body.appendChild(qTouchClone);
+		document.addEventListener('touchmove', qPreventTouchScroll, { passive: false });
+		document.addEventListener('touchmove', qHandleDocTouchMove);
+		document.addEventListener('touchend', qHandleDocTouchEnd);
+		document.addEventListener('touchcancel', qHandleDocTouchEnd);
+	}
+
+	function qFindClosestRow(y: number): number | null {
+		if (!qTableBody) return null;
+		const rows = Array.from(qTableBody.children) as HTMLElement[];
+		let closest: number | null = null; let minDist = Infinity;
+		for (let i = 0; i < rows.length; i++) {
+			if (i === qTouchDragIdx) continue;
+			const r = rows[i].getBoundingClientRect();
+			const d = Math.abs(y - (r.top + r.bottom) / 2);
+			if (d < minDist) { minDist = d; closest = i; }
+		}
+		return closest;
+	}
+
+	function qAutoScrollLoop() {
+		const y = qLastTouchY; const vh = window.innerHeight;
+		if (y < SCROLL_EDGE) window.scrollBy(0, -SCROLL_SPEED);
+		else if (y > vh - SCROLL_EDGE) window.scrollBy(0, SCROLL_SPEED);
+		if (qTouchClone) qTouchClone.style.top = `${y - 20}px`;
+		qDragOverIdx = qFindClosestRow(y);
+		qScrollRaf = requestAnimationFrame(qAutoScrollLoop);
+	}
+
+	function onQTouchStart(idx: number, e: TouchEvent) {
+		qTouchPendingIdx = idx; qTouchStartY = e.touches[0].clientY;
+		qTouchRow = e.currentTarget as HTMLElement;
+		qTouchHoldTimer = setTimeout(qActivateTouchDrag, 300);
+	}
+
 	let syncStatus = $state('');
 
 	async function runInitialSync(eventSlug?: string) {
@@ -330,6 +438,20 @@
 			error = `StartGG seeding: ${seedingResult}`;
 		}
 		return true;
+	}
+
+	async function previewFromEvent() {
+		if (!eventUrl.trim()) return;
+		loadingPreview = true; error = '';
+		const res = await fetch('/api/tournament/preview-seeds', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ eventSlug: eventUrl.trim(), mode: tournamentMode })
+		});
+		if (!res.ok) { loadingPreview = false; const data = await res.json(); error = data.error ?? 'Failed'; return; }
+		const data = await res.json();
+		quickPreview = data.entrants;
+		loadingPreview = false;
 	}
 
 	async function startFromEvent() {
@@ -712,11 +834,78 @@
 					{:else if tournamentMode === 'experimental1'}
 						<span class="self-end pb-2 text-xs text-muted-foreground">3 rounds</span>
 					{/if}
+					{#if !quickPreview}
+						<button onclick={previewFromEvent} disabled={loadingPreview || !eventUrl.trim()}
+							class="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50">
+							{loadingPreview ? 'Loading...' : 'Preview Seeding'}
+						</button>
+					{/if}
 					<button onclick={startFromEvent} disabled={loadingEvent || !eventUrl.trim()}
 						class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-						{loadingEvent ? (syncStatus || 'Loading…') : tournamentMode === 'gauntlet' ? 'Start Macro Default →' : tournamentMode === 'experimental1' ? 'Start Experimental #1 →' : 'Start Swiss →'}
+						{loadingEvent ? (syncStatus || 'Loading...') : tournamentMode === 'gauntlet' ? 'Start Macro Default →' : tournamentMode === 'experimental1' ? 'Start Experimental #1 →' : 'Start Swiss →'}
 					</button>
 				</div>
+
+				{#if quickPreview}
+					<div class="mt-4 grid gap-6 lg:grid-cols-2">
+						<div>
+							<h3 class="text-sm font-medium text-foreground mb-1">Seeding — {quickPreview.length} players</h3>
+							<p class="mb-2 text-xs text-muted-foreground">Drag rows to reorder seeds before starting.</p>
+							<div class="lg:max-h-[28rem] lg:overflow-auto rounded-lg border border-border">
+								<table class="w-full text-sm">
+									<thead class="sticky top-0 bg-card z-10">
+										<tr class="border-b border-border text-left text-muted-foreground">
+											<th class="px-2 py-1.5 text-right w-12">Seed</th>
+											<th class="px-2 py-1.5">Tag</th>
+										</tr>
+									</thead>
+									<tbody bind:this={qTableBody}>
+										{#each quickPreview as e, i}
+											<tr
+												draggable="true"
+												ondragstart={() => onQDragStart(i)}
+												ondragover={(ev) => onQDragOver(i, ev)}
+												ondragleave={onQDragLeave}
+												ondrop={() => onQDrop(i)}
+												ondragend={onQDragEnd}
+												ontouchstart={(ev) => onQTouchStart(i, ev)}
+												class="border-b border-border cursor-grab active:cursor-grabbing transition-colors select-none
+													{qDragOverIdx === i ? 'bg-violet-900/30 border-violet-600' : 'hover:bg-secondary/50'}
+													{qDragIdx === i ? 'opacity-40' : ''}"
+												style="-webkit-user-select:none;-webkit-touch-callout:none">
+												<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.seedNum}</td>
+												<td class="px-2 py-1.5 text-foreground truncate max-w-[10rem]">{e.gamerTag}</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<div>
+							<h3 class="text-sm font-medium text-foreground mb-2">{tournamentMode === 'gauntlet' || tournamentMode === 'experimental1' ? 'R1 Bracket Matchups' : 'R1 Pairings'}</h3>
+							<div class="space-y-1 max-h-[28rem] overflow-y-auto">
+								{#each quickPairings as { top, bottom }}
+									<div class="flex items-center gap-2 rounded px-3 py-1.5 text-sm bg-card">
+										<span class="w-6 text-right font-mono text-xs text-muted-foreground">{top.seedNum}</span>
+										<span class="flex-1 text-foreground truncate">{top.gamerTag}</span>
+										<span class="text-muted-foreground text-xs">vs</span>
+										<span class="flex-1 text-right text-foreground truncate">{bottom.gamerTag}</span>
+										<span class="w-6 font-mono text-xs text-muted-foreground">{bottom.seedNum}</span>
+									</div>
+								{/each}
+								{#if quickPreview.length % 2 === 1}
+									{@const bye = quickPreview[Math.floor(quickPreview.length / 2)]}
+									<div class="flex items-center gap-2 rounded bg-card px-3 py-1.5 text-sm">
+										<span class="w-6 text-right font-mono text-xs text-muted-foreground">{bye.seedNum}</span>
+										<span class="text-foreground">{bye.gamerTag}</span>
+										<span class="text-warning text-xs ml-auto">BYE</span>
+									</div>
+								{/if}
+							</div>
+						</div>
+					</div>
+				{/if}
 			</div>
 		</div>
 	</div>
