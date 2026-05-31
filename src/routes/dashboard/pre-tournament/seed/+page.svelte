@@ -31,6 +31,12 @@
 	let dragIdx = $state<number | null>(null);
 	let dragOverIdx = $state<number | null>(null);
 
+	// Touch drag state
+	let touchDragIdx = $state<number | null>(null);
+	let touchStartY = 0;
+	let touchClone: HTMLElement | null = null;
+	let tableBody: HTMLElement | null = null;
+
 	let abortController: AbortController | null = null;
 	let result = $state<{
 		entrants: { seedNum: number; gamerTag: string; elo: number; jitteredElo: number; isNewcomer: boolean; playerId?: number }[];
@@ -149,6 +155,48 @@
 		dragIdx = null; dragOverIdx = null;
 	}
 	function onDragEnd() { dragIdx = null; dragOverIdx = null; }
+
+	// ── Touch reorder (mobile) ──
+	function onTouchStart(idx: number, e: TouchEvent) {
+		touchDragIdx = idx;
+		touchStartY = e.touches[0].clientY;
+		const row = (e.currentTarget as HTMLElement);
+		touchClone = row.cloneNode(true) as HTMLElement;
+		const rect = row.getBoundingClientRect();
+		touchClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;opacity:0.85;z-index:50;pointer-events:none;background:var(--color-card, #1a1a2e);`;
+		document.body.appendChild(touchClone);
+		dragIdx = idx;
+	}
+
+	function onTouchMove(e: TouchEvent) {
+		if (touchDragIdx === null || !touchClone || !tableBody) return;
+		e.preventDefault();
+		const y = e.touches[0].clientY;
+		const dy = y - touchStartY;
+		const origRect = tableBody.children[touchDragIdx] as HTMLElement;
+		if (!origRect) return;
+		const origTop = origRect.getBoundingClientRect().top;
+		touchClone.style.top = `${origTop + dy}px`;
+
+		const rows = Array.from(tableBody.children) as HTMLElement[];
+		let overIdx: number | null = null;
+		for (let i = 0; i < rows.length; i++) {
+			if (i === touchDragIdx) continue;
+			const r = rows[i].getBoundingClientRect();
+			if (y >= r.top && y <= r.bottom) { overIdx = i; break; }
+		}
+		dragOverIdx = overIdx;
+	}
+
+	function onTouchEnd() {
+		if (touchDragIdx !== null && dragOverIdx !== null) {
+			onDrop(dragOverIdx);
+		}
+		touchDragIdx = null;
+		dragIdx = null;
+		dragOverIdx = null;
+		if (touchClone) { touchClone.remove(); touchClone = null; }
+	}
 
 	function computePairings(entrants: NonNullable<typeof result>['entrants']) {
 		const n = entrants.length;
@@ -391,7 +439,7 @@
 									<th class="px-2 py-1.5 text-right w-16">Elo</th>
 								</tr>
 							</thead>
-							<tbody>
+							<tbody bind:this={tableBody}>
 								{#each result.entrants as e, i}
 									<tr
 										draggable="true"
@@ -400,7 +448,10 @@
 										ondragleave={onDragLeave}
 										ondrop={() => onDrop(i)}
 										ondragend={onDragEnd}
-										class="border-b border-border cursor-grab active:cursor-grabbing transition-colors
+										ontouchstart={(ev) => onTouchStart(i, ev)}
+										ontouchmove={onTouchMove}
+										ontouchend={onTouchEnd}
+										class="border-b border-border cursor-grab active:cursor-grabbing transition-colors touch-none
 											{dragOverIdx === i ? 'bg-violet-900/30 border-violet-600' : 'hover:bg-secondary/50'}
 											{dragIdx === i ? 'opacity-40' : ''}">
 										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.seedNum}</td>
