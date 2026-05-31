@@ -275,12 +275,11 @@ interface StandingsResult {
 
 /**
  * Fetch recent matchups for a set of player IDs.
- * - Last ~1 month of MSV weeklies
+ * - Last ~2 months of MSV weeklies (by date, scans slug range)
  * - Last ~4 months of MSV macros (32+ entrants)
- * - Last ~4 months of external offline regionals (32+ entrants) discovered via top players' recent standings
+ * - Last ~4 months of external offline regionals/majors (32+ entrants) via top players' recent standings
  */
 export async function fetchRecentMatchups(
-	targetNumber: number,
 	playerIds: Set<number>
 ): Promise<Map<string, HistoricalMatch>> {
 	const matches = new Map<string, HistoricalMatch>();
@@ -288,42 +287,39 @@ export async function fetchRecentMatchups(
 	const fourMonthsAgo = Date.now() / 1000 - 4 * 30 * 86400;
 	const twoMonthsAgo = Date.now() / 1000 - 2 * 30 * 86400;
 
-	// ── 1. MSV weeklies (last 8, ~2 months) ──
-	const weeklyStart = Math.max(1, targetNumber - 8);
-	const weeklySlugs: string[] = [];
-	for (let n = weeklyStart; n < targetNumber; n++) {
-		weeklySlugs.push(`microspacing-vancouver-${n}`);
-	}
-
-	// ── 2. MSV macros (last 10, filtered by date) ──
-	const macroSlugs: string[] = [];
-	for (let n = 1; n <= 10; n++) {
-		macroSlugs.push(`macrospacing-vancouver-${n}`);
-	}
-
 	interface TournamentQueryResult { tournament: { id: number; name: string; startAt: number; events: { id: number; name: string; numEntrants: number }[] } | null }
 
-	for (const slug of [...weeklySlugs, ...macroSlugs]) {
+	// ── 1. MSV weeklies — scan down from 200, stop after 3 consecutive misses ──
+	let misses = 0;
+	for (let n = 200; n >= 1 && misses < 3; n--) {
+		const slug = `microspacing-vancouver-${n}`;
 		const data = await gql<TournamentQueryResult>(TOURNAMENT_QUERY, { slug });
-		if (!data?.tournament) continue;
-
+		if (!data?.tournament) { misses++; continue; }
+		misses = 0;
 		const startAt = data.tournament.startAt ?? 0;
-		const isMacro = slug.startsWith('macro');
-
-		if (isMacro) {
-			if (startAt < fourMonthsAgo) continue;
-			const hasLargeEvent = data.tournament.events?.some((e) => (e.numEntrants ?? 0) >= 32);
-			if (!hasLargeEvent) continue;
-		} else {
-			if (startAt < twoMonthsAgo) continue;
-		}
-
+		if (startAt < twoMonthsAgo) break;
 		for (const event of data.tournament.events ?? []) {
 			await fetchSetsFromEvent(event.id, data.tournament.name, matches, playerIds);
 		}
 	}
 
-	// ── 3. External regionals: query top 16 players' recent standings ──
+	// ── 2. MSV macros — scan down from 20, stop after 3 consecutive misses ──
+	misses = 0;
+	for (let n = 20; n >= 1 && misses < 3; n--) {
+		const slug = `macrospacing-vancouver-${n}`;
+		const data = await gql<TournamentQueryResult>(TOURNAMENT_QUERY, { slug });
+		if (!data?.tournament) { misses++; continue; }
+		misses = 0;
+		const startAt = data.tournament.startAt ?? 0;
+		if (startAt < fourMonthsAgo) break;
+		const hasLargeEvent = data.tournament.events?.some((e) => (e.numEntrants ?? 0) >= 32);
+		if (!hasLargeEvent) continue;
+		for (const event of data.tournament.events ?? []) {
+			await fetchSetsFromEvent(event.id, data.tournament.name, matches, playerIds);
+		}
+	}
+
+	// ── 3. External regionals/majors: query top 16 players' recent standings ──
 	const playerIdArr = [...playerIds].slice(0, 16);
 	const seenEventIds = new Set<number>();
 	const regionalEvents: { eventId: number; tournamentName: string }[] = [];

@@ -5,13 +5,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const body = await request.json();
-	const { entrants, targetNumber } = body as {
+	const { entrants } = body as {
 		entrants: { seedNum: number; gamerTag: string; playerId?: number }[];
-		targetNumber: number;
 	};
 
-	if (!entrants?.length || !targetNumber) {
-		return Response.json({ error: 'entrants and targetNumber required' }, { status: 400 });
+	if (!entrants?.length) {
+		return Response.json({ error: 'entrants required' }, { status: 400 });
 	}
 
 	const matchups = predictBracketMatchups(entrants);
@@ -21,7 +20,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		if (e.playerId) playerIds.add(e.playerId);
 	}
 
-	const recentMatches = await fetchRecentMatchups(targetNumber, playerIds);
+	const recentMatches = await fetchRecentMatchups(playerIds);
 
 	function pairKey(a: number, b: number): string {
 		return a < b ? `${a}:${b}` : `${b}:${a}`;

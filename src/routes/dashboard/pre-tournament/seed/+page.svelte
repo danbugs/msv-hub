@@ -35,12 +35,12 @@
 	let loadingCollisions = $state(false);
 
 	async function fetchBracketCollisions(entrants: { seedNum: number; gamerTag: string; playerId?: number }[]) {
-		if (!targetNumber || tournamentMode === 'default') return;
+		if (tournamentMode === 'default') return;
 		loadingCollisions = true;
 		const res = await fetch('/api/tournament/bracket-collisions', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ entrants, targetNumber: Number(targetNumber) })
+			body: JSON.stringify({ entrants })
 		});
 		if (res.ok) {
 			const data = await res.json();
