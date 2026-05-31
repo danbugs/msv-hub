@@ -33,8 +33,11 @@
 
 	// Touch drag state
 	let touchDragIdx = $state<number | null>(null);
+	let touchPendingIdx: number | null = null;
 	let touchStartY = 0;
+	let touchHoldTimer: ReturnType<typeof setTimeout> | null = null;
 	let touchClone: HTMLElement | null = null;
+	let touchRow: HTMLElement | null = null;
 	let tableBody: HTMLElement | null = null;
 
 	let abortController: AbortController | null = null;
@@ -156,21 +159,34 @@
 	}
 	function onDragEnd() { dragIdx = null; dragOverIdx = null; }
 
-	// ── Touch reorder (mobile) ──
+	// ── Touch reorder (mobile, long-press to drag) ──
 	function onTouchStart(idx: number, e: TouchEvent) {
-		touchDragIdx = idx;
+		touchPendingIdx = idx;
 		touchStartY = e.touches[0].clientY;
-		const row = (e.currentTarget as HTMLElement);
-		touchClone = row.cloneNode(true) as HTMLElement;
-		const rect = row.getBoundingClientRect();
-		touchClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;opacity:0.85;z-index:50;pointer-events:none;background:var(--color-card, #1a1a2e);`;
-		document.body.appendChild(touchClone);
-		dragIdx = idx;
+		touchRow = e.currentTarget as HTMLElement;
+		touchHoldTimer = setTimeout(() => {
+			if (touchPendingIdx === null || !touchRow) return;
+			touchDragIdx = touchPendingIdx;
+			dragIdx = touchPendingIdx;
+			touchClone = touchRow.cloneNode(true) as HTMLElement;
+			const rect = touchRow.getBoundingClientRect();
+			touchClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;opacity:0.85;z-index:50;pointer-events:none;background:var(--color-card, #1a1a2e);`;
+			document.body.appendChild(touchClone);
+		}, 300);
 	}
 
 	function onTouchMove(e: TouchEvent) {
-		if (touchDragIdx === null || !touchClone || !tableBody) return;
+		if (touchDragIdx === null) {
+			// Not yet in drag mode — if finger moved too far, cancel the hold
+			if (touchHoldTimer && Math.abs(e.touches[0].clientY - touchStartY) > 10) {
+				clearTimeout(touchHoldTimer);
+				touchHoldTimer = null;
+				touchPendingIdx = null;
+			}
+			return;
+		}
 		e.preventDefault();
+		if (!touchClone || !tableBody) return;
 		const y = e.touches[0].clientY;
 		const dy = y - touchStartY;
 		const origRect = tableBody.children[touchDragIdx] as HTMLElement;
@@ -189,10 +205,13 @@
 	}
 
 	function onTouchEnd() {
+		if (touchHoldTimer) { clearTimeout(touchHoldTimer); touchHoldTimer = null; }
 		if (touchDragIdx !== null && dragOverIdx !== null) {
 			onDrop(dragOverIdx);
 		}
 		touchDragIdx = null;
+		touchPendingIdx = null;
+		touchRow = null;
 		dragIdx = null;
 		dragOverIdx = null;
 		if (touchClone) { touchClone.remove(); touchClone = null; }
@@ -430,7 +449,7 @@
 				<!-- Seeding table with drag -->
 				<div>
 					<h3 class="text-sm font-medium text-foreground mb-2">Seeding — {result.entrants.length} players</h3>
-					<div class="max-h-[28rem] overflow-auto rounded-lg border border-border">
+					<div class="lg:max-h-[28rem] lg:overflow-auto rounded-lg border border-border">
 						<table class="w-full text-sm">
 							<thead class="sticky top-0 bg-card z-10">
 								<tr class="border-b border-border text-left text-muted-foreground">
@@ -451,7 +470,7 @@
 										ontouchstart={(ev) => onTouchStart(i, ev)}
 										ontouchmove={onTouchMove}
 										ontouchend={onTouchEnd}
-										class="border-b border-border cursor-grab active:cursor-grabbing transition-colors touch-none
+										class="border-b border-border cursor-grab active:cursor-grabbing transition-colors
 											{dragOverIdx === i ? 'bg-violet-900/30 border-violet-600' : 'hover:bg-secondary/50'}
 											{dragIdx === i ? 'opacity-40' : ''}">
 										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.seedNum}</td>
