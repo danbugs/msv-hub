@@ -470,9 +470,10 @@
 										ontouchstart={(ev) => onTouchStart(i, ev)}
 										ontouchmove={onTouchMove}
 										ontouchend={onTouchEnd}
-										class="border-b border-border cursor-grab active:cursor-grabbing transition-colors
+										class="border-b border-border cursor-grab active:cursor-grabbing transition-colors select-none
 											{dragOverIdx === i ? 'bg-violet-900/30 border-violet-600' : 'hover:bg-secondary/50'}
-											{dragIdx === i ? 'opacity-40' : ''}">
+											{dragIdx === i ? 'opacity-40' : ''}"
+										style="-webkit-user-select:none;-webkit-touch-callout:none">
 										<td class="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.seedNum}</td>
 										<td class="px-2 py-1.5 text-foreground truncate max-w-[10rem]">
 											{e.gamerTag}
