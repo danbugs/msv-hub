@@ -159,7 +159,7 @@
 		const [moved] = e.splice(dragIdx, 1);
 		e.splice(targetIdx, 0, moved);
 		e.forEach((ent, i) => ent.seedNum = i + 1);
-		result = { ...result, entrants: e, pairings: computePairings(e) };
+		result = { ...result, entrants: e };
 		dragIdx = null; dragOverIdx = null;
 	}
 	function onDragEnd() { dragIdx = null; dragOverIdx = null; }
@@ -257,7 +257,19 @@
 	function computePairings(entrants: NonNullable<typeof result>['entrants']) {
 		const n = entrants.length;
 		const pairings = [];
-		if (n % 2 === 1) {
+		const useBracketPairing = tournamentMode === 'gauntlet' || tournamentMode === 'experimental1';
+
+		if (useBracketPairing) {
+			// DE bracket pairing: seed 1 vs N, seed 2 vs N-1, etc.
+			const half = Math.floor(n / 2);
+			for (let i = 0; i < half; i++) {
+				const j = n - 1 - i;
+				pairings.push({
+					top: { seedNum: entrants[i].seedNum, gamerTag: entrants[i].gamerTag, playerId: entrants[i].playerId },
+					bottom: { seedNum: entrants[j].seedNum, gamerTag: entrants[j].gamerTag, playerId: entrants[j].playerId }
+				});
+			}
+		} else if (n % 2 === 1) {
 			const half = (n + 1) / 2;
 			for (let i = 0; i < half - 1; i++) {
 				pairings.push({
@@ -277,6 +289,11 @@
 		return pairings;
 	}
 
+	let displayPairings = $derived.by(() => {
+		if (!result) return [];
+		return computePairings(result.entrants);
+	});
+
 	/** Check if a pairing is a rematch from last week using the full avoidance set */
 	function isCollision(topPlayerId: number | undefined, bottomPlayerId: number | undefined): boolean {
 		if (!result?.avoidPairs?.length || !topPlayerId || !bottomPlayerId) return false;
@@ -287,7 +304,7 @@
 	/** Count current collisions in pairings */
 	let collisionCount = $derived.by(() => {
 		if (!result) return 0;
-		return result.pairings.filter((p) => isCollision(p.top.playerId, p.bottom.playerId)).length;
+		return displayPairings.filter((p) => isCollision(p.top.playerId, p.bottom.playerId)).length;
 	});
 
 	let syncStatus = $state('');
@@ -525,9 +542,9 @@
 
 				<!-- R1 Pairings -->
 				<div>
-					<h3 class="text-sm font-medium text-foreground mb-2">R1 Pairings</h3>
+					<h3 class="text-sm font-medium text-foreground mb-2">{tournamentMode === 'gauntlet' || tournamentMode === 'experimental1' ? 'R1 Bracket Matchups' : 'R1 Pairings'}</h3>
 					<div class="space-y-1 max-h-[28rem] overflow-y-auto">
-						{#each result.pairings as { top, bottom }}
+						{#each displayPairings as { top, bottom }}
 							<div class="flex items-center gap-2 rounded px-3 py-1.5 text-sm
 								{isCollision(top.playerId, bottom.playerId) ? 'bg-destructive-muted border border-destructive-border' : 'bg-card'}">
 								<span class="w-6 text-right font-mono text-xs text-muted-foreground">{top.seedNum}</span>
