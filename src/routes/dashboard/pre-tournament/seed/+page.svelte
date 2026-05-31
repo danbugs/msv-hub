@@ -39,6 +39,9 @@
 	let touchClone: HTMLElement | null = null;
 	let touchRow: HTMLElement | null = null;
 	let tableBody: HTMLElement | null = null;
+	let scrollRaf: number | null = null;
+	const SCROLL_EDGE = 60;
+	const SCROLL_SPEED = 8;
 
 	let abortController: AbortController | null = null;
 	let result = $state<{
@@ -160,25 +163,62 @@
 	function onDragEnd() { dragIdx = null; dragOverIdx = null; }
 
 	// ── Touch reorder (mobile, long-press to drag) ──
+	function activateTouchDrag() {
+		if (touchPendingIdx === null || !touchRow) return;
+		touchDragIdx = touchPendingIdx;
+		dragIdx = touchPendingIdx;
+		touchClone = touchRow.cloneNode(true) as HTMLElement;
+		const rect = touchRow.getBoundingClientRect();
+		touchClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;opacity:0.85;z-index:50;pointer-events:none;background:var(--color-card, #1a1a2e);`;
+		document.body.appendChild(touchClone);
+		document.body.style.overflow = 'hidden';
+	}
+
+	function stopAutoScroll() {
+		if (scrollRaf !== null) { cancelAnimationFrame(scrollRaf); scrollRaf = null; }
+	}
+
+	function findClosestRow(y: number): number | null {
+		if (!tableBody) return null;
+		const rows = Array.from(tableBody.children) as HTMLElement[];
+		let closest: number | null = null;
+		let minDist = Infinity;
+		for (let i = 0; i < rows.length; i++) {
+			if (i === touchDragIdx) continue;
+			const r = rows[i].getBoundingClientRect();
+			const mid = (r.top + r.bottom) / 2;
+			const d = Math.abs(y - mid);
+			if (d < minDist) { minDist = d; closest = i; }
+		}
+		return closest;
+	}
+
+	let lastTouchY = 0;
+
+	function autoScrollLoop() {
+		const y = lastTouchY;
+		const vh = window.innerHeight;
+		if (y < SCROLL_EDGE) {
+			window.scrollBy(0, -SCROLL_SPEED);
+		} else if (y > vh - SCROLL_EDGE) {
+			window.scrollBy(0, SCROLL_SPEED);
+		}
+		if (touchClone) touchClone.style.top = `${y - 20}px`;
+		dragOverIdx = findClosestRow(y);
+		scrollRaf = requestAnimationFrame(autoScrollLoop);
+	}
+
 	function onTouchStart(idx: number, e: TouchEvent) {
 		touchPendingIdx = idx;
 		touchStartY = e.touches[0].clientY;
 		touchRow = e.currentTarget as HTMLElement;
-		touchHoldTimer = setTimeout(() => {
-			if (touchPendingIdx === null || !touchRow) return;
-			touchDragIdx = touchPendingIdx;
-			dragIdx = touchPendingIdx;
-			touchClone = touchRow.cloneNode(true) as HTMLElement;
-			const rect = touchRow.getBoundingClientRect();
-			touchClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;opacity:0.85;z-index:50;pointer-events:none;background:var(--color-card, #1a1a2e);`;
-			document.body.appendChild(touchClone);
-		}, 300);
+		touchHoldTimer = setTimeout(activateTouchDrag, 300);
 	}
 
 	function onTouchMove(e: TouchEvent) {
+		const y = e.touches[0].clientY;
 		if (touchDragIdx === null) {
-			// Not yet in drag mode — if finger moved too far, cancel the hold
-			if (touchHoldTimer && Math.abs(e.touches[0].clientY - touchStartY) > 10) {
+			if (touchHoldTimer && Math.abs(y - touchStartY) > 10) {
 				clearTimeout(touchHoldTimer);
 				touchHoldTimer = null;
 				touchPendingIdx = null;
@@ -186,26 +226,13 @@
 			return;
 		}
 		e.preventDefault();
-		if (!touchClone || !tableBody) return;
-		const y = e.touches[0].clientY;
-		const dy = y - touchStartY;
-		const origRect = tableBody.children[touchDragIdx] as HTMLElement;
-		if (!origRect) return;
-		const origTop = origRect.getBoundingClientRect().top;
-		touchClone.style.top = `${origTop + dy}px`;
-
-		const rows = Array.from(tableBody.children) as HTMLElement[];
-		let overIdx: number | null = null;
-		for (let i = 0; i < rows.length; i++) {
-			if (i === touchDragIdx) continue;
-			const r = rows[i].getBoundingClientRect();
-			if (y >= r.top && y <= r.bottom) { overIdx = i; break; }
-		}
-		dragOverIdx = overIdx;
+		lastTouchY = y;
+		if (scrollRaf === null) scrollRaf = requestAnimationFrame(autoScrollLoop);
 	}
 
 	function onTouchEnd() {
 		if (touchHoldTimer) { clearTimeout(touchHoldTimer); touchHoldTimer = null; }
+		stopAutoScroll();
 		if (touchDragIdx !== null && dragOverIdx !== null) {
 			onDrop(dragOverIdx);
 		}
@@ -215,6 +242,7 @@
 		dragIdx = null;
 		dragOverIdx = null;
 		if (touchClone) { touchClone.remove(); touchClone = null; }
+		document.body.style.overflow = '';
 	}
 
 	function computePairings(entrants: NonNullable<typeof result>['entrants']) {
