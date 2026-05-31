@@ -220,7 +220,8 @@ function pairKey(a: number, b: number): string {
 
 export function resolveCollisions(
 	entrants: { seedNum: number; gamerTag: string; playerId?: number }[],
-	recentMatches: Map<string, HistoricalMatch>
+	recentMatches: Map<string, HistoricalMatch>,
+	maxSwapDist = 4
 ): { fixed: { seedNum: number; gamerTag: string; playerId?: number }[]; swaps: { from: string; to: string; fromSeed: number; toSeed: number }[] } {
 	const fixed = entrants.map(e => ({ ...e }));
 	const swaps: { from: string; to: string; fromSeed: number; toSeed: number }[] = [];
@@ -233,38 +234,50 @@ export function resolveCollisions(
 		);
 		if (collisions.length === 0) break;
 
-		const c = collisions[0];
-		const idxA = fixed.findIndex(e => e.playerId === c.playerId1);
-		const idxB = fixed.findIndex(e => e.playerId === c.playerId2);
-		if (idxA === -1 || idxB === -1) break;
+		let resolved = false;
+		for (const c of collisions) {
+			const idxA = fixed.findIndex(e => e.playerId === c.playerId1);
+			const idxB = fixed.findIndex(e => e.playerId === c.playerId2);
+			if (idxA === -1 || idxB === -1) continue;
 
-		// Try swapping the lower-seeded player with every other position; pick closest swap that reduces collisions.
-		const swapFrom = Math.max(idxA, idxB);
-		let bestTo = -1;
-		let bestCount = collisions.length;
+			// Try both players, prefer swapping the lower seed (higher index).
+			for (const swapFrom of [Math.max(idxA, idxB), Math.min(idxA, idxB)]) {
+				const other = swapFrom === idxA ? idxB : idxA;
+				let bestTo = -1;
+				let bestCount = collisions.length;
 
-		for (let to = 0; to < fixed.length; to++) {
-			if (to === swapFrom || to === Math.min(idxA, idxB)) continue;
-			[fixed[swapFrom], fixed[to]] = [fixed[to], fixed[swapFrom]];
-			fixed.forEach((e, i) => e.seedNum = i + 1);
-			const cnt = predictBracketMatchups(fixed).filter(m =>
-				m.playerId1 && m.playerId2 && recentMatches.has(pairKey(m.playerId1, m.playerId2))
-			).length;
-			[fixed[swapFrom], fixed[to]] = [fixed[to], fixed[swapFrom]];
-			fixed.forEach((e, i) => e.seedNum = i + 1);
-			if (cnt < bestCount || (cnt === bestCount && bestTo !== -1 && Math.abs(to - swapFrom) < Math.abs(bestTo - swapFrom))) {
-				bestCount = cnt;
-				bestTo = to;
+				// Only consider nearby positions.
+				const lo = Math.max(0, swapFrom - maxSwapDist);
+				const hi = Math.min(fixed.length - 1, swapFrom + maxSwapDist);
+				for (let to = lo; to <= hi; to++) {
+					if (to === swapFrom || to === other) continue;
+					[fixed[swapFrom], fixed[to]] = [fixed[to], fixed[swapFrom]];
+					fixed.forEach((e, i) => e.seedNum = i + 1);
+					const cnt = predictBracketMatchups(fixed).filter(m =>
+						m.playerId1 && m.playerId2 && recentMatches.has(pairKey(m.playerId1, m.playerId2))
+					).length;
+					[fixed[swapFrom], fixed[to]] = [fixed[to], fixed[swapFrom]];
+					fixed.forEach((e, i) => e.seedNum = i + 1);
+					if (cnt < bestCount || (cnt === bestCount && bestTo !== -1 && Math.abs(to - swapFrom) < Math.abs(bestTo - swapFrom))) {
+						bestCount = cnt;
+						bestTo = to;
+					}
+				}
+
+				if (bestTo !== -1 && bestCount < collisions.length) {
+					swaps.push({
+						from: fixed[swapFrom].gamerTag, to: fixed[bestTo].gamerTag,
+						fromSeed: fixed[swapFrom].seedNum, toSeed: fixed[bestTo].seedNum
+					});
+					[fixed[swapFrom], fixed[bestTo]] = [fixed[bestTo], fixed[swapFrom]];
+					fixed.forEach((e, i) => e.seedNum = i + 1);
+					resolved = true;
+					break;
+				}
 			}
+			if (resolved) break;
 		}
-		if (bestTo === -1) break;
-
-		swaps.push({
-			from: fixed[swapFrom].gamerTag, to: fixed[bestTo].gamerTag,
-			fromSeed: fixed[swapFrom].seedNum, toSeed: fixed[bestTo].seedNum
-		});
-		[fixed[swapFrom], fixed[bestTo]] = [fixed[bestTo], fixed[swapFrom]];
-		fixed.forEach((e, i) => e.seedNum = i + 1);
+		if (!resolved) break;
 	}
 
 	return { fixed, swaps };
