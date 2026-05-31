@@ -1,6 +1,41 @@
 import {
-	gql, TOURNAMENT_QUERY, PLAYER_RECENT_STANDINGS_QUERY, fetchAllSets, extractPlayerId, extractGamerTag
+	gql, extractPlayerId, extractGamerTag
 } from './startgg';
+import { Redis } from '@upstash/redis';
+import { env } from '$env/dynamic/private';
+
+const MATCHUP_CACHE_KEY = 'matchups:recent:v4';
+const MATCHUP_CACHE_TTL = 6 * 60 * 60;
+const SCAN_DELAY = 400;
+
+const PLAYER_SETS_QUERY = `
+query PlayerRecentSets($playerId: ID!, $perPage: Int!) {
+  player(id: $playerId) {
+    id
+    gamerTag
+    sets(perPage: $perPage) {
+      nodes {
+        displayScore
+        winnerId
+        event { tournament { name startAt } }
+        slots {
+          entrant {
+            participants { player { id gamerTag } }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+function tryGetRedis(): Redis | null {
+	try {
+		const url = env.UPSTASH_REDIS_REST_URL;
+		const token = env.UPSTASH_REDIS_REST_TOKEN;
+		if (!url || !token) return null;
+		return new Redis({ url, token });
+	} catch { return null; }
+}
 
 function getStandardBracketOrder(bracketSize: number): number[] {
 	let positions = [0];
@@ -26,10 +61,6 @@ export interface PredictedMatchup {
 	bracket: 'winners' | 'losers';
 }
 
-/**
- * Simulate a DE bracket assuming seeds hold. Returns all predicted matchups.
- * Focuses on top `maxSeed` seeds for relevance.
- */
 export function predictBracketMatchups(
 	entrants: { seedNum: number; gamerTag: string; playerId?: number }[],
 	maxSeed = 32
@@ -41,7 +72,6 @@ export function predictBracketMatchups(
 
 	const sorted = [...entrants].sort((a, b) => a.seedNum - b.seedNum);
 
-	// Build initial bracket slots: seed index → entrant (or null for BYE)
 	type Slot = { seed: number; tag: string; playerId?: number } | null;
 	const slots: Slot[] = order.map((idx) =>
 		idx < sorted.length
@@ -52,7 +82,6 @@ export function predictBracketMatchups(
 	const matchups: PredictedMatchup[] = [];
 	const relevant = (s: Slot) => s !== null && s.seed <= maxSeed;
 
-	// Simulate winners bracket
 	let winnersRound = slots;
 	let losersPool: Slot[] = [];
 	let roundNum = 1;
@@ -78,7 +107,6 @@ export function predictBracketMatchups(
 						round: label, bracket: 'winners'
 					});
 				}
-				// Higher seed (lower number) wins
 				const winner = a.seed < b.seed ? a : b;
 				const loser = a.seed < b.seed ? b : a;
 				nextWinners.push(winner);
@@ -94,12 +122,9 @@ export function predictBracketMatchups(
 		roundNum++;
 	}
 
-	// Simulate losers bracket
-	// L1: pairs of WR1 losers (index 0+1, 2+3, etc.)
 	const wr1Losers = losersPool.splice(0, Math.pow(2, Math.ceil(Math.log2(n))) / 2);
 	let losersRound: Slot[] = [];
 
-	// LR1: pair adjacent WR1 losers
 	for (let i = 0; i < wr1Losers.length; i += 2) {
 		const a = wr1Losers[i];
 		const b = wr1Losers[i + 1] ?? null;
@@ -118,9 +143,6 @@ export function predictBracketMatchups(
 		}
 	}
 
-	// Subsequent losers rounds alternate between:
-	// Even LR: survivors face drop-ins from winners (reversed)
-	// Odd LR: survivors face each other
 	let lrNum = 2;
 	let dropInIdx = 0;
 
@@ -128,7 +150,6 @@ export function predictBracketMatchups(
 		const nextLosers: Slot[] = [];
 
 		if (lrNum % 2 === 0 && dropInIdx < losersPool.length) {
-			// Even LR: face winners drop-ins
 			const dropIns = losersPool.slice(dropInIdx, dropInIdx + losersRound.length);
 			dropInIdx += losersRound.length;
 			const reversed = [...dropIns].reverse();
@@ -151,7 +172,6 @@ export function predictBracketMatchups(
 				}
 			}
 		} else {
-			// Odd LR: pair up survivors
 			for (let i = 0; i < losersRound.length; i += 2) {
 				const a = losersRound[i];
 				const b = losersRound[i + 1] ?? null;
@@ -178,7 +198,6 @@ export function predictBracketMatchups(
 		if (losersRound.length <= 1 && dropInIdx >= losersPool.length) break;
 	}
 
-	// Grand finals: winners champion vs losers champion
 	if (winnersRound.length === 1 && losersRound.length === 1) {
 		const a = winnersRound[0];
 		const b = losersRound[0];
@@ -199,8 +218,16 @@ function pairKey(a: number, b: number): string {
 	return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
 
+export interface HistoricalMatch {
+	player1Id: number;
+	player2Id: number;
+	tag1: string;
+	tag2: string;
+	event: string;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseSetBasic(node: Record<string, any>, tournamentName: string): {
+function parsePlayerSet(node: Record<string, any>): {
 	p1: number; p2: number; tag1: string; tag2: string; event: string;
 } | null {
 	if (!node) return null;
@@ -222,133 +249,89 @@ function parseSetBasic(node: Record<string, any>, tournamentName: string): {
 	return {
 		p1: players[0].playerId, p2: players[1].playerId,
 		tag1: players[0].tag, tag2: players[1].tag,
-		event: tournamentName
+		event: node.event?.tournament?.name ?? 'Unknown'
 	};
 }
 
-export interface HistoricalMatch {
-	player1Id: number;
-	player2Id: number;
-	tag1: string;
-	tag2: string;
-	event: string;
-}
-
-function addMatch(
-	matches: Map<string, HistoricalMatch>,
-	parsed: { p1: number; p2: number; tag1: string; tag2: string; event: string },
-	playerIds: Set<number>
-) {
-	if (!playerIds.has(parsed.p1) && !playerIds.has(parsed.p2)) return;
-	const key = pairKey(parsed.p1, parsed.p2);
-	if (!matches.has(key)) {
-		matches.set(key, {
-			player1Id: Math.min(parsed.p1, parsed.p2),
-			player2Id: Math.max(parsed.p1, parsed.p2),
-			tag1: parsed.p1 < parsed.p2 ? parsed.tag1 : parsed.tag2,
-			tag2: parsed.p1 < parsed.p2 ? parsed.tag2 : parsed.tag1,
-			event: parsed.event
-		});
-	}
-}
-
-async function fetchSetsFromEvent(
-	eventId: number, tournamentName: string,
-	matches: Map<string, HistoricalMatch>, playerIds: Set<number>
-) {
-	const rawSets = await fetchAllSets(eventId);
-	for (const raw of rawSets) {
-		const parsed = parseSetBasic(raw, tournamentName);
-		if (parsed) addMatch(matches, parsed, playerIds);
-	}
-}
-
-interface StandingsResult {
-	player: {
-		id: number; gamerTag: string;
-		recentStandings: {
-			placement: number;
-			entrant: { event: { id: number; numEntrants: number; isOnline: boolean; tournament: { name: string; startAt: number } } };
-		}[];
-	};
-}
-
-/**
- * Fetch recent matchups for a set of player IDs.
- * - Last ~2 months of MSV weeklies (by date, scans slug range)
- * - Last ~4 months of MSV macros (32+ entrants)
- * - Last ~4 months of external offline regionals/majors (32+ entrants) via top players' recent standings
- */
-export async function fetchRecentMatchups(
-	playerIds: Set<number>
+async function computeRecentMatchups(
+	playerIds: number[]
 ): Promise<Map<string, HistoricalMatch>> {
 	const matches = new Map<string, HistoricalMatch>();
-
-	const fourMonthsAgo = Date.now() / 1000 - 4 * 30 * 86400;
 	const twoMonthsAgo = Date.now() / 1000 - 2 * 30 * 86400;
 
-	interface TournamentQueryResult { tournament: { id: number; name: string; startAt: number; events: { id: number; name: string; numEntrants: number }[] } | null }
+	for (const pid of playerIds) {
+		const data = await gql<{
+			player: { sets: { nodes: Record<string, unknown>[] } } | null
+		}>(PLAYER_SETS_QUERY, { playerId: pid, perPage: 30 }, { delay: SCAN_DELAY });
 
-	// ── 1. MSV weeklies — scan down from 200, stop after 3 consecutive misses ──
-	let misses = 0;
-	for (let n = 200; n >= 1 && misses < 3; n--) {
-		const slug = `microspacing-vancouver-${n}`;
-		const data = await gql<TournamentQueryResult>(TOURNAMENT_QUERY, { slug });
-		if (!data?.tournament) { misses++; continue; }
-		misses = 0;
-		const startAt = data.tournament.startAt ?? 0;
-		if (startAt < twoMonthsAgo) break;
-		for (const event of data.tournament.events ?? []) {
-			await fetchSetsFromEvent(event.id, data.tournament.name, matches, playerIds);
+		if (!data?.player?.sets?.nodes) continue;
+
+		for (const setNode of data.player.sets.nodes) {
+			const sn = setNode as Record<string, unknown>;
+			const startAt = ((sn.event as Record<string, unknown> | undefined)?.tournament as Record<string, unknown> | undefined)?.startAt as number | undefined ?? 0;
+			if (startAt > 0 && startAt < twoMonthsAgo) continue;
+
+			const parsed = parsePlayerSet(sn);
+			if (!parsed) continue;
+
+			const key = pairKey(parsed.p1, parsed.p2);
+			if (!matches.has(key)) {
+				matches.set(key, {
+					player1Id: Math.min(parsed.p1, parsed.p2),
+					player2Id: Math.max(parsed.p1, parsed.p2),
+					tag1: parsed.p1 < parsed.p2 ? parsed.tag1 : parsed.tag2,
+					tag2: parsed.p1 < parsed.p2 ? parsed.tag2 : parsed.tag1,
+					event: parsed.event
+				});
+			}
 		}
-	}
-
-	// ── 2. MSV macros — scan down from 20, stop after 3 consecutive misses ──
-	misses = 0;
-	for (let n = 20; n >= 1 && misses < 3; n--) {
-		const slug = `macrospacing-vancouver-${n}`;
-		const data = await gql<TournamentQueryResult>(TOURNAMENT_QUERY, { slug });
-		if (!data?.tournament) { misses++; continue; }
-		misses = 0;
-		const startAt = data.tournament.startAt ?? 0;
-		if (startAt < fourMonthsAgo) break;
-		const hasLargeEvent = data.tournament.events?.some((e) => (e.numEntrants ?? 0) >= 32);
-		if (!hasLargeEvent) continue;
-		for (const event of data.tournament.events ?? []) {
-			await fetchSetsFromEvent(event.id, data.tournament.name, matches, playerIds);
-		}
-	}
-
-	// ── 3. External regionals/majors: query top 16 players' recent standings ──
-	const playerIdArr = [...playerIds].slice(0, 16);
-	const seenEventIds = new Set<number>();
-	const regionalEvents: { eventId: number; tournamentName: string }[] = [];
-
-	for (const pid of playerIdArr) {
-		const data = await gql<StandingsResult>(PLAYER_RECENT_STANDINGS_QUERY, { playerId: pid });
-		if (!data?.player?.recentStandings) continue;
-
-		for (const s of data.player.recentStandings) {
-			const evt = s.entrant?.event;
-			if (!evt) continue;
-			if (seenEventIds.has(evt.id)) continue;
-
-			const startAt = evt.tournament?.startAt ?? 0;
-			if (startAt < fourMonthsAgo) continue;
-			if ((evt.numEntrants ?? 0) < 32) continue;
-			if (evt.isOnline) continue;
-
-			const name = evt.tournament?.name ?? '';
-			if (/microspacing|macrospacing/i.test(name)) continue;
-
-			seenEventIds.add(evt.id);
-			regionalEvents.push({ eventId: evt.id, tournamentName: name });
-		}
-	}
-
-	for (const { eventId, tournamentName } of regionalEvents) {
-		await fetchSetsFromEvent(eventId, tournamentName, matches, playerIds);
 	}
 
 	return matches;
+}
+
+export async function fetchRecentMatchups(
+	entrants: { seedNum: number; playerId?: number }[]
+): Promise<Map<string, HistoricalMatch>> {
+	const allPlayerIds = new Set(
+		entrants.map(e => e.playerId).filter((id): id is number => id != null)
+	);
+	const redis = tryGetRedis();
+
+	// Try Redis cache (avoids ~50s StartGG scan on repeat calls)
+	if (redis) {
+		try {
+			const cached = await redis.get<[string, HistoricalMatch][]>(MATCHUP_CACHE_KEY);
+			if (cached) {
+				const filtered = new Map<string, HistoricalMatch>();
+				for (const [key, match] of cached) {
+					if (allPlayerIds.has(match.player1Id) || allPlayerIds.has(match.player2Id)) {
+						filtered.set(key, match);
+					}
+				}
+				return filtered;
+			}
+		} catch { /* proceed to compute */ }
+	}
+
+	// Query all players' recent sets — covers MSV, Tempo, SFU, UBC, KPU, regionals, etc.
+	const idsToQuery = entrants
+		.filter(e => e.playerId != null)
+		.sort((a, b) => a.seedNum - b.seedNum)
+		.map(e => e.playerId!);
+	const all = await computeRecentMatchups(idsToQuery);
+
+	if (redis) {
+		try {
+			await redis.set(MATCHUP_CACHE_KEY, [...all.entries()], { ex: MATCHUP_CACHE_TTL });
+		} catch { /* cache write failed */ }
+	}
+
+	const filtered = new Map<string, HistoricalMatch>();
+	for (const [key, match] of all) {
+		if (allPlayerIds.has(match.player1Id) || allPlayerIds.has(match.player2Id)) {
+			filtered.set(key, match);
+		}
+	}
+	return filtered;
 }

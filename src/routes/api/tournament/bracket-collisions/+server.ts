@@ -1,6 +1,8 @@
 import type { RequestHandler } from './$types';
 import { predictBracketMatchups, fetchRecentMatchups } from '$lib/server/bracket-predict';
 
+export const config = { maxDuration: 300 };
+
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -15,12 +17,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const matchups = predictBracketMatchups(entrants);
 
-	const playerIds = new Set<number>();
-	for (const e of entrants) {
-		if (e.playerId) playerIds.add(e.playerId);
-	}
-
-	const recentMatches = await fetchRecentMatchups(playerIds);
+	const recentMatches = await fetchRecentMatchups(entrants);
 
 	function pairKey(a: number, b: number): string {
 		return a < b ? `${a}:${b}` : `${b}:${a}`;
