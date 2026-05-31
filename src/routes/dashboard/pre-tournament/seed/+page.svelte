@@ -34,6 +34,9 @@
 	let bracketCollisions = $state<BracketCollision[]>([]);
 	let loadingCollisions = $state(false);
 
+	let fixingCollisions = $state(false);
+	let lastSwaps = $state<{ from: string; to: string; fromSeed: number; toSeed: number }[]>([]);
+
 	async function fetchBracketCollisions(entrants: { seedNum: number; gamerTag: string; playerId?: number }[]) {
 		if (tournamentMode === 'default') return;
 		loadingCollisions = true;
@@ -47,6 +50,37 @@
 			bracketCollisions = data.collisions;
 		}
 		loadingCollisions = false;
+	}
+
+	async function fixBracketCollisions(entrants: { seedNum: number; gamerTag: string; playerId?: number }[], target: 'quick' | 'seeder') {
+		fixingCollisions = true;
+		const res = await fetch('/api/tournament/bracket-collisions', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ entrants, fix: true })
+		});
+		if (res.ok) {
+			const data = await res.json();
+			bracketCollisions = data.collisions;
+			lastSwaps = data.swaps ?? [];
+			if (data.fixedEntrants) {
+				if (target === 'quick' && quickPreview) {
+					quickPreview = data.fixedEntrants.map((e: { seedNum: number; gamerTag: string; playerId?: number }) => {
+						const orig = quickPreview!.find(q => q.gamerTag === e.gamerTag);
+						return { ...e, elo: orig?.elo ?? 0, jitteredElo: orig?.jitteredElo ?? 0, isNewcomer: orig?.isNewcomer ?? false };
+					});
+				} else if (target === 'seeder' && result) {
+					result = {
+						...result,
+						entrants: data.fixedEntrants.map((e: { seedNum: number; gamerTag: string; playerId?: number }) => {
+							const orig = result!.entrants.find(r => r.gamerTag === e.gamerTag);
+							return { ...e, elo: orig?.elo ?? 0, jitteredElo: orig?.jitteredElo ?? 0, isNewcomer: orig?.isNewcomer ?? false };
+						})
+					};
+				}
+			}
+		}
+		fixingCollisions = false;
 	}
 
 	function findCollision(tag1: string, tag2: string): BracketCollision | undefined {
@@ -734,9 +768,15 @@
 					{/if}
 					{#if bracketCollisions.length > 0}
 						<div class="mt-3 rounded-lg border border-orange-700/40 bg-orange-950/20 p-3">
-							<p class="text-xs font-medium text-orange-400 mb-2">
-								Predicted rematches ({bracketCollisions.length})
-							</p>
+							<div class="flex items-center justify-between mb-2">
+								<p class="text-xs font-medium text-orange-400">
+									Predicted rematches ({bracketCollisions.length})
+								</p>
+								<button onclick={() => fixBracketCollisions(result!.entrants, 'seeder')} disabled={fixingCollisions}
+									class="rounded bg-orange-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-orange-500 disabled:opacity-50">
+									{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
+								</button>
+							</div>
 							<div class="space-y-1">
 								{#each bracketCollisions as c}
 									<div class="flex items-center gap-2 text-xs">
@@ -752,6 +792,16 @@
 					{:else if loadingCollisions}
 						<div class="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
 							<div class="h-2 w-2 rounded-full bg-orange-500 animate-pulse"></div>Checking for bracket rematches...
+						</div>
+					{/if}
+					{#if lastSwaps.length > 0}
+						<div class="mt-2 rounded-lg border border-green-700/40 bg-green-950/20 p-3">
+							<p class="text-xs font-medium text-green-400 mb-1">Swaps applied</p>
+							<div class="space-y-0.5">
+								{#each lastSwaps as s}
+									<p class="text-xs text-muted-foreground">Seed {s.fromSeed} {s.from} ↔ Seed {s.toSeed} {s.to}</p>
+								{/each}
+							</div>
 						</div>
 					{/if}
 				</div>
@@ -971,9 +1021,15 @@
 							</div>
 							{#if bracketCollisions.length > 0}
 								<div class="mt-3 rounded-lg border border-orange-700/40 bg-orange-950/20 p-3">
-									<p class="text-xs font-medium text-orange-400 mb-2">
-										Predicted rematches ({bracketCollisions.length})
-									</p>
+									<div class="flex items-center justify-between mb-2">
+										<p class="text-xs font-medium text-orange-400">
+											Predicted rematches ({bracketCollisions.length})
+										</p>
+										<button onclick={() => fixBracketCollisions(quickPreview!, 'quick')} disabled={fixingCollisions}
+											class="rounded bg-orange-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-orange-500 disabled:opacity-50">
+											{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
+										</button>
+									</div>
 									<div class="space-y-1">
 										{#each bracketCollisions as c}
 											<div class="flex items-center gap-2 text-xs">
@@ -989,6 +1045,16 @@
 							{:else if loadingCollisions}
 								<div class="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
 									<div class="h-2 w-2 rounded-full bg-orange-500 animate-pulse"></div>Checking for bracket rematches...
+								</div>
+							{/if}
+							{#if lastSwaps.length > 0}
+								<div class="mt-2 rounded-lg border border-green-700/40 bg-green-950/20 p-3">
+									<p class="text-xs font-medium text-green-400 mb-1">Swaps applied</p>
+									<div class="space-y-0.5">
+										{#each lastSwaps as s}
+											<p class="text-xs text-muted-foreground">Seed {s.fromSeed} {s.from} ↔ Seed {s.toSeed} {s.to}</p>
+										{/each}
+									</div>
 								</div>
 							{/if}
 						</div>
