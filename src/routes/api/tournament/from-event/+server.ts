@@ -6,9 +6,11 @@ import {
 	EVENT_BY_SLUG_QUERY,
 	EVENT_PHASES_QUERY,
 	TOURNAMENT_QUERY,
+	UPDATE_PHASE_SEEDING_MUTATION,
 	fetchPhaseSeedsWithTags,
 	fetchPhaseSeeds,
-	fetchPhaseGroups
+	fetchPhaseGroups,
+	extractPlayerId
 } from '$lib/server/startgg';
 import type { TournamentState, Entrant, FinalStanding } from '$lib/types/tournament';
 
@@ -17,12 +19,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const body = await request.json();
-	const { eventSlug, numStations, streamStation, numRounds: numRoundsOverride, mode: modeParam } = body as {
+	const { eventSlug, numStations, streamStation, numRounds: numRoundsOverride, mode: modeParam, overrideSeeds } = body as {
 		eventSlug: string;
 		numStations: number;
 		streamStation?: number;
 		numRounds?: number;
 		mode?: 'default' | 'gauntlet' | 'experimental1';
+		overrideSeeds?: { seedNum: number; gamerTag: string; playerId?: number }[];
 	};
 
 	if (!eventSlug || !numStations) {
@@ -85,35 +88,76 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 	const phaseId = phases[0].id;
 
-	// Fetch seeds (tags for display + raw for entrant IDs) in parallel.
-	let [seeds, sgSeeds] = await Promise.all([
-		fetchPhaseSeedsWithTags(phaseId),
-		fetchPhaseSeeds(phaseId).catch(() => [])
-	]);
+	// Fetch raw seeds (needed for entrant IDs regardless of override).
+	let sgSeeds = await fetchPhaseSeeds(phaseId).catch(() => [] as Awaited<ReturnType<typeof fetchPhaseSeeds>>);
 
-	// If Swiss phase is empty (e.g. after a gauntlet reset moved everyone to Main),
-	// try reading seeds from other events in the same tournament.
-	if (!seeds.length) {
-		const tournSlug = resolvedSlug.match(/tournament\/([^/]+)/)?.[1];
-		if (tournSlug) {
-			const tData = await gql<{ tournament: { events: { id: number; name: string }[] } }>(
-				TOURNAMENT_QUERY, { slug: tournSlug }
-			);
-			const otherEvents = (tData?.tournament?.events ?? []).filter((e) => e.id !== eventId);
-			for (const evt of otherEvents) {
-				const evtPhases = await gql<{ event: { phases: { id: number }[] } }>(
-					EVENT_PHASES_QUERY, { eventId: evt.id }
+	// Build playerId → seedId/entrantId maps from StartGG raw seeds.
+	const pidToSeedId = new Map<number, number>();
+	const pidToEntrantId = new Map<number, number>();
+	for (const seedNode of sgSeeds) {
+		const playerId = extractPlayerId(seedNode.entrant ?? {});
+		const entrantId = Number((seedNode as { entrant?: { id?: unknown } }).entrant?.id);
+		if (playerId !== null) {
+			pidToSeedId.set(playerId, seedNode.id);
+			if (entrantId && !isNaN(entrantId)) pidToEntrantId.set(playerId, entrantId);
+		}
+	}
+
+	let seeds: { seedNum: number; gamerTag: string; playerId?: number }[];
+
+	if (overrideSeeds?.length) {
+		seeds = overrideSeeds;
+
+		// Apply reordered seeding to StartGG so the bracket matches.
+		const seedMapping: { seedId: number; seedNum: number }[] = [];
+		for (const s of overrideSeeds) {
+			if (s.playerId == null) continue;
+			const seedId = pidToSeedId.get(s.playerId);
+			if (seedId !== undefined) {
+				seedMapping.push({ seedId, seedNum: s.seedNum });
+			}
+		}
+		if (seedMapping.length) {
+			seedMapping.sort((a, b) => a.seedNum - b.seedNum);
+			await gql(UPDATE_PHASE_SEEDING_MUTATION, { phaseId, seedMapping });
+		}
+	} else {
+		seeds = await fetchPhaseSeedsWithTags(phaseId);
+
+		// If Swiss phase is empty, try reading seeds from other events.
+		if (!seeds.length) {
+			const tournSlug = resolvedSlug.match(/tournament\/([^/]+)/)?.[1];
+			if (tournSlug) {
+				const tData = await gql<{ tournament: { events: { id: number; name: string }[] } }>(
+					TOURNAMENT_QUERY, { slug: tournSlug }
 				);
-				const fallbackPhaseId = evtPhases?.event?.phases?.[0]?.id;
-				if (!fallbackPhaseId) continue;
-				const [fallbackSeeds, fallbackSgSeeds] = await Promise.all([
-					fetchPhaseSeedsWithTags(fallbackPhaseId),
-					fetchPhaseSeeds(fallbackPhaseId).catch(() => [])
-				]);
-				if (fallbackSeeds.length) {
-					seeds = fallbackSeeds;
-					sgSeeds = fallbackSgSeeds;
-					break;
+				const otherEvents = (tData?.tournament?.events ?? []).filter((e) => e.id !== eventId);
+				for (const evt of otherEvents) {
+					const evtPhases = await gql<{ event: { phases: { id: number }[] } }>(
+						EVENT_PHASES_QUERY, { eventId: evt.id }
+					);
+					const fallbackPhaseId = evtPhases?.event?.phases?.[0]?.id;
+					if (!fallbackPhaseId) continue;
+					const [fallbackSeeds, fallbackSgSeeds] = await Promise.all([
+						fetchPhaseSeedsWithTags(fallbackPhaseId),
+						fetchPhaseSeeds(fallbackPhaseId).catch(() => [])
+					]);
+					if (fallbackSeeds.length) {
+						seeds = fallbackSeeds;
+						sgSeeds = fallbackSgSeeds;
+						// Rebuild maps from fallback seeds
+						pidToSeedId.clear();
+						pidToEntrantId.clear();
+						for (const seedNode of sgSeeds) {
+							const playerId = extractPlayerId(seedNode.entrant ?? {});
+							const entrantId = Number((seedNode as { entrant?: { id?: unknown } }).entrant?.id);
+							if (playerId !== null) {
+								pidToSeedId.set(playerId, seedNode.id);
+								if (entrantId && !isNaN(entrantId)) pidToEntrantId.set(playerId, entrantId);
+							}
+						}
+						break;
+					}
 				}
 			}
 		}
@@ -123,22 +167,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'No seeds found in first phase' }, { status: 404 });
 	}
 
-	// Build seedNum → startggEntrantId map
-	const sgSeedToEntrantId = new Map<number, number>();
-	for (const seed of sgSeeds) {
-		const seedNum = Number((seed as { seedNum?: unknown }).seedNum);
-		const entrantId = Number((seed as { entrant?: { id?: unknown } }).entrant?.id);
-		if (seedNum && entrantId && !isNaN(seedNum) && !isNaN(entrantId)) {
-			sgSeedToEntrantId.set(seedNum, entrantId);
-		}
-	}
-
 	const tourneySlug = resolvedSlug.replace(/\//g, '-');
 	const entrants: Entrant[] = seeds.map((s, i) => ({
 		id: `e-${i + 1}`,
 		gamerTag: s.gamerTag,
 		initialSeed: s.seedNum,
-		startggEntrantId: sgSeedToEntrantId.get(s.seedNum)
+		startggEntrantId: s.playerId != null ? pidToEntrantId.get(s.playerId) : undefined
 	}));
 
 	if (mode === 'gauntlet') {

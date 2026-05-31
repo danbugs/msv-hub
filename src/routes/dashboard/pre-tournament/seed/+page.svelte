@@ -488,14 +488,20 @@
 		if (!eventUrl.trim()) return;
 		if (tournamentMode !== 'gauntlet' && swissRounds !== '' && (Number(swissRounds) < 1 || Number(swissRounds) > 5)) { error = 'Swiss rounds must be between 1 and 5'; return; }
 		loadingEvent = true; error = '';
+		const payload: Record<string, unknown> = {
+			eventSlug: eventUrl.trim(), numStations: Number(numStations), streamStation: 16,
+			numRounds: tournamentMode !== 'gauntlet' && swissRounds ? Number(swissRounds) : undefined,
+			mode: tournamentMode
+		};
+		if (quickPreview) {
+			payload.overrideSeeds = quickPreview.map((e) => ({
+				seedNum: e.seedNum, gamerTag: e.gamerTag, playerId: e.playerId
+			}));
+		}
 		const res = await fetch('/api/tournament/from-event', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				eventSlug: eventUrl.trim(), numStations: Number(numStations), streamStation: 16,
-				numRounds: tournamentMode !== 'gauntlet' && swissRounds ? Number(swissRounds) : undefined,
-				mode: tournamentMode
-			})
+			body: JSON.stringify(payload)
 		});
 		if (!res.ok) { loadingEvent = false; const data = await res.json(); error = data.error ?? 'Failed'; return; }
 
