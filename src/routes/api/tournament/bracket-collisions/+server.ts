@@ -31,7 +31,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					seed1: m.seed1, seed2: m.seed2,
 					tag1: m.tag1, tag2: m.tag2,
 					round: m.round, bracket: m.bracket,
-					event: history.event
+					event: history.event,
+					count: history.count,
+					isRegional: history.isRegional
 				};
 			});
 	}

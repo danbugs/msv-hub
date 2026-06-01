@@ -4,7 +4,7 @@ import {
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
 
-const MATCHUP_CACHE_KEY = 'matchups:recent:v7';
+const MATCHUP_CACHE_KEY = 'matchups:recent:v8';
 const MATCHUP_CACHE_TTL = 6 * 60 * 60;
 const SCAN_DELAY = 400;
 
@@ -242,7 +242,7 @@ export function resolveCollisions(
 		collisions.sort((a, b) => {
 			const ma = recentMatches.get(pairKey(a.playerId1!, a.playerId2!));
 			const mb = recentMatches.get(pairKey(b.playerId1!, b.playerId2!));
-			return (mb?.startAt ?? 0) - (ma?.startAt ?? 0);
+			return (mb ? collisionPriority(mb) : 0) - (ma ? collisionPriority(ma) : 0);
 		});
 
 		let resolved = false;
@@ -306,6 +306,8 @@ export interface HistoricalMatch {
 	tag2: string;
 	event: string;
 	startAt: number;
+	count: number;
+	isRegional: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -334,6 +336,23 @@ function parsePlayerSet(node: Record<string, any>): {
 		event: node.event?.tournament?.name ?? 'Unknown',
 		startAt: node.event?.tournament?.startAt ?? 0
 	};
+}
+
+const REGIONAL_PATTERNS = [
+	/macro/i, /alpine arena/i, /peak pressure/i, /out of pools/i
+];
+
+function isRegionalEvent(name: string): boolean {
+	return REGIONAL_PATTERNS.some(p => p.test(name));
+}
+
+function collisionPriority(match: HistoricalMatch): number {
+	let score = match.count * 10;
+	const now = Date.now() / 1000;
+	const daysAgo = Math.max(0, (now - match.startAt) / 86400);
+	score += Math.max(0, 8 - daysAgo) * 2;
+	if (match.isRegional) score += 50;
+	return score;
 }
 
 async function computeRecentMatchups(
@@ -368,15 +387,27 @@ async function computeRecentMatchups(
 
 				const key = pairKey(parsed.p1, parsed.p2);
 				const existing = matches.get(key);
-				if (!existing || parsed.startAt > existing.startAt) {
+				const regional = isRegionalEvent(parsed.event);
+				if (!existing) {
 					matches.set(key, {
 						player1Id: Math.min(parsed.p1, parsed.p2),
 						player2Id: Math.max(parsed.p1, parsed.p2),
 						tag1: parsed.p1 < parsed.p2 ? parsed.tag1 : parsed.tag2,
 						tag2: parsed.p1 < parsed.p2 ? parsed.tag2 : parsed.tag1,
 						event: parsed.event,
-						startAt: parsed.startAt
+						startAt: parsed.startAt,
+						count: 1,
+						isRegional: regional
 					});
+				} else {
+					existing.count++;
+					if (regional) existing.isRegional = true;
+					if (parsed.startAt > existing.startAt) {
+						existing.event = parsed.event;
+						existing.startAt = parsed.startAt;
+						existing.tag1 = parsed.p1 < parsed.p2 ? parsed.tag1 : parsed.tag2;
+						existing.tag2 = parsed.p1 < parsed.p2 ? parsed.tag2 : parsed.tag1;
+					}
 				}
 			}
 

@@ -30,7 +30,7 @@
 	let loadingPreview = $state(false);
 
 	// Bracket collision predictions
-	interface BracketCollision { seed1: number; seed2: number; tag1: string; tag2: string; round: string; bracket: string; event: string }
+	interface BracketCollision { seed1: number; seed2: number; tag1: string; tag2: string; round: string; bracket: string; event: string; count?: number; isRegional?: boolean }
 	let bracketCollisions = $state<BracketCollision[]>([]);
 	let loadingCollisions = $state(false);
 
@@ -224,6 +224,7 @@
 		e.splice(targetIdx, 0, moved);
 		e.forEach((ent, i) => ent.seedNum = i + 1);
 		result = { ...result, entrants: e };
+		lastSwaps = [];
 		dragIdx = null; dragOverIdx = null;
 	}
 	function onDragEnd() { dragIdx = null; dragOverIdx = null; }
@@ -390,6 +391,7 @@
 		e.splice(targetIdx, 0, moved);
 		e.forEach((ent, i) => ent.seedNum = i + 1);
 		quickPreview = e;
+		lastSwaps = [];
 		qDragIdx = null; qDragOverIdx = null;
 	}
 	function onQDragEnd() { qDragIdx = null; qDragOverIdx = null; }
@@ -771,10 +773,16 @@
 								<p class="text-xs font-medium text-orange-400">
 									Predicted rematches ({bracketCollisions.length})
 								</p>
-								<button onclick={() => fixBracketCollisions(result!.entrants, 'seeder')} disabled={fixingCollisions}
-									class="rounded bg-orange-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-orange-500 disabled:opacity-50">
-									{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
-								</button>
+								<div class="flex items-center gap-1.5">
+									<button onclick={() => fetchBracketCollisions(result!.entrants)} disabled={loadingCollisions}
+										class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
+										{loadingCollisions ? 'Checking...' : 'Recheck'}
+									</button>
+									<button onclick={() => fixBracketCollisions(result!.entrants, 'seeder')} disabled={fixingCollisions}
+										class="rounded bg-orange-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-orange-500 disabled:opacity-50">
+										{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
+									</button>
+								</div>
 							</div>
 							<div class="space-y-1">
 								{#each bracketCollisions as c}
@@ -783,6 +791,8 @@
 										<span class="text-foreground truncate">{c.tag1}</span>
 										<span class="text-muted-foreground">vs</span>
 										<span class="text-foreground truncate">{c.tag2}</span>
+										{#if c.isRegional}<span class="shrink-0 rounded bg-red-600/30 px-1 text-red-400 font-medium">regional</span>{/if}
+										{#if (c.count ?? 1) > 1}<span class="shrink-0 rounded bg-orange-600/30 px-1 text-orange-300">{c.count}x</span>{/if}
 										<span class="text-orange-400/70 ml-auto shrink-0 truncate max-w-[10rem]" title={c.event}>@ {c.event}</span>
 									</div>
 								{/each}
@@ -791,6 +801,13 @@
 					{:else if loadingCollisions}
 						<div class="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
 							<div class="h-2 w-2 rounded-full bg-orange-500 animate-pulse"></div>Checking for bracket rematches...
+						</div>
+					{:else if !loadingCollisions && result}
+						<div class="mt-3">
+							<button onclick={() => fetchBracketCollisions(result!.entrants)} disabled={loadingCollisions}
+								class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
+								Check Collisions
+							</button>
 						</div>
 					{/if}
 					{#if lastSwaps.length > 0}
@@ -1024,10 +1041,16 @@
 										<p class="text-xs font-medium text-orange-400">
 											Predicted rematches ({bracketCollisions.length})
 										</p>
-										<button onclick={() => fixBracketCollisions(quickPreview!, 'quick')} disabled={fixingCollisions}
-											class="rounded bg-orange-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-orange-500 disabled:opacity-50">
-											{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
-										</button>
+										<div class="flex items-center gap-1.5">
+											<button onclick={() => fetchBracketCollisions(quickPreview!)} disabled={loadingCollisions}
+												class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
+												{loadingCollisions ? 'Checking...' : 'Recheck'}
+											</button>
+											<button onclick={() => fixBracketCollisions(quickPreview!, 'quick')} disabled={fixingCollisions}
+												class="rounded bg-orange-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-orange-500 disabled:opacity-50">
+												{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
+											</button>
+										</div>
 									</div>
 									<div class="space-y-1">
 										{#each bracketCollisions as c}
@@ -1036,6 +1059,8 @@
 												<span class="text-foreground truncate">{c.tag1}</span>
 												<span class="text-muted-foreground">vs</span>
 												<span class="text-foreground truncate">{c.tag2}</span>
+												{#if c.isRegional}<span class="shrink-0 rounded bg-red-600/30 px-1 text-red-400 font-medium">regional</span>{/if}
+												{#if (c.count ?? 1) > 1}<span class="shrink-0 rounded bg-orange-600/30 px-1 text-orange-300">{c.count}x</span>{/if}
 												<span class="text-orange-400/70 ml-auto shrink-0 truncate max-w-[10rem]" title={c.event}>@ {c.event}</span>
 											</div>
 										{/each}
@@ -1044,6 +1069,13 @@
 							{:else if loadingCollisions}
 								<div class="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
 									<div class="h-2 w-2 rounded-full bg-orange-500 animate-pulse"></div>Checking for bracket rematches...
+								</div>
+							{:else if !loadingCollisions && quickPreview}
+								<div class="mt-3">
+									<button onclick={() => fetchBracketCollisions(quickPreview!)} disabled={loadingCollisions}
+										class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
+										Check Collisions
+									</button>
 								</div>
 							{/if}
 							{#if lastSwaps.length > 0}
