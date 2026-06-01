@@ -158,8 +158,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const mainEventId = tournament.startggMainBracketEventId;
 
-	const participants = await getTournamentParticipants(tournamentSlug);
-	log(`Found ${participants.length} participants`);
+	const allParticipants = await getTournamentParticipants(tournamentSlug);
+	const entrantTags = new Set(tournament.entrants.map((e) => e.gamerTag.toLowerCase()));
+	const participants = allParticipants.filter((p) => entrantTags.has(p.gamerTag.toLowerCase()));
+	log(`Found ${allParticipants.length} participants, ${participants.length} are tournament entrants`);
 
 	// Refresh stored entrant IDs to current Swiss event IDs.
 	// from-event may have read seeds from a fallback event (Main), leaving
@@ -259,7 +261,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// Step 3: Remove players from Swiss
 		log(`Step 3: Removing players from Swiss...`);
-		const freshParticipants = await getTournamentParticipants(tournamentSlug);
+		const freshAll = await getTournamentParticipants(tournamentSlug);
+		const freshParticipants = freshAll.filter((p) => entrantTags.has(p.gamerTag.toLowerCase()));
 		let removedFromSwiss = 0;
 		for (const p of freshParticipants) {
 			if (!p.currentEventIds.includes(swissEventId)) continue;
@@ -332,8 +335,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const needsCleanup = participants.some((p) => p.currentEventIds.some((id) => id !== swissEventId));
 		if (needsCleanup) {
 			log(`Step 3: Removing players from non-Swiss events...`);
-			const freshParticipants = await getTournamentParticipants(tournamentSlug);
-			for (const p of freshParticipants) {
+			const freshAll2 = await getTournamentParticipants(tournamentSlug);
+			const freshParticipants2 = freshAll2.filter((p) => entrantTags.has(p.gamerTag.toLowerCase()));
+			for (const p of freshParticipants2) {
 				const nonSwiss = p.currentEventIds.filter((id) => id !== swissEventId);
 				if (nonSwiss.length === 0) continue;
 				const result = await updateParticipantEvents(p.participantId, [swissEventId]);
