@@ -4,7 +4,7 @@ import {
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
 
-const MATCHUP_CACHE_KEY = 'matchups:recent:v8';
+const MATCHUP_CACHE_KEY = 'matchups:recent:v9';
 const MATCHUP_CACHE_TTL = 6 * 60 * 60;
 const SCAN_DELAY = 400;
 
@@ -361,7 +361,7 @@ function parsePlayerSet(node: Record<string, any>): {
 }
 
 const REGIONAL_PATTERNS = [
-	/macro/i, /alpine arena/i, /peak pressure/i, /out of pools/i
+	/macro/i, /alpine arena/i, /peak pressure/i, /out of pools/i, /freestyle/i
 ];
 
 function isRegionalEvent(name: string): boolean {
@@ -381,7 +381,7 @@ async function computeRecentMatchups(
 	playerIds: number[]
 ): Promise<Map<string, HistoricalMatch>> {
 	const matches = new Map<string, HistoricalMatch>();
-	const twoMonthsAgo = Date.now() / 1000 - 2 * 30 * 86400;
+	const cutoffTime = Date.now() / 1000 - 4 * 30 * 86400;
 
 	for (const pid of playerIds) {
 		let page = 1;
@@ -399,7 +399,7 @@ async function computeRecentMatchups(
 			for (const setNode of data.player.sets.nodes) {
 				const sn = setNode as Record<string, unknown>;
 				const startAt = ((sn.event as Record<string, unknown> | undefined)?.tournament as Record<string, unknown> | undefined)?.startAt as number | undefined ?? 0;
-				if (startAt > 0 && startAt < twoMonthsAgo) {
+				if (startAt > 0 && startAt < cutoffTime) {
 					reachedCutoff = true;
 					continue;
 				}
