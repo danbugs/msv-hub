@@ -361,7 +361,7 @@ function parsePlayerSet(node: Record<string, any>): {
 }
 
 const REGIONAL_PATTERNS = [
-	/macro/i, /alpine arena/i, /peak pressure/i, /out of pools/i, /freestyle/i
+	/macro/i, /alpine arena/i, /peak pressure/i, /^out of pools/i, /^freestyle/i
 ];
 
 function isRegionalEvent(name: string): boolean {
