@@ -35,10 +35,12 @@
 	let loadingCollisions = $state(false);
 
 	let fixingCollisions = $state(false);
+	let fixAttempted = $state(false);
 	let lastSwaps = $state<{ from: string; to: string; fromSeed: number; toSeed: number }[]>([]);
 
 	async function fetchBracketCollisions(entrants: { seedNum: number; gamerTag: string; playerId?: number }[]) {
 		loadingCollisions = true;
+		fixAttempted = false;
 		const res = await fetch('/api/tournament/bracket-collisions', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -53,6 +55,7 @@
 
 	async function fixBracketCollisions(entrants: { seedNum: number; gamerTag: string; playerId?: number }[], target: 'quick' | 'seeder') {
 		fixingCollisions = true;
+		fixAttempted = true;
 		const res = await fetch('/api/tournament/bracket-collisions', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -773,29 +776,34 @@
 				<div class="mt-4 rounded-lg border border-violet-700/40 bg-violet-950/20 p-4">
 					<div class="flex items-center justify-between mb-3">
 						<p class="text-sm font-medium text-violet-400">
-							Predicted bracket rematches ({bracketCollisions.length})
+							{fixAttempted ? 'Remaining' : 'Predicted'} bracket rematches ({bracketCollisions.length})
 						</p>
 						<div class="flex items-center gap-1.5">
 							<button onclick={() => fetchBracketCollisions(result!.entrants)} disabled={loadingCollisions}
 								class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
 								{loadingCollisions ? 'Checking...' : 'Recheck'}
 							</button>
-							<button onclick={() => fixBracketCollisions(result!.entrants, 'seeder')} disabled={fixingCollisions}
-								class="rounded bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50">
-								{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
-							</button>
+							{#if !fixAttempted}
+								<button onclick={() => fixBracketCollisions(result!.entrants, 'seeder')} disabled={fixingCollisions}
+									class="rounded bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50">
+									{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
+								</button>
+							{/if}
 						</div>
 					</div>
-					<div class="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+					{#if fixAttempted}
+						<p class="mb-3 text-xs text-violet-400/70">These couldn't be resolved without moving players too far from their seeded position.</p>
+					{/if}
+					<div class="space-y-1">
 						{#each bracketCollisions as c}
 							<div class="flex items-center gap-2 text-sm">
-								<span class="text-violet-400 font-mono w-16 shrink-0">{c.round}</span>
-								<span class="text-foreground truncate">{c.tag1}</span>
+								<span class="text-violet-400 font-mono w-20 shrink-0">{c.round}</span>
+								<span class="text-foreground">{c.tag1}</span>
 								<span class="text-muted-foreground">vs</span>
-								<span class="text-foreground truncate">{c.tag2}</span>
+								<span class="text-foreground">{c.tag2}</span>
 								{#if c.isRegional}<span class="shrink-0 rounded bg-red-600/30 px-1 text-red-400 text-xs font-medium">regional</span>{/if}
 								{#if (c.count ?? 1) > 1}<span class="shrink-0 rounded bg-violet-600/30 px-1 text-violet-300 text-xs">{c.count}x</span>{/if}
-								<span class="text-violet-400/60 ml-auto shrink-0 truncate max-w-[12rem] text-xs" title={c.event}>@ {c.event}</span>
+								<span class="text-violet-400/60 ml-auto shrink-0 text-xs" title={c.event}>@ {c.event}</span>
 							</div>
 						{/each}
 					</div>
@@ -1043,29 +1051,34 @@
 						<div class="mt-4 rounded-lg border border-violet-700/40 bg-violet-950/20 p-4">
 							<div class="flex items-center justify-between mb-3">
 								<p class="text-sm font-medium text-violet-400">
-									Predicted bracket rematches ({bracketCollisions.length})
+									{fixAttempted ? 'Remaining' : 'Predicted'} bracket rematches ({bracketCollisions.length})
 								</p>
 								<div class="flex items-center gap-1.5">
 									<button onclick={() => fetchBracketCollisions(quickPreview!)} disabled={loadingCollisions}
 										class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
 										{loadingCollisions ? 'Checking...' : 'Recheck'}
 									</button>
-									<button onclick={() => fixBracketCollisions(quickPreview!, 'quick')} disabled={fixingCollisions}
-										class="rounded bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50">
-										{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
-									</button>
+									{#if !fixAttempted}
+										<button onclick={() => fixBracketCollisions(quickPreview!, 'quick')} disabled={fixingCollisions}
+											class="rounded bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50">
+											{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
+										</button>
+									{/if}
 								</div>
 							</div>
-							<div class="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+							{#if fixAttempted}
+								<p class="mb-3 text-xs text-violet-400/70">These couldn't be resolved without moving players too far from their seeded position.</p>
+							{/if}
+							<div class="space-y-1">
 								{#each bracketCollisions as c}
 									<div class="flex items-center gap-2 text-sm">
-										<span class="text-violet-400 font-mono w-16 shrink-0">{c.round}</span>
-										<span class="text-foreground truncate">{c.tag1}</span>
+										<span class="text-violet-400 font-mono w-20 shrink-0">{c.round}</span>
+										<span class="text-foreground">{c.tag1}</span>
 										<span class="text-muted-foreground">vs</span>
-										<span class="text-foreground truncate">{c.tag2}</span>
+										<span class="text-foreground">{c.tag2}</span>
 										{#if c.isRegional}<span class="shrink-0 rounded bg-red-600/30 px-1 text-red-400 text-xs font-medium">regional</span>{/if}
 										{#if (c.count ?? 1) > 1}<span class="shrink-0 rounded bg-violet-600/30 px-1 text-violet-300 text-xs">{c.count}x</span>{/if}
-										<span class="text-violet-400/60 ml-auto shrink-0 truncate max-w-[12rem] text-xs" title={c.event}>@ {c.event}</span>
+										<span class="text-violet-400/60 ml-auto shrink-0 text-xs" title={c.event}>@ {c.event}</span>
 									</div>
 								{/each}
 							</div>
