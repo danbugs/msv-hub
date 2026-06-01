@@ -235,7 +235,18 @@ export function resolveCollisions(
 	const origIdx = new Map<string, number>();
 	fixed.forEach((e, i) => origIdx.set(e.gamerTag, i));
 
-	for (let attempt = 0; attempt < 20; attempt++) {
+	function weightedScore(ms: PredictedMatchup[]): number {
+		let score = 0;
+		for (const m of ms) {
+			if (!m.playerId1 || !m.playerId2) continue;
+			const h = recentMatches.get(pairKey(m.playerId1, m.playerId2));
+			if (!h) continue;
+			score += h.isRegional ? 100 : 1;
+		}
+		return score;
+	}
+
+	for (let attempt = 0; attempt < 30; attempt++) {
 		fixed.forEach((e, i) => e.seedNum = i + 1);
 		const matchups = predictBracketMatchups(fixed);
 		const collisions = matchups.filter(m =>
@@ -249,18 +260,21 @@ export function resolveCollisions(
 			return (mb ? collisionPriority(mb) : 0) - (ma ? collisionPriority(ma) : 0);
 		});
 
+		const curScore = weightedScore(collisions);
 		let resolved = false;
 		for (const c of collisions) {
 			const match = recentMatches.get(pairKey(c.playerId1!, c.playerId2!));
+			const isRegional = match?.isRegional ?? false;
+			const distMult = isRegional ? 2 : 1;
 			const idxA = fixed.findIndex(e => e.playerId === c.playerId1);
 			const idxB = fixed.findIndex(e => e.playerId === c.playerId2);
 			if (idxA === -1 || idxB === -1) continue;
 
 			for (const swapFrom of [Math.max(idxA, idxB), Math.min(idxA, idxB)]) {
 				const other = swapFrom === idxA ? idxB : idxA;
-				const dist = maxSwapDist(swapFrom + 1);
+				const dist = maxSwapDist(swapFrom + 1) * distMult;
 				let bestTo = -1;
-				let bestCount = collisions.length;
+				let bestScore = curScore;
 
 				const lo = Math.max(0, swapFrom - dist);
 				const hi = Math.min(fixed.length - 1, swapFrom + dist);
@@ -268,23 +282,24 @@ export function resolveCollisions(
 					if (to === swapFrom || to === other) continue;
 					const origA = origIdx.get(fixed[swapFrom].gamerTag)!;
 					const origB = origIdx.get(fixed[to].gamerTag)!;
-					if (Math.abs(to - origA) > maxSwapDist(origA + 1)) continue;
-					if (Math.abs(swapFrom - origB) > maxSwapDist(origB + 1)) continue;
+					if (Math.abs(to - origA) > maxSwapDist(origA + 1) * distMult) continue;
+					if (Math.abs(swapFrom - origB) > maxSwapDist(origB + 1) * distMult) continue;
 
 					[fixed[swapFrom], fixed[to]] = [fixed[to], fixed[swapFrom]];
 					fixed.forEach((e, i) => e.seedNum = i + 1);
-					const cnt = predictBracketMatchups(fixed).filter(m =>
+					const newCols = predictBracketMatchups(fixed).filter(m =>
 						m.playerId1 && m.playerId2 && recentMatches.has(pairKey(m.playerId1, m.playerId2))
-					).length;
+					);
+					const s = weightedScore(newCols);
 					[fixed[swapFrom], fixed[to]] = [fixed[to], fixed[swapFrom]];
 					fixed.forEach((e, i) => e.seedNum = i + 1);
-					if (cnt < bestCount || (cnt === bestCount && bestTo !== -1 && Math.abs(to - swapFrom) < Math.abs(bestTo - swapFrom))) {
-						bestCount = cnt;
+					if (s < bestScore || (s === bestScore && bestTo !== -1 && Math.abs(to - swapFrom) < Math.abs(bestTo - swapFrom))) {
+						bestScore = s;
 						bestTo = to;
 					}
 				}
 
-				if (bestTo !== -1 && bestCount < collisions.length) {
+				if (bestTo !== -1 && bestScore < curScore) {
 					const reason = swapReason(match);
 					swaps.push({
 						from: fixed[swapFrom].gamerTag, to: fixed[bestTo].gamerTag,
