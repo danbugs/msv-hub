@@ -36,7 +36,7 @@
 
 	let fixingCollisions = $state(false);
 	let fixAttempted = $state(false);
-	let lastSwaps = $state<{ from: string; to: string; fromSeed: number; toSeed: number }[]>([]);
+	let lastSwaps = $state<{ from: string; to: string; fromSeed: number; toSeed: number; reason?: string }[]>([]);
 
 	async function fetchBracketCollisions(entrants: { seedNum: number; gamerTag: string; playerId?: number }[]) {
 		loadingCollisions = true;
@@ -794,16 +794,16 @@
 					{#if fixAttempted}
 						<p class="mb-3 text-xs text-violet-400/70">These couldn't be resolved without moving players too far from their seeded position.</p>
 					{/if}
-					<div class="space-y-1">
+					<div class="space-y-1 overflow-hidden">
 						{#each bracketCollisions as c}
-							<div class="flex items-center gap-2 text-sm">
+							<div class="flex items-center gap-2 text-sm min-w-0">
 								<span class="text-violet-400 font-mono w-20 shrink-0">{c.round}</span>
-								<span class="text-foreground">{c.tag1}</span>
-								<span class="text-muted-foreground">vs</span>
-								<span class="text-foreground">{c.tag2}</span>
+								<span class="text-foreground shrink-0">{c.tag1}</span>
+								<span class="text-muted-foreground shrink-0">vs</span>
+								<span class="text-foreground shrink-0">{c.tag2}</span>
 								{#if c.isRegional}<span class="shrink-0 rounded bg-red-600/30 px-1 text-red-400 text-xs font-medium">regional</span>{/if}
 								{#if (c.count ?? 1) > 1}<span class="shrink-0 rounded bg-violet-600/30 px-1 text-violet-300 text-xs">{c.count}x</span>{/if}
-								<span class="text-violet-400/60 ml-auto shrink-0 text-xs" title={c.event}>@ {c.event}</span>
+								<span class="text-violet-400/60 ml-auto truncate text-xs min-w-0" title={c.event}>@ {c.event}</span>
 							</div>
 						{/each}
 					</div>
@@ -825,7 +825,10 @@
 					<p class="text-xs font-medium text-green-400 mb-1">Swaps applied</p>
 					<div class="space-y-0.5">
 						{#each lastSwaps as s}
-							<p class="text-xs text-muted-foreground">Seed {s.fromSeed} {s.from} ↔ Seed {s.toSeed} {s.to}</p>
+							<p class="text-xs text-muted-foreground">
+								Seed {s.fromSeed} {s.from} ↔ Seed {s.toSeed} {s.to}
+								{#if s.reason}<span class="text-violet-400/70 ml-1">({s.reason})</span>{/if}
+							</p>
 						{/each}
 					</div>
 				</div>
@@ -1069,16 +1072,16 @@
 							{#if fixAttempted}
 								<p class="mb-3 text-xs text-violet-400/70">These couldn't be resolved without moving players too far from their seeded position.</p>
 							{/if}
-							<div class="space-y-1">
+							<div class="space-y-1 overflow-hidden">
 								{#each bracketCollisions as c}
-									<div class="flex items-center gap-2 text-sm">
+									<div class="flex items-center gap-2 text-sm min-w-0">
 										<span class="text-violet-400 font-mono w-20 shrink-0">{c.round}</span>
-										<span class="text-foreground">{c.tag1}</span>
-										<span class="text-muted-foreground">vs</span>
-										<span class="text-foreground">{c.tag2}</span>
+										<span class="text-foreground shrink-0">{c.tag1}</span>
+										<span class="text-muted-foreground shrink-0">vs</span>
+										<span class="text-foreground shrink-0">{c.tag2}</span>
 										{#if c.isRegional}<span class="shrink-0 rounded bg-red-600/30 px-1 text-red-400 text-xs font-medium">regional</span>{/if}
 										{#if (c.count ?? 1) > 1}<span class="shrink-0 rounded bg-violet-600/30 px-1 text-violet-300 text-xs">{c.count}x</span>{/if}
-										<span class="text-violet-400/60 ml-auto shrink-0 text-xs" title={c.event}>@ {c.event}</span>
+										<span class="text-violet-400/60 ml-auto truncate text-xs min-w-0" title={c.event}>@ {c.event}</span>
 									</div>
 								{/each}
 							</div>
@@ -1100,7 +1103,10 @@
 							<p class="text-xs font-medium text-green-400 mb-1">Swaps applied</p>
 							<div class="space-y-0.5">
 								{#each lastSwaps as s}
-									<p class="text-xs text-muted-foreground">Seed {s.fromSeed} {s.from} ↔ Seed {s.toSeed} {s.to}</p>
+									<p class="text-xs text-muted-foreground">
+										Seed {s.fromSeed} {s.from} ↔ Seed {s.toSeed} {s.to}
+										{#if s.reason}<span class="text-violet-400/70 ml-1">({s.reason})</span>{/if}
+									</p>
 								{/each}
 							</div>
 						</div>

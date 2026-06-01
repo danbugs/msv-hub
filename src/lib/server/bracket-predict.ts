@@ -220,14 +220,18 @@ function maxSwapDist(seedNum: number): number {
 	return 6;
 }
 
+export interface SwapInfo {
+	from: string; to: string; fromSeed: number; toSeed: number;
+	reason: string;
+}
+
 export function resolveCollisions(
 	entrants: { seedNum: number; gamerTag: string; playerId?: number }[],
 	recentMatches: Map<string, HistoricalMatch>
-): { fixed: { seedNum: number; gamerTag: string; playerId?: number }[]; swaps: { from: string; to: string; fromSeed: number; toSeed: number }[] } {
+): { fixed: { seedNum: number; gamerTag: string; playerId?: number }[]; swaps: SwapInfo[] } {
 	const fixed = entrants.map(e => ({ ...e }));
-	const swaps: { from: string; to: string; fromSeed: number; toSeed: number }[] = [];
+	const swaps: SwapInfo[] = [];
 
-	// Track each player's original index so cascading swaps can't drift them too far.
 	const origIdx = new Map<string, number>();
 	fixed.forEach((e, i) => origIdx.set(e.gamerTag, i));
 
@@ -247,13 +251,16 @@ export function resolveCollisions(
 
 		let resolved = false;
 		for (const c of collisions) {
+			const match = recentMatches.get(pairKey(c.playerId1!, c.playerId2!));
+			const highPriority = match ? (match.isRegional || match.count >= 3) : false;
 			const idxA = fixed.findIndex(e => e.playerId === c.playerId1);
 			const idxB = fixed.findIndex(e => e.playerId === c.playerId2);
 			if (idxA === -1 || idxB === -1) continue;
 
 			for (const swapFrom of [Math.max(idxA, idxB), Math.min(idxA, idxB)]) {
 				const other = swapFrom === idxA ? idxB : idxA;
-				const dist = maxSwapDist(swapFrom + 1);
+				const baseDist = maxSwapDist(swapFrom + 1);
+				const dist = highPriority ? baseDist * 2 : baseDist;
 				let bestTo = -1;
 				let bestCount = collisions.length;
 
@@ -261,11 +268,12 @@ export function resolveCollisions(
 				const hi = Math.min(fixed.length - 1, swapFrom + dist);
 				for (let to = lo; to <= hi; to++) {
 					if (to === swapFrom || to === other) continue;
-					// Check that neither player would drift beyond their tier's max from original seed.
 					const origA = origIdx.get(fixed[swapFrom].gamerTag)!;
 					const origB = origIdx.get(fixed[to].gamerTag)!;
-					if (Math.abs(to - origA) > maxSwapDist(origA + 1)) continue;
-					if (Math.abs(swapFrom - origB) > maxSwapDist(origB + 1)) continue;
+					const driftLimitA = highPriority ? maxSwapDist(origA + 1) * 2 : maxSwapDist(origA + 1);
+					const driftLimitB = highPriority ? maxSwapDist(origB + 1) * 2 : maxSwapDist(origB + 1);
+					if (Math.abs(to - origA) > driftLimitA) continue;
+					if (Math.abs(swapFrom - origB) > driftLimitB) continue;
 
 					[fixed[swapFrom], fixed[to]] = [fixed[to], fixed[swapFrom]];
 					fixed.forEach((e, i) => e.seedNum = i + 1);
@@ -281,9 +289,11 @@ export function resolveCollisions(
 				}
 
 				if (bestTo !== -1 && bestCount < collisions.length) {
+					const reason = swapReason(match);
 					swaps.push({
 						from: fixed[swapFrom].gamerTag, to: fixed[bestTo].gamerTag,
-						fromSeed: fixed[swapFrom].seedNum, toSeed: fixed[bestTo].seedNum
+						fromSeed: fixed[swapFrom].seedNum, toSeed: fixed[bestTo].seedNum,
+						reason
 					});
 					[fixed[swapFrom], fixed[bestTo]] = [fixed[bestTo], fixed[swapFrom]];
 					fixed.forEach((e, i) => e.seedNum = i + 1);
@@ -297,6 +307,18 @@ export function resolveCollisions(
 	}
 
 	return { fixed, swaps };
+}
+
+function swapReason(match: HistoricalMatch | undefined): string {
+	if (!match) return 'rematch';
+	const parts: string[] = [];
+	if (match.isRegional) parts.push('regional');
+	if (match.count > 1) parts.push(`${match.count}x`);
+	const daysAgo = Math.max(0, Math.round((Date.now() / 1000 - match.startAt) / 86400));
+	if (daysAgo <= 7) parts.push('last week');
+	else if (daysAgo <= 14) parts.push('2 weeks ago');
+	else parts.push(`${Math.round(daysAgo / 7)}w ago`);
+	return parts.join(', ');
 }
 
 export interface HistoricalMatch {
