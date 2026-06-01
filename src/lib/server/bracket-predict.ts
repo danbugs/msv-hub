@@ -63,8 +63,7 @@ export interface PredictedMatchup {
 }
 
 export function predictBracketMatchups(
-	entrants: { seedNum: number; gamerTag: string; playerId?: number }[],
-	maxSeed = 32
+	entrants: { seedNum: number; gamerTag: string; playerId?: number }[]
 ): PredictedMatchup[] {
 	const n = entrants.length;
 	if (n < 2) return [];
@@ -81,7 +80,6 @@ export function predictBracketMatchups(
 	);
 
 	const matchups: PredictedMatchup[] = [];
-	const relevant = (s: Slot) => s !== null && s.seed <= maxSeed;
 
 	let winnersRound = slots;
 	let losersPool: Slot[] = [];
@@ -97,17 +95,15 @@ export function predictBracketMatchups(
 			const b = winnersRound[i * 2 + 1];
 
 			if (a && b) {
-				if (relevant(a) || relevant(b)) {
-					const label = numMatches === 1 ? 'WF'
-						: numMatches === 2 ? `WSF ${i + 1}`
-						: `WR${roundNum} M${i + 1}`;
-					matchups.push({
-						seed1: a.seed, seed2: b.seed,
-						tag1: a.tag, tag2: b.tag,
-						playerId1: a.playerId, playerId2: b.playerId,
-						round: label, bracket: 'winners'
-					});
-				}
+				const label = numMatches === 1 ? 'WF'
+					: numMatches === 2 ? `WSF ${i + 1}`
+					: `WR${roundNum} M${i + 1}`;
+				matchups.push({
+					seed1: a.seed, seed2: b.seed,
+					tag1: a.tag, tag2: b.tag,
+					playerId1: a.playerId, playerId2: b.playerId,
+					round: label, bracket: 'winners'
+				});
 				const winner = a.seed < b.seed ? a : b;
 				const loser = a.seed < b.seed ? b : a;
 				nextWinners.push(winner);
@@ -130,14 +126,12 @@ export function predictBracketMatchups(
 		const a = wr1Losers[i];
 		const b = wr1Losers[i + 1] ?? null;
 		if (a && b) {
-			if (relevant(a) || relevant(b)) {
-				matchups.push({
-					seed1: a.seed, seed2: b.seed,
-					tag1: a.tag, tag2: b.tag,
-					playerId1: a.playerId, playerId2: b.playerId,
-					round: `LR1 M${Math.floor(i / 2) + 1}`, bracket: 'losers'
-				});
-			}
+			matchups.push({
+				seed1: a.seed, seed2: b.seed,
+				tag1: a.tag, tag2: b.tag,
+				playerId1: a.playerId, playerId2: b.playerId,
+				round: `LR1 M${Math.floor(i / 2) + 1}`, bracket: 'losers'
+			});
 			losersRound.push(a.seed < b.seed ? a : b);
 		} else {
 			losersRound.push(a ?? b);
@@ -159,14 +153,12 @@ export function predictBracketMatchups(
 				const a = losersRound[i];
 				const b = reversed[i] ?? null;
 				if (a && b) {
-					if (relevant(a) || relevant(b)) {
-						matchups.push({
-							seed1: a.seed, seed2: b.seed,
-							tag1: a.tag, tag2: b.tag,
-							playerId1: a.playerId, playerId2: b.playerId,
-							round: `LR${lrNum} M${i + 1}`, bracket: 'losers'
-						});
-					}
+					matchups.push({
+						seed1: a.seed, seed2: b.seed,
+						tag1: a.tag, tag2: b.tag,
+						playerId1: a.playerId, playerId2: b.playerId,
+						round: `LR${lrNum} M${i + 1}`, bracket: 'losers'
+					});
 					nextLosers.push(a.seed < b.seed ? a : b);
 				} else {
 					nextLosers.push(a ?? b);
@@ -177,16 +169,14 @@ export function predictBracketMatchups(
 				const a = losersRound[i];
 				const b = losersRound[i + 1] ?? null;
 				if (a && b) {
-					if (relevant(a) || relevant(b)) {
-						const label = losersRound.length === 2 ? `LSF ${Math.floor(i / 2) + 1}`
-							: `LR${lrNum} M${Math.floor(i / 2) + 1}`;
-						matchups.push({
-							seed1: a.seed, seed2: b.seed,
-							tag1: a.tag, tag2: b.tag,
-							playerId1: a.playerId, playerId2: b.playerId,
-							round: label, bracket: 'losers'
-						});
-					}
+					const label = losersRound.length === 2 ? `LSF ${Math.floor(i / 2) + 1}`
+						: `LR${lrNum} M${Math.floor(i / 2) + 1}`;
+					matchups.push({
+						seed1: a.seed, seed2: b.seed,
+						tag1: a.tag, tag2: b.tag,
+						playerId1: a.playerId, playerId2: b.playerId,
+						round: label, bracket: 'losers'
+					});
 					nextLosers.push(a.seed < b.seed ? a : b);
 				} else {
 					nextLosers.push(a ?? b);
@@ -202,7 +192,7 @@ export function predictBracketMatchups(
 	if (winnersRound.length === 1 && losersRound.length === 1) {
 		const a = winnersRound[0];
 		const b = losersRound[0];
-		if (a && b && (relevant(a) || relevant(b))) {
+		if (a && b) {
 			matchups.push({
 				seed1: a.seed, seed2: b.seed,
 				tag1: a.tag, tag2: b.tag,
