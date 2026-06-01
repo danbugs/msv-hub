@@ -154,9 +154,11 @@ export function predictBracketMatchups(
 			} else if (n >= 8) {
 				const half = Math.floor(n / 2);
 				ordered = [...dropIns.slice(0, half).reverse(), ...dropIns.slice(half).reverse()];
-			} else {
+			} else if (n >= 4) {
 				const half = Math.floor(n / 2);
 				ordered = [...dropIns.slice(half), ...dropIns.slice(0, half)];
+			} else {
+				ordered = [...dropIns];
 			}
 
 			for (let i = 0; i < losersRound.length; i++) {

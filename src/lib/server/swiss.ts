@@ -1003,9 +1003,11 @@ export function generateBracket(
 				} else if (dropCount >= 8) {
 					const half = Math.floor(dropCount / 2);
 					wdIdx = i < half ? half - 1 - i : dropCount - 1 - (i - half);
-				} else {
+				} else if (dropCount >= 4) {
 					const half = Math.floor(dropCount / 2);
 					wdIdx = (i + half) % dropCount;
+				} else {
+					wdIdx = i;
 				}
 				const wd = winnersDropMatches[wdIdx];
 				if (wd) { wd.loserNextMatchId = roundMatches[i].id; wd.loserNextSlot = 'bottom'; }
