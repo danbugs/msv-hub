@@ -989,15 +989,21 @@ export function generateBracket(
 			}
 		} else if (lRound % 2 === 0) {
 			// Even: L(prev) survivors → top; W losers → bottom.
-			// Swap halves so top-bracket losers face bottom-bracket survivors
-			// and vice versa, avoiding rematches from the winners round.
+			// Odd drop-ins (1st, 3rd): full reversal.
+			// Even drop-ins (2nd, 4th): reverse within each half.
 			const dropWinnersRound = lRound / 2 + 1;
 			const winnersDropMatches = matches.filter((m) => m.round === dropWinnersRound);
-			const half = Math.floor(winnersDropMatches.length / 2);
+			const dropNumber = lRound / 2;
 			for (let i = 0; i < numMatches; i++) {
 				const prev = losersPrevMatches[i];
 				if (prev) { prev.winnerNextMatchId = roundMatches[i].id; prev.winnerNextSlot = 'top'; }
-				const wdIdx = i < half ? i + half : i - half;
+				let wdIdx: number;
+				if (dropNumber % 2 === 1) {
+					wdIdx = numMatches - 1 - i;
+				} else {
+					const half = Math.floor(winnersDropMatches.length / 2);
+					wdIdx = i < half ? half - 1 - i : winnersDropMatches.length - 1 - (i - half);
+				}
 				const wd = winnersDropMatches[wdIdx];
 				if (wd) { wd.loserNextMatchId = roundMatches[i].id; wd.loserNextSlot = 'bottom'; }
 			}
