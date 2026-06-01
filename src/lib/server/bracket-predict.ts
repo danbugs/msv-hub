@@ -147,11 +147,12 @@ export function predictBracketMatchups(
 		if (lrNum % 2 === 0 && dropInIdx < losersPool.length) {
 			const dropIns = losersPool.slice(dropInIdx, dropInIdx + losersRound.length);
 			dropInIdx += losersRound.length;
-			const reversed = [...dropIns].reverse();
+			const dropNumber = lrNum / 2;
+			const ordered = dropNumber % 2 === 1 ? [...dropIns].reverse() : dropIns;
 
 			for (let i = 0; i < losersRound.length; i++) {
 				const a = losersRound[i];
-				const b = reversed[i] ?? null;
+				const b = ordered[i] ?? null;
 				if (a && b) {
 					matchups.push({
 						seed1: a.seed, seed2: b.seed,

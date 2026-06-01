@@ -989,11 +989,13 @@ export function generateBracket(
 			}
 		} else if (lRound % 2 === 0) {
 			// Even: L(prev) survivors → top; W losers → bottom.
-			// All drop rounds reverse the order so WR losers land on the
-			// opposite side of the losers bracket, matching StartGG's layout.
+			// Alternate reversal each drop-in round: odd drops (1st, 3rd) reverse,
+			// even drops (2nd, 4th) don't. This prevents rematches from the
+			// winners round that just fed losers into this section.
 			const dropWinnersRound = lRound / 2 + 1;
 			const winnersDropMatches = matches.filter((m) => m.round === dropWinnersRound);
-			const reversed = true;
+			const dropNumber = lRound / 2;
+			const reversed = dropNumber % 2 === 1;
 			for (let i = 0; i < numMatches; i++) {
 				const prev = losersPrevMatches[i];
 				if (prev) { prev.winnerNextMatchId = roundMatches[i].id; prev.winnerNextSlot = 'top'; }

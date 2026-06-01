@@ -265,7 +265,7 @@ describe('generateBracket', () => {
 		expect(byeMatches.length).toBeGreaterThan(0);
 	});
 
-	it('LR4 drops WR3 losers reversed (opposite side) for 24-player bracket', () => {
+	it('LR4 drops WR3 losers non-reversed (2nd drop-in alternates) for 24-player bracket', () => {
 		const entrants24: Entrant[] = Array.from({ length: 24 }, (_, i) => ({
 			id: `p-${i + 1}`,
 			gamerTag: `Player${i + 1}`,
@@ -311,13 +311,14 @@ describe('generateBracket', () => {
 			.sort((a, b) => a.matchIndex - b.matchIndex);
 		expect(wr3.length).toBe(4);
 
-		// Verify reversed drops: WR3[i] loser → LR4[numMatches-1-i]
+		// LR4 is the 2nd drop-in (dropNumber=2, even), so NOT reversed:
+		// WR3[i] loser → LR4[i]
 		for (let i = 0; i < wr3.length; i++) {
 			const wr3Match = wr3[i];
 			const loserId = wr3Match.topPlayerId === wr3Match.winnerId
 				? wr3Match.bottomPlayerId
 				: wr3Match.topPlayerId;
-			const expectedTarget = lr4[lr4.length - 1 - i];
+			const expectedTarget = lr4[i];
 			expect(expectedTarget.bottomPlayerId).toBe(loserId);
 		}
 
