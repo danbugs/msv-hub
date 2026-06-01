@@ -4,16 +4,17 @@ import {
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
 
-const MATCHUP_CACHE_KEY = 'matchups:recent:v5';
+const MATCHUP_CACHE_KEY = 'matchups:recent:v6';
 const MATCHUP_CACHE_TTL = 6 * 60 * 60;
 const SCAN_DELAY = 400;
 
 const PLAYER_SETS_QUERY = `
-query PlayerRecentSets($playerId: ID!, $perPage: Int!) {
+query PlayerRecentSets($playerId: ID!, $perPage: Int!, $page: Int!) {
   player(id: $playerId) {
     id
     gamerTag
-    sets(perPage: $perPage) {
+    sets(perPage: $perPage, page: $page) {
+      pageInfo { totalPages }
       nodes {
         displayScore
         winnerId
@@ -351,32 +352,44 @@ async function computeRecentMatchups(
 	const twoMonthsAgo = Date.now() / 1000 - 2 * 30 * 86400;
 
 	for (const pid of playerIds) {
-		const data = await gql<{
-			player: { sets: { nodes: Record<string, unknown>[] } } | null
-		}>(PLAYER_SETS_QUERY, { playerId: pid, perPage: 30 }, { delay: SCAN_DELAY });
+		let page = 1;
+		let totalPages = 1;
+		let reachedCutoff = false;
 
-		if (!data?.player?.sets?.nodes) continue;
+		while (page <= totalPages && !reachedCutoff) {
+			const data = await gql<{
+				player: { sets: { pageInfo: { totalPages: number }; nodes: Record<string, unknown>[] } } | null
+			}>(PLAYER_SETS_QUERY, { playerId: pid, perPage: 30, page }, { delay: SCAN_DELAY });
 
-		for (const setNode of data.player.sets.nodes) {
-			const sn = setNode as Record<string, unknown>;
-			const startAt = ((sn.event as Record<string, unknown> | undefined)?.tournament as Record<string, unknown> | undefined)?.startAt as number | undefined ?? 0;
-			if (startAt > 0 && startAt < twoMonthsAgo) continue;
+			if (!data?.player?.sets?.nodes) break;
+			totalPages = data.player.sets.pageInfo?.totalPages ?? 1;
 
-			const parsed = parsePlayerSet(sn);
-			if (!parsed) continue;
+			for (const setNode of data.player.sets.nodes) {
+				const sn = setNode as Record<string, unknown>;
+				const startAt = ((sn.event as Record<string, unknown> | undefined)?.tournament as Record<string, unknown> | undefined)?.startAt as number | undefined ?? 0;
+				if (startAt > 0 && startAt < twoMonthsAgo) {
+					reachedCutoff = true;
+					continue;
+				}
 
-			const key = pairKey(parsed.p1, parsed.p2);
-			const existing = matches.get(key);
-			if (!existing || parsed.startAt > existing.startAt) {
-				matches.set(key, {
-					player1Id: Math.min(parsed.p1, parsed.p2),
-					player2Id: Math.max(parsed.p1, parsed.p2),
-					tag1: parsed.p1 < parsed.p2 ? parsed.tag1 : parsed.tag2,
-					tag2: parsed.p1 < parsed.p2 ? parsed.tag2 : parsed.tag1,
-					event: parsed.event,
-					startAt: parsed.startAt
-				});
+				const parsed = parsePlayerSet(sn);
+				if (!parsed) continue;
+
+				const key = pairKey(parsed.p1, parsed.p2);
+				const existing = matches.get(key);
+				if (!existing || parsed.startAt > existing.startAt) {
+					matches.set(key, {
+						player1Id: Math.min(parsed.p1, parsed.p2),
+						player2Id: Math.max(parsed.p1, parsed.p2),
+						tag1: parsed.p1 < parsed.p2 ? parsed.tag1 : parsed.tag2,
+						tag2: parsed.p1 < parsed.p2 ? parsed.tag2 : parsed.tag1,
+						event: parsed.event,
+						startAt: parsed.startAt
+					});
+				}
 			}
+
+			page++;
 		}
 	}
 
