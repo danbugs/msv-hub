@@ -4,7 +4,7 @@ import {
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
 
-const MATCHUP_CACHE_KEY = 'matchups:recent:v9';
+const MATCHUP_CACHE_KEY = 'matchups:recent:v10';
 const MATCHUP_CACHE_TTL = 6 * 60 * 60;
 const SCAN_DELAY = 400;
 
@@ -361,7 +361,8 @@ function parsePlayerSet(node: Record<string, any>): {
 }
 
 const REGIONAL_PATTERNS = [
-	/macro/i, /alpine arena/i, /peak pressure/i, /^out of pools/i, /^freestyle/i
+	/macro/i, /alpine arena/i, /peak pressure/i, /^out of pools/i, /^freestyle/i,
+	/uvic.*monthly/i, /pataka/i
 ];
 
 function isRegionalEvent(name: string): boolean {
@@ -381,7 +382,7 @@ async function computeRecentMatchups(
 	playerIds: number[]
 ): Promise<Map<string, HistoricalMatch>> {
 	const matches = new Map<string, HistoricalMatch>();
-	const cutoffTime = Date.now() / 1000 - 4 * 30 * 86400;
+	const cutoffTime = Date.now() / 1000 - 5 * 30 * 86400;
 
 	for (const pid of playerIds) {
 		let page = 1;
