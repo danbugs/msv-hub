@@ -209,7 +209,6 @@
 		loading = false; abortController = null;
 		if (result) {
 			currentStep = 2;
-			fetchBracketCollisions(result.entrants);
 		}
 	}
 
@@ -516,7 +515,6 @@
 		const data = await res.json();
 		quickPreview = data.entrants;
 		loadingPreview = false;
-		fetchBracketCollisions(data.entrants);
 	}
 
 	async function startFromEvent() {
