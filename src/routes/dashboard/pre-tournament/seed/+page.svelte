@@ -621,11 +621,11 @@
 							required placeholder="e.g. 134" class="mt-1 w-48 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 					</div>
 					<div class="flex gap-1 pb-0.5">
-						<button type="button" onclick={() => mode = 'micro'}
+						<button type="button" onclick={() => { mode = 'micro'; tournamentMode = 'default'; }}
 							class="rounded-lg px-3 py-2 text-sm font-medium transition-colors {mode === 'micro' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 							Micro
 						</button>
-						<button type="button" onclick={() => mode = 'macro'}
+						<button type="button" onclick={() => { mode = 'macro'; tournamentMode = 'gauntlet'; }}
 							class="rounded-lg px-3 py-2 text-sm font-medium transition-colors {mode === 'macro' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 							Macro
 						</button>
@@ -765,61 +765,63 @@
 							⚠ {collisionCount} rematch{collisionCount > 1 ? 'es' : ''} from last week — drag seeds to resolve
 						</div>
 					{/if}
-					{#if bracketCollisions.length > 0}
-						<div class="mt-3 rounded-lg border border-orange-700/40 bg-orange-950/20 p-3">
-							<div class="flex items-center justify-between mb-2">
-								<p class="text-xs font-medium text-orange-400">
-									Predicted rematches ({bracketCollisions.length})
-								</p>
-								<div class="flex items-center gap-1.5">
-									<button onclick={() => fetchBracketCollisions(result!.entrants)} disabled={loadingCollisions}
-										class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
-										{loadingCollisions ? 'Checking...' : 'Recheck'}
-									</button>
-									<button onclick={() => fixBracketCollisions(result!.entrants, 'seeder')} disabled={fixingCollisions}
-										class="rounded bg-orange-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-orange-500 disabled:opacity-50">
-										{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
-									</button>
-								</div>
-							</div>
-							<div class="space-y-1">
-								{#each bracketCollisions as c}
-									<div class="flex items-center gap-2 text-xs">
-										<span class="text-orange-400 font-mono w-16 shrink-0">{c.round}</span>
-										<span class="text-foreground truncate">{c.tag1}</span>
-										<span class="text-muted-foreground">vs</span>
-										<span class="text-foreground truncate">{c.tag2}</span>
-										{#if c.isRegional}<span class="shrink-0 rounded bg-red-600/30 px-1 text-red-400 font-medium">regional</span>{/if}
-										{#if (c.count ?? 1) > 1}<span class="shrink-0 rounded bg-orange-600/30 px-1 text-orange-300">{c.count}x</span>{/if}
-										<span class="text-orange-400/70 ml-auto shrink-0 truncate max-w-[10rem]" title={c.event}>@ {c.event}</span>
-									</div>
-								{/each}
-							</div>
-						</div>
-					{:else if loadingCollisions}
-						<div class="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-							<div class="h-2 w-2 rounded-full bg-orange-500 animate-pulse"></div>Checking for bracket rematches...
-						</div>
-					{:else if !loadingCollisions && result}
-						<div class="mt-3">
-							<button onclick={() => fetchBracketCollisions(result!.entrants)} disabled={loadingCollisions}
-								class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
-								Check Collisions
-							</button>
-						</div>
-					{/if}
-					{#if lastSwaps.length > 0}
-						<div class="mt-2 rounded-lg border border-green-700/40 bg-green-950/20 p-3">
-							<p class="text-xs font-medium text-green-400 mb-1">Swaps applied</p>
-							<div class="space-y-0.5">
-								{#each lastSwaps as s}
-									<p class="text-xs text-muted-foreground">Seed {s.fromSeed} {s.from} ↔ Seed {s.toSeed} {s.to}</p>
-								{/each}
-							</div>
-						</div>
-					{/if}
 				</div>
 			</div>
+
+			<!-- Bracket collision panel (full width) -->
+			{#if bracketCollisions.length > 0}
+				<div class="mt-4 rounded-lg border border-violet-700/40 bg-violet-950/20 p-4">
+					<div class="flex items-center justify-between mb-3">
+						<p class="text-sm font-medium text-violet-400">
+							Predicted bracket rematches ({bracketCollisions.length})
+						</p>
+						<div class="flex items-center gap-1.5">
+							<button onclick={() => fetchBracketCollisions(result!.entrants)} disabled={loadingCollisions}
+								class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
+								{loadingCollisions ? 'Checking...' : 'Recheck'}
+							</button>
+							<button onclick={() => fixBracketCollisions(result!.entrants, 'seeder')} disabled={fixingCollisions}
+								class="rounded bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50">
+								{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
+							</button>
+						</div>
+					</div>
+					<div class="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+						{#each bracketCollisions as c}
+							<div class="flex items-center gap-2 text-sm">
+								<span class="text-violet-400 font-mono w-16 shrink-0">{c.round}</span>
+								<span class="text-foreground truncate">{c.tag1}</span>
+								<span class="text-muted-foreground">vs</span>
+								<span class="text-foreground truncate">{c.tag2}</span>
+								{#if c.isRegional}<span class="shrink-0 rounded bg-red-600/30 px-1 text-red-400 text-xs font-medium">regional</span>{/if}
+								{#if (c.count ?? 1) > 1}<span class="shrink-0 rounded bg-violet-600/30 px-1 text-violet-300 text-xs">{c.count}x</span>{/if}
+								<span class="text-violet-400/60 ml-auto shrink-0 truncate max-w-[12rem] text-xs" title={c.event}>@ {c.event}</span>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{:else if loadingCollisions}
+				<div class="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+					<div class="h-2 w-2 rounded-full bg-violet-500 animate-pulse"></div>Checking for bracket rematches...
+				</div>
+			{:else if !loadingCollisions && result}
+				<div class="mt-4">
+					<button onclick={() => fetchBracketCollisions(result!.entrants)} disabled={loadingCollisions}
+						class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
+						Check Collisions
+					</button>
+				</div>
+			{/if}
+			{#if lastSwaps.length > 0}
+				<div class="mt-2 rounded-lg border border-green-700/40 bg-green-950/20 p-3">
+					<p class="text-xs font-medium text-green-400 mb-1">Swaps applied</p>
+					<div class="space-y-0.5">
+						{#each lastSwaps as s}
+							<p class="text-xs text-muted-foreground">Seed {s.fromSeed} {s.from} ↔ Seed {s.toSeed} {s.to}</p>
+						{/each}
+					</div>
+				</div>
+			{/if}
 
 			<details class="mt-3 rounded-lg border border-border bg-card">
 				<summary class="cursor-pointer px-4 py-2 text-xs text-muted-foreground">Full Log ({result.logs.length})</summary>
@@ -1033,61 +1035,63 @@
 									</div>
 								{/if}
 							</div>
-							{#if bracketCollisions.length > 0}
-								<div class="mt-3 rounded-lg border border-orange-700/40 bg-orange-950/20 p-3">
-									<div class="flex items-center justify-between mb-2">
-										<p class="text-xs font-medium text-orange-400">
-											Predicted rematches ({bracketCollisions.length})
-										</p>
-										<div class="flex items-center gap-1.5">
-											<button onclick={() => fetchBracketCollisions(quickPreview!)} disabled={loadingCollisions}
-												class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
-												{loadingCollisions ? 'Checking...' : 'Recheck'}
-											</button>
-											<button onclick={() => fixBracketCollisions(quickPreview!, 'quick')} disabled={fixingCollisions}
-												class="rounded bg-orange-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-orange-500 disabled:opacity-50">
-												{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
-											</button>
-										</div>
-									</div>
-									<div class="space-y-1">
-										{#each bracketCollisions as c}
-											<div class="flex items-center gap-2 text-xs">
-												<span class="text-orange-400 font-mono w-16 shrink-0">{c.round}</span>
-												<span class="text-foreground truncate">{c.tag1}</span>
-												<span class="text-muted-foreground">vs</span>
-												<span class="text-foreground truncate">{c.tag2}</span>
-												{#if c.isRegional}<span class="shrink-0 rounded bg-red-600/30 px-1 text-red-400 font-medium">regional</span>{/if}
-												{#if (c.count ?? 1) > 1}<span class="shrink-0 rounded bg-orange-600/30 px-1 text-orange-300">{c.count}x</span>{/if}
-												<span class="text-orange-400/70 ml-auto shrink-0 truncate max-w-[10rem]" title={c.event}>@ {c.event}</span>
-											</div>
-										{/each}
-									</div>
-								</div>
-							{:else if loadingCollisions}
-								<div class="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-									<div class="h-2 w-2 rounded-full bg-orange-500 animate-pulse"></div>Checking for bracket rematches...
-								</div>
-							{:else if !loadingCollisions && quickPreview}
-								<div class="mt-3">
-									<button onclick={() => fetchBracketCollisions(quickPreview!)} disabled={loadingCollisions}
-										class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
-										Check Collisions
-									</button>
-								</div>
-							{/if}
-							{#if lastSwaps.length > 0}
-								<div class="mt-2 rounded-lg border border-green-700/40 bg-green-950/20 p-3">
-									<p class="text-xs font-medium text-green-400 mb-1">Swaps applied</p>
-									<div class="space-y-0.5">
-										{#each lastSwaps as s}
-											<p class="text-xs text-muted-foreground">Seed {s.fromSeed} {s.from} ↔ Seed {s.toSeed} {s.to}</p>
-										{/each}
-									</div>
-								</div>
-							{/if}
 						</div>
 					</div>
+
+					<!-- Bracket collision panel (full width) -->
+					{#if bracketCollisions.length > 0}
+						<div class="mt-4 rounded-lg border border-violet-700/40 bg-violet-950/20 p-4">
+							<div class="flex items-center justify-between mb-3">
+								<p class="text-sm font-medium text-violet-400">
+									Predicted bracket rematches ({bracketCollisions.length})
+								</p>
+								<div class="flex items-center gap-1.5">
+									<button onclick={() => fetchBracketCollisions(quickPreview!)} disabled={loadingCollisions}
+										class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
+										{loadingCollisions ? 'Checking...' : 'Recheck'}
+									</button>
+									<button onclick={() => fixBracketCollisions(quickPreview!, 'quick')} disabled={fixingCollisions}
+										class="rounded bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50">
+										{fixingCollisions ? 'Fixing...' : 'Fix Collisions'}
+									</button>
+								</div>
+							</div>
+							<div class="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+								{#each bracketCollisions as c}
+									<div class="flex items-center gap-2 text-sm">
+										<span class="text-violet-400 font-mono w-16 shrink-0">{c.round}</span>
+										<span class="text-foreground truncate">{c.tag1}</span>
+										<span class="text-muted-foreground">vs</span>
+										<span class="text-foreground truncate">{c.tag2}</span>
+										{#if c.isRegional}<span class="shrink-0 rounded bg-red-600/30 px-1 text-red-400 text-xs font-medium">regional</span>{/if}
+										{#if (c.count ?? 1) > 1}<span class="shrink-0 rounded bg-violet-600/30 px-1 text-violet-300 text-xs">{c.count}x</span>{/if}
+										<span class="text-violet-400/60 ml-auto shrink-0 truncate max-w-[12rem] text-xs" title={c.event}>@ {c.event}</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{:else if loadingCollisions}
+						<div class="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+							<div class="h-2 w-2 rounded-full bg-violet-500 animate-pulse"></div>Checking for bracket rematches...
+						</div>
+					{:else if !loadingCollisions && quickPreview}
+						<div class="mt-4">
+							<button onclick={() => fetchBracketCollisions(quickPreview!)} disabled={loadingCollisions}
+								class="rounded bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/80 disabled:opacity-50">
+								Check Collisions
+							</button>
+						</div>
+					{/if}
+					{#if lastSwaps.length > 0}
+						<div class="mt-2 rounded-lg border border-green-700/40 bg-green-950/20 p-3">
+							<p class="text-xs font-medium text-green-400 mb-1">Swaps applied</p>
+							<div class="space-y-0.5">
+								{#each lastSwaps as s}
+									<p class="text-xs text-muted-foreground">Seed {s.fromSeed} {s.from} ↔ Seed {s.toSeed} {s.to}</p>
+								{/each}
+							</div>
+						</div>
+					{/if}
 				{/if}
 			</div>
 		</div>
