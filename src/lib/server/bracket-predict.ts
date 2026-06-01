@@ -356,10 +356,10 @@ async function computeRecentMatchups(
 		let totalPages = 1;
 		let reachedCutoff = false;
 
-		while (page <= totalPages && !reachedCutoff) {
+		while (page <= totalPages && page <= 3 && !reachedCutoff) {
 			const data = await gql<{
 				player: { sets: { pageInfo: { totalPages: number }; nodes: Record<string, unknown>[] } } | null
-			}>(PLAYER_SETS_QUERY, { playerId: pid, perPage: 30, page }, { delay: SCAN_DELAY });
+			}>(PLAYER_SETS_QUERY, { playerId: pid, perPage: 50, page }, { delay: SCAN_DELAY });
 
 			if (!data?.player?.sets?.nodes) break;
 			totalPages = data.player.sets.pageInfo?.totalPages ?? 1;
