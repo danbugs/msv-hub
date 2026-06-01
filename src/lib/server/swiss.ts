@@ -993,16 +993,19 @@ export function generateBracket(
 			// Even drop-ins (2nd, 4th): reverse within each half.
 			const dropWinnersRound = lRound / 2 + 1;
 			const winnersDropMatches = matches.filter((m) => m.round === dropWinnersRound);
-			const dropNumber = lRound / 2;
+			const dropCount = winnersDropMatches.length;
 			for (let i = 0; i < numMatches; i++) {
 				const prev = losersPrevMatches[i];
 				if (prev) { prev.winnerNextMatchId = roundMatches[i].id; prev.winnerNextSlot = 'top'; }
 				let wdIdx: number;
-				if (dropNumber % 2 === 1) {
+				if (dropCount >= 16) {
 					wdIdx = numMatches - 1 - i;
+				} else if (dropCount >= 8) {
+					const half = Math.floor(dropCount / 2);
+					wdIdx = i < half ? half - 1 - i : dropCount - 1 - (i - half);
 				} else {
-					const half = Math.floor(winnersDropMatches.length / 2);
-					wdIdx = i < half ? half - 1 - i : winnersDropMatches.length - 1 - (i - half);
+					const half = Math.floor(dropCount / 2);
+					wdIdx = (i + half) % dropCount;
 				}
 				const wd = winnersDropMatches[wdIdx];
 				if (wd) { wd.loserNextMatchId = roundMatches[i].id; wd.loserNextSlot = 'bottom'; }
