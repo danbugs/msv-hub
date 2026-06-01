@@ -205,8 +205,8 @@ function predictMatchups(ents) {
 		if (lrNum % 2 === 0 && dropInIdx < losersPool.length) {
 			const dropIns = losersPool.slice(dropInIdx, dropInIdx + losersRound.length);
 			dropInIdx += losersRound.length;
-			const dropNumber = lrNum / 2;
-			const ordered = dropNumber % 2 === 1 ? [...dropIns].reverse() : dropIns;
+			const half = Math.floor(dropIns.length / 2);
+			const ordered = [...dropIns.slice(half), ...dropIns.slice(0, half)];
 			for (let i = 0; i < losersRound.length; i++) {
 				const a = losersRound[i], b = ordered[i] ?? null;
 				if (a && b) {

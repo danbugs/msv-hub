@@ -4,7 +4,7 @@ import {
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
 
-const MATCHUP_CACHE_KEY = 'matchups:recent:v10';
+const MATCHUP_CACHE_KEY = 'matchups:recent:v11';
 const MATCHUP_CACHE_TTL = 6 * 60 * 60;
 const SCAN_DELAY = 400;
 
@@ -147,8 +147,8 @@ export function predictBracketMatchups(
 		if (lrNum % 2 === 0 && dropInIdx < losersPool.length) {
 			const dropIns = losersPool.slice(dropInIdx, dropInIdx + losersRound.length);
 			dropInIdx += losersRound.length;
-			const dropNumber = lrNum / 2;
-			const ordered = dropNumber % 2 === 1 ? [...dropIns].reverse() : dropIns;
+			const half = Math.floor(dropIns.length / 2);
+			const ordered = [...dropIns.slice(half), ...dropIns.slice(0, half)];
 
 			for (let i = 0; i < losersRound.length; i++) {
 				const a = losersRound[i];
