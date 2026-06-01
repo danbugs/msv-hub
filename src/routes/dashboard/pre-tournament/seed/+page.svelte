@@ -38,7 +38,6 @@
 	let lastSwaps = $state<{ from: string; to: string; fromSeed: number; toSeed: number }[]>([]);
 
 	async function fetchBracketCollisions(entrants: { seedNum: number; gamerTag: string; playerId?: number }[]) {
-		if (tournamentMode === 'default') return;
 		loadingCollisions = true;
 		const res = await fetch('/api/tournament/bracket-collisions', {
 			method: 'POST',
