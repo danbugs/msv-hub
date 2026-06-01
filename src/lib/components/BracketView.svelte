@@ -96,51 +96,48 @@
 			winnerNextSlot: m.winnerNextSlot,
 			loserNextMatchId: m.loserNextMatchId,
 			loserNextSlot: m.loserNextSlot,
+			advanced: false,
 		}]));
 
-		// Simulate: process matches in round order (positive first, then negative)
-		const sortedIds = bracket.matches
-			.map((m) => m.id)
-			.sort((a, b) => {
-				const ma = matchState.get(a)!;
-				const mb = matchState.get(b)!;
-				const ra = bracket.matches.find((m) => m.id === a)!.round;
-				const rb = bracket.matches.find((m) => m.id === b)!.round;
-				// Process positive rounds first (ascending), then negative (ascending by abs)
-				if (ra > 0 && rb > 0) return ra - rb;
-				if (ra > 0 && rb < 0) return -1;
-				if (ra < 0 && rb > 0) return 1;
-				return Math.abs(ra) - Math.abs(rb);
-			});
+		// Multi-pass: resolve matches as their dependencies become available.
+		// This correctly handles GF (needs losers finals winner) and bye cascades.
+		let changed = true;
+		while (changed) {
+			changed = false;
+			for (const [matchId, ms] of matchState) {
+				if (ms.advanced) continue;
 
-		for (const matchId of sortedIds) {
-			const ms = matchState.get(matchId)!;
-			if (!ms.topPlayerId || !ms.bottomPlayerId) continue;
-			if (ms.winnerId) {
-				// Already reported — advance as-is
-			} else {
-				// Project: higher seed wins
-				const topSeed = seedMap.get(ms.topPlayerId) ?? Infinity;
-				const botSeed = seedMap.get(ms.bottomPlayerId) ?? Infinity;
-				ms.winnerId = topSeed <= botSeed ? ms.topPlayerId : ms.bottomPlayerId;
-				ms.loserId = topSeed <= botSeed ? ms.bottomPlayerId : ms.topPlayerId;
-				projected.set(matchId, { top: ms.topPlayerId, bottom: ms.bottomPlayerId });
-			}
-			// Advance winner
-			if (ms.winnerNextMatchId) {
-				const next = matchState.get(ms.winnerNextMatchId);
-				if (next) {
-					if (ms.winnerNextSlot === 'top') next.topPlayerId = ms.winnerId;
-					else next.bottomPlayerId = ms.winnerId;
+				if (ms.winnerId) {
+					if (!ms.loserId && ms.topPlayerId && ms.bottomPlayerId) {
+						ms.loserId = ms.winnerId === ms.topPlayerId ? ms.bottomPlayerId : ms.topPlayerId;
+					}
+				} else if (ms.topPlayerId && ms.bottomPlayerId) {
+					const topSeed = seedMap.get(ms.topPlayerId) ?? Infinity;
+					const botSeed = seedMap.get(ms.bottomPlayerId) ?? Infinity;
+					ms.winnerId = topSeed <= botSeed ? ms.topPlayerId : ms.bottomPlayerId;
+					ms.loserId = topSeed <= botSeed ? ms.bottomPlayerId : ms.topPlayerId;
+					projected.set(matchId, { top: ms.topPlayerId, bottom: ms.bottomPlayerId });
+				} else {
+					continue;
 				}
-			}
-			// Advance loser
-			if (ms.loserNextMatchId && ms.loserId) {
-				const next = matchState.get(ms.loserNextMatchId);
-				if (next) {
-					if (ms.loserNextSlot === 'top') next.topPlayerId = ms.loserId;
-					else next.bottomPlayerId = ms.loserId;
+
+				if (ms.winnerNextMatchId) {
+					const next = matchState.get(ms.winnerNextMatchId);
+					if (next) {
+						if (ms.winnerNextSlot === 'top') next.topPlayerId = ms.winnerId;
+						else next.bottomPlayerId = ms.winnerId;
+					}
 				}
+				if (ms.loserNextMatchId && ms.loserId) {
+					const next = matchState.get(ms.loserNextMatchId);
+					if (next) {
+						if (ms.loserNextSlot === 'top') next.topPlayerId = ms.loserId;
+						else next.bottomPlayerId = ms.loserId;
+					}
+				}
+
+				ms.advanced = true;
+				changed = true;
 			}
 		}
 
