@@ -4,7 +4,7 @@ import {
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
 
-const MATCHUP_CACHE_KEY = 'matchups:recent:v6';
+const MATCHUP_CACHE_KEY = 'matchups:recent:v7';
 const MATCHUP_CACHE_TTL = 6 * 60 * 60;
 const SCAN_DELAY = 400;
 
