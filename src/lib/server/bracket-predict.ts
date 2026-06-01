@@ -218,13 +218,26 @@ function pairKey(a: number, b: number): string {
 	return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
 
+// Max drift from original seed, aligned with DE placement tiers (powers of 2).
+function maxSwapDist(seedNum: number): number {
+	if (seedNum <= 2) return 1;
+	if (seedNum <= 4) return 1;
+	if (seedNum <= 8) return 2;
+	if (seedNum <= 16) return 3;
+	if (seedNum <= 32) return 4;
+	return 6;
+}
+
 export function resolveCollisions(
 	entrants: { seedNum: number; gamerTag: string; playerId?: number }[],
-	recentMatches: Map<string, HistoricalMatch>,
-	maxSwapDist = 4
+	recentMatches: Map<string, HistoricalMatch>
 ): { fixed: { seedNum: number; gamerTag: string; playerId?: number }[]; swaps: { from: string; to: string; fromSeed: number; toSeed: number }[] } {
 	const fixed = entrants.map(e => ({ ...e }));
 	const swaps: { from: string; to: string; fromSeed: number; toSeed: number }[] = [];
+
+	// Track each player's original index so cascading swaps can't drift them too far.
+	const origIdx = new Map<string, number>();
+	fixed.forEach((e, i) => origIdx.set(e.gamerTag, i));
 
 	for (let attempt = 0; attempt < 20; attempt++) {
 		fixed.forEach((e, i) => e.seedNum = i + 1);
@@ -234,7 +247,6 @@ export function resolveCollisions(
 		);
 		if (collisions.length === 0) break;
 
-		// Prioritize resolving the most recent rematches first.
 		collisions.sort((a, b) => {
 			const ma = recentMatches.get(pairKey(a.playerId1!, a.playerId2!));
 			const mb = recentMatches.get(pairKey(b.playerId1!, b.playerId2!));
@@ -247,17 +259,22 @@ export function resolveCollisions(
 			const idxB = fixed.findIndex(e => e.playerId === c.playerId2);
 			if (idxA === -1 || idxB === -1) continue;
 
-			// Try both players, prefer swapping the lower seed (higher index).
 			for (const swapFrom of [Math.max(idxA, idxB), Math.min(idxA, idxB)]) {
 				const other = swapFrom === idxA ? idxB : idxA;
+				const dist = maxSwapDist(swapFrom + 1);
 				let bestTo = -1;
 				let bestCount = collisions.length;
 
-				// Only consider nearby positions.
-				const lo = Math.max(0, swapFrom - maxSwapDist);
-				const hi = Math.min(fixed.length - 1, swapFrom + maxSwapDist);
+				const lo = Math.max(0, swapFrom - dist);
+				const hi = Math.min(fixed.length - 1, swapFrom + dist);
 				for (let to = lo; to <= hi; to++) {
 					if (to === swapFrom || to === other) continue;
+					// Check that neither player would drift beyond their tier's max from original seed.
+					const origA = origIdx.get(fixed[swapFrom].gamerTag)!;
+					const origB = origIdx.get(fixed[to].gamerTag)!;
+					if (Math.abs(to - origA) > maxSwapDist(origA + 1)) continue;
+					if (Math.abs(swapFrom - origB) > maxSwapDist(origB + 1)) continue;
+
 					[fixed[swapFrom], fixed[to]] = [fixed[to], fixed[swapFrom]];
 					fixed.forEach((e, i) => e.seedNum = i + 1);
 					const cnt = predictBracketMatchups(fixed).filter(m =>
