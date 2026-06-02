@@ -288,10 +288,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			debug.push(`  ${key}: SIZE MISMATCH`);
 		}
 
-		const n = Math.min(sortedSets.length, msvMatches.length);
-		for (let i = 0; i < n; i++) {
-			const s = sortedSets[i];
-			const m = msvMatches[i];
+		for (const s of sortedSets) {
 			const slots = (s.slots ?? []) as Slot[];
 			const sgE1 = Number(slots[0]?.entrant?.id);
 			const sgE2 = Number(slots[1]?.entrant?.id);
@@ -300,11 +297,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			const sgWinnerId = Number(s.winnerId);
 			const msvWinner = sgWinnerId ? bracketEntrantToMsvHub.get(sgWinnerId) : undefined;
 
-			if (sgWinnerId && !msvWinner) {
-				debug.push(`  ${key}[${i}] ${s.identifier}: winnerId ${sgWinnerId} not in bracketEntrantToMsvHub (${bracketEntrantToMsvHub.size} entries)`);
+			// Match by entrant identity instead of positional index
+			let m = msvMatches.find((match) =>
+				(msvE1 && (match.topPlayerId === msvE1 || match.bottomPlayerId === msvE1)) ||
+				(msvE2 && (match.topPlayerId === msvE2 || match.bottomPlayerId === msvE2))
+			);
+			if (!m) {
+				// Fallback: find first unoccupied match in this round
+				m = msvMatches.find((match) => !match.topPlayerId && !match.bottomPlayerId && !match.startggSetId);
+				if (m) debug.push(`  ${key} set ${s.identifier}: no entrant match, using empty slot ${m.id}`);
 			}
-			if (sgWinnerId && msvWinner && msvWinner !== msvE1 && msvWinner !== msvE2) {
-				debug.push(`  ${key}[${i}] ${s.identifier}: winner ${msvWinner} not in slots (${msvE1}, ${msvE2})`);
+			if (!m) {
+				debug.push(`  ${key} set ${s.identifier}: no matching MSV match found`);
+				unmatched++;
+				continue;
+			}
+
+			if (sgWinnerId && !msvWinner) {
+				debug.push(`  ${key} ${s.identifier}: winnerId ${sgWinnerId} not in bracketEntrantToMsvHub (${bracketEntrantToMsvHub.size} entries)`);
 			}
 
 			m.topPlayerId = msvE1;

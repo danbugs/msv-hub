@@ -311,15 +311,15 @@ describe('generateBracket', () => {
 			.sort((a, b) => a.matchIndex - b.matchIndex);
 		expect(wr3.length).toBe(4);
 
-		// LR4 is the 2nd drop-in (dropNumber=2, even), so NOT reversed:
-		// WR3[i] loser → LR4[i]
-		for (let i = 0; i < wr3.length; i++) {
-			const wr3Match = wr3[i];
-			const loserId = wr3Match.topPlayerId === wr3Match.winnerId
-				? wr3Match.bottomPlayerId
-				: wr3Match.topPlayerId;
-			const expectedTarget = lr4[i];
-			expect(expectedTarget.bottomPlayerId).toBe(loserId);
+		// LR4 has 4 drop-ins (n=4), so uses swap-halves:
+		// WR3 losers [0,1,2,3] → LR4 bottom slots [2,3,0,1]
+		const wr3Losers = wr3.map((m) =>
+			m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId
+		);
+		const half = Math.floor(wr3Losers.length / 2);
+		const expectedOrder = [...wr3Losers.slice(half), ...wr3Losers.slice(0, half)];
+		for (let i = 0; i < expectedOrder.length; i++) {
+			expect(lr4[i].bottomPlayerId).toBe(expectedOrder[i]);
 		}
 
 		// No player appears in multiple LR4 matches
