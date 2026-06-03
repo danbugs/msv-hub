@@ -52,23 +52,23 @@ export async function generateFastestRegMessage(
 	const client = getClient();
 	const runnersUp = topRunners.length > 0 ? `\n\nTop 3 after: ${topRunners.join(', ')}` : '';
 
-	const response = await client.messages.create({
-		model: 'claude-haiku-4-5-20251001',
-		max_tokens: 100,
-		temperature: 0.9,
-		messages: [
-			{
-				role: 'user',
-				content: `You're posting in a Smash Bros local Discord (MSV). Someone won "fastest registrant" (first to register when reg opened).
+	const gendered = /\bhe\b|\bhim\b|\bhis\b|\bshe\b|\bher\b|\bhers\b|\bman\b|\bman's\b|\bboy\b|\bgirl\b|\bguy\b|\bdude\b|\bking\b|\bqueen\b/i;
+
+	const userContent = `You're posting in a Smash Bros local Discord (MSV). Someone won "fastest registrant" (first to register when reg opened).
 
 Write a VERY short message (1-2 sentences). Casual, a little goofy, like a friend posting. Max 1 emoji. No caps lock. No "ALERT" or "BREAKING". Keep it lowkey and fun.
+
+GENDER-NEUTRAL LANGUAGE IS MANDATORY. This is a HARD rule, not a suggestion:
+- ONLY use they/them/their when referring to any person.
+- NEVER use: he, him, his, she, her, hers, man, man's, boy, girl, guy, dude, king, queen.
+- If your message contains ANY of these banned words, rewrite it completely before outputting.
 
 ${AI_AVOIDANCE}
 
 IMPORTANT: You MUST pick ONE of these styles at random. Do NOT default to the same style every time:
-1. NAME PUN — make a pun or wordplay on the winner's name (e.g. "HM ( @raphael ) ? More like, He Must have gotten fastest reg!")
+1. NAME PUN — make a pun or wordplay on the winner's name (e.g. "HM ( @raphael ) ? More like, Has to Must have gotten fastest reg!")
 2. GAME REFERENCE — use a Smash/FGC term (frame perfect, buffered input, 0-to-death, tech chase, spot dodge, parry, etc.) but pick a DIFFERENT term each time
-3. SIMPLE HYPE — just a casual congrats with personality (e.g. "@Mossayef is our boy and he won fastest registrant!")
+3. SIMPLE HYPE — just a casual congrats with personality (e.g. "@Mossayef really showed up and won fastest registrant!")
 4. NARRATIVE — tell a tiny story (e.g. "@Captain L decided to not Captain Lose this one and took fastest registrant!")
 5. QUESTION/REACTION — act surprised or ask rhetorically (e.g. "wait, @BrenX1 again?? that's three in a row!")
 
@@ -77,20 +77,30 @@ Pick style number: ${Math.floor(Math.random() * 5) + 1}
 Winner: @${winnerTag}
 Event: ${eventName}
 
-Output ONLY the message text. Always refer to the winner as @${winnerTag}. Don't include runners-up.`
-			}
-		]
-	});
+Output ONLY the message text. Always refer to the winner as @${winnerTag}. Don't include runners-up.`;
 
-	let text = response.content[0].type === 'text' ? response.content[0].text : '';
-	text = text.trim();
+	for (let attempt = 0; attempt < 3; attempt++) {
+		const response = await client.messages.create({
+			model: 'claude-haiku-4-5-20251001',
+			max_tokens: 100,
+			temperature: 0.9,
+			messages: [{ role: 'user', content: userContent }]
+		});
 
-	// Replace @gamerTag with proper Discord mention if we have a valid snowflake
-	if (winnerDiscordId && /^\d{17,20}$/.test(winnerDiscordId)) {
-		text = text.replace(new RegExp(`@${winnerTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'gi'), `<@${winnerDiscordId}>`);
+		let text = response.content[0].type === 'text' ? response.content[0].text : '';
+		text = text.trim();
+		if (!text || gendered.test(text)) continue;
+
+		if (winnerDiscordId && /^\d{17,20}$/.test(winnerDiscordId)) {
+			text = text.replace(new RegExp(`@${winnerTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'gi'), `<@${winnerDiscordId}>`);
+		}
+
+		return text + runnersUp;
 	}
 
-	return text + runnersUp;
+	// Fallback if all attempts had gendered language
+	const winnerMention = winnerDiscordId && /^\d{17,20}$/.test(winnerDiscordId) ? `<@${winnerDiscordId}>` : `@${winnerTag}`;
+	return `${winnerMention} grabbed fastest registrant for ${eventName} 🏃` + runnersUp;
 }
 
 /**
@@ -150,7 +160,7 @@ BAD (never write like this):
 
 GOOD (match this vibe, don't copy):
 "pac backwards spells cap, no cap"
-"kirby doesn't suck. He inhales!"
+"kirby doesn't suck. They inhale!"
 "no fox given"
 "google chrom"
 "ridley should be bigger"
@@ -247,7 +257,7 @@ ${AI_AVOIDANCE}
 
 Tone: casual discord speak. "boutta", "smt", "lowkey", "u" are fine. corny puns encouraged. just post like a normal person in a discord server. Output ONLY the message — no commentary, no self-corrections, no preamble. Keep it short.`;
 
-	const banned = /\breally\b|\bwhole\b|\bliterally just\b|\bout here\b|\blol\b|\blmao\b|\bgoddess\b|\bgods?\b|\bdemons?\b|\bmeant it\b|\bhonestly\b|\bthat .{2,20} energy\b|\bdrip\b|\bgo-to\b|\bweapons?\b|\byo what'?s everyone/i;
+	const banned = /\breally\b|\bwhole\b|\bliterally just\b|\bout here\b|\blol\b|\blmao\b|\bgoddess\b|\bgods?\b|\bdemons?\b|\bmeant it\b|\bhonestly\b|\bthat .{2,20} energy\b|\bdrip\b|\bgo-to\b|\bweapons?\b|\byo what'?s everyone|\bhe\b|\bhim\b|\bhis\b|\bshe\b|\bher\b|\bhers\b|\bman\b|\bman's\b|\bboy\b|\bgirl\b|\bguy\b|\bdude\b|\bking\b|\bqueen\b/i;
 
 	for (let attempt = 0; attempt < 3; attempt++) {
 		const response = await client.messages.create({
@@ -306,7 +316,10 @@ Player data:
 ${matchupNotes.length > 0 ? '- Matchup notes: ' + matchupNotes.join(' ') : ''}
 
 RULES:
-- ALWAYS use gender-neutral language (they/them/their). NEVER use he/him/his or she/her/hers.
+- GENDER-NEUTRAL LANGUAGE IS MANDATORY. This is a HARD rule, not a suggestion:
+- ONLY use they/them/their when referring to any person.
+- NEVER use: he, him, his, she, her, hers, man, man's, boy, girl, guy, dude, king, queen.
+- If your message contains ANY of these banned words, rewrite it completely before outputting.
 - Be positive and encouraging. Highlight strengths and storylines.
 - Write like a knowledgeable Smash commentator or analyst.
 - Reference specific data points naturally (rank, characters, rivalries).
