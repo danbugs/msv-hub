@@ -62,7 +62,7 @@ function getRoundMatches(byRound: Map<number, BracketMatch[]>, round: number): B
 // Micro Default: dependency-based pairing.
 // WR(n) + LR(n-1) can run together since both only need the previous level done.
 // WR1, WR2+LR1, WR3+LR2, WR4+LR3, WR5+LR4, LR5, LR6, ..., GF
-function microRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
+export function microRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
 	const byRound = new Map<number, BracketMatch[]>();
 	for (const m of matches) {
 		if (m.id.includes('-GFR-')) continue;
@@ -104,7 +104,7 @@ function microRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
 // Macro Default: LR2 runs standalone to trigger Redemption ASAP.
 // WR1, WR2+LR1, LR2, WR3+LR3, LR4, WR4+LR5, LR6, ..., GF
 // After LR2 (group index 2), Redemption groups get interleaved.
-function macroRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
+export function macroRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
 	const byRound = new Map<number, BracketMatch[]>();
 	for (const m of matches) {
 		if (m.id.includes('-GFR-')) continue;

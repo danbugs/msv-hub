@@ -14,6 +14,7 @@ import type {
 	StreamRecommendation,
 	TournamentSettings
 } from '$lib/types/tournament';
+import { microRoundOrder, macroRoundOrder } from '$lib/waves';
 
 // ── Standings ────────────────────────────────────────────────────────────
 
@@ -448,7 +449,8 @@ export function assignBracketStations(
 	/** Cumulative stream appearances per player across all rounds + brackets */
 	streamCountByPlayer?: Map<string, number>,
 	/** Stations occupied by the other bracket (gauntlet mode cross-bracket awareness) */
-	externalOccupiedStations?: Set<number>
+	externalOccupiedStations?: Set<number>,
+	mode?: 'default' | 'gauntlet' | 'experimental1'
 ): BracketState {
 	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
 
@@ -457,6 +459,15 @@ export function assignBracketStations(
 		(m) => m.topPlayerId && m.bottomPlayerId && !m.winnerId && m.station === undefined
 	);
 	if (ready.length === 0) return updated;
+
+	// Build wave-order priority: earlier waves get stations first
+	const usesMacroOrder = bracketName === 'main' && (mode === 'gauntlet' || mode === 'experimental1');
+	const groups = usesMacroOrder ? macroRoundOrder(updated.matches) : microRoundOrder(updated.matches);
+	const waveOrder = new Map<string, number>();
+	for (let g = 0; g < groups.length; g++) {
+		for (const m of groups[g]) waveOrder.set(m.id, g);
+	}
+	ready.sort((a, b) => (waveOrder.get(a.id) ?? Infinity) - (waveOrder.get(b.id) ?? Infinity));
 
 	// Only auto-assign stream for main bracket, and only if no other bracket has stream
 	const activeStream = updated.matches.find((m) => m.isStream && !m.winnerId);
@@ -513,12 +524,13 @@ export function assignBracketStations(
 		for (const s of externalOccupiedStations) usedStations.add(s);
 	}
 
-	for (let i = 0; i < updated.matches.length; i++) {
-		const m = updated.matches[i];
-		if (!m.topPlayerId || !m.bottomPlayerId || m.winnerId || m.station !== undefined) continue;
+	for (const rm of ready) {
+		if (rm.station !== undefined) continue;
+		const i = updated.matches.findIndex((m) => m.id === rm.id);
+		if (i < 0) continue;
 		for (const s of stationPool) {
 			if (usedStations.has(s)) continue;
-			updated.matches[i] = { ...m, station: s };
+			updated.matches[i] = { ...updated.matches[i], station: s };
 			usedStations.add(s);
 			break;
 		}
@@ -1168,7 +1180,8 @@ export function reportBracketMatch(
 	otherBracketHasStream?: boolean,
 	gameWinners?: ('top' | 'bottom')[],
 	isDQ?: boolean,
-	streamCountByPlayer?: Map<string, number>
+	streamCountByPlayer?: Map<string, number>,
+	mode?: 'default' | 'gauntlet' | 'experimental1'
 ): BracketState {
 	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
 	const match = updated.matches.find((m) => m.id === matchId);
@@ -1243,7 +1256,7 @@ export function reportBracketMatch(
 		}
 	}
 
-	return settings ? assignBracketStations(updated, settings, bracketName, otherBracketHasStream, streamCountByPlayer) : updated;
+	return settings ? assignBracketStations(updated, settings, bracketName, otherBracketHasStream, streamCountByPlayer, undefined, mode) : updated;
 }
 
 function optimizeBracketArrangement(

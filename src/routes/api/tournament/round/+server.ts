@@ -83,7 +83,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		if (isExperimental1) {
 			// All players in one main bracket, no redemption yet
 			let mainBracket = generateBracket('main', mainPlayers, finalStandings, undefined, lastRoundOpponents);
-			mainBracket = assignBracketStations(mainBracket, tournament.settings);
+			mainBracket = assignBracketStations(mainBracket, tournament.settings, 'main', false, undefined, undefined, tournament.mode);
 			tournament.brackets = { main: mainBracket };
 		} else {
 			tournament.brackets = {

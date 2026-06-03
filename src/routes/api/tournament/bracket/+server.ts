@@ -69,7 +69,8 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 		tournament.brackets[bracketName] = reportBracketMatch(
 			bracket, matchId, winnerId, topCharacters, bottomCharacters, topScore, bottomScore,
-			tournament.settings, bracketName, otherHasStream, gameWinners, isDQ, streamCountByPlayer
+			tournament.settings, bracketName, otherHasStream, gameWinners, isDQ, streamCountByPlayer,
+			tournament.mode
 		);
 	} catch (err) {
 		return Response.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 400 });
@@ -171,7 +172,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				);
 				tournament.brackets[otherName] = assignBracketStations(
 					otherBracket, tournament.settings, otherName as 'main' | 'redemption',
-					false, undefined, thisBracketOccupied
+					false, undefined, thisBracketOccupied, tournament.mode
 				);
 				otherBracketReassigned = true;
 			}
