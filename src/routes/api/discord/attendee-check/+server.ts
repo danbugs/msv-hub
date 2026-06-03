@@ -161,9 +161,10 @@ function mention(tag: string, discordId: string): string {
  * e.g. "tournament/microspacing-vancouver-135/event/..." → "MSV#135"
  */
 function extractEventLabel(slug: string): string {
-	const match = slug.match(/microspacing-vancouver-(\d+)/i);
-	if (match) return `MSV#${match[1]}`;
-	// Fallback: use the short slug
+	const micro = slug.match(/microspacing-vancouver-(\d+)/i);
+	if (micro) return `MSV#${micro[1]}`;
+	const macro = slug.match(/macrospacing-vancouver-(\d+)/i);
+	if (macro) return `Macro#${macro[1]}`;
 	return shortenSlug(slug);
 }
 
@@ -260,19 +261,22 @@ async function postFastestRegistrant(
 
 		await sendMessage(threadId, funMessage);
 		await saveFastestRegLeaderboard({
-			entries: allEntries, threadId, leaderboardMessageId, updatedAt: Date.now()
+			entries: allEntries, threadId, leaderboardMessageId,
+			seasonNumber: lb?.seasonNumber, updatedAt: Date.now()
 		});
 		result = `posted to thread, ${edited ? 'edited' : 'new'} leaderboard (${eventLabel})`;
 	} else {
 		const entries = [newEntry];
 		const leaderboardText = buildLeaderboardText(entries);
-		const threadName = truncateTo100(`Fastest Registrant — Season`);
+		const prevLb = await getFastestRegLeaderboard();
+		const seasonNumber = (prevLb?.seasonNumber ?? 0) + 1;
+		const threadName = truncateTo100(`Fastest Registrant — Season ${seasonNumber}`);
 		const thread = await createForumPost(FASTEST_REG_FORUM_ID, threadName, leaderboardText);
 		await sendMessage(thread.id, funMessage);
 		const msgs = await fetchMessages(thread.id, 1);
 		await saveFastestRegLeaderboard({
 			entries, threadId: thread.id,
-			leaderboardMessageId: msgs[0]?.id ?? '', updatedAt: Date.now()
+			leaderboardMessageId: msgs[0]?.id ?? '', seasonNumber, updatedAt: Date.now()
 		});
 		result = `created new forum thread (${eventLabel})`;
 	}

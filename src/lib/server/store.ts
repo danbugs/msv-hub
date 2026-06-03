@@ -88,7 +88,7 @@ export async function saveCommunityConfig(config: Partial<CommunityConfig>): Pro
 // ---------------------------------------------------------------------------
 
 export interface FastestRegEntry {
-	/** e.g. "MSV#135" */
+	/** e.g. "MSV#135" or "Macro#7" */
 	eventLabel: string;
 	/** Winner's gamer tag */
 	winnerTag: string;
@@ -105,6 +105,8 @@ export interface FastestRegLeaderboard {
 	threadId: string;
 	/** Discord message ID of the leaderboard body (first message, for editing) */
 	leaderboardMessageId: string;
+	/** Current season number (used in thread title) */
+	seasonNumber?: number;
 	updatedAt: number;
 }
 
@@ -114,11 +116,11 @@ export interface FastestRegLeaderboard {
  */
 export function parseLeaderboardEntries(text: string): FastestRegEntry[] {
 	const entries: FastestRegEntry[] = [];
-	// Match lines like: MSV#125) @Dom  or  MSV#125) <@123456789>  or  MSV#125) Dom
-	const lineRegex = /(?:MSV|MaSV)#(\d+)\)\s*(.+)/gi;
+	// Match lines like: MSV#125) @Dom  or  Macro#7) <@123>  or  MaSV#125) Dom
+	const lineRegex = /((?:MSV|MaSV|Macro)#\d+)\)\s*(.+)/gi;
 	let match;
 	while ((match = lineRegex.exec(text)) !== null) {
-		const eventLabel = `MSV#${match[1]}`;
+		const eventLabel = match[1];
 		let winnerRaw = match[2].trim();
 		let winnerTag = winnerRaw;
 		let winnerDiscordId = '';
@@ -159,15 +161,17 @@ export async function saveFastestRegLeaderboard(lb: FastestRegLeaderboard): Prom
 export function buildLeaderboardText(entries: FastestRegEntry[]): string {
 	if (entries.length === 0) return 'No fastest registrant data yet.';
 
-	// Count wins per player (by discordId, fallback to tag)
+	// Count points per player (by discordId, fallback to tag)
+	// Macro events are worth 2 points, regular MSV events are worth 1
 	const wins = new Map<string, { tag: string; discordId: string; count: number }>();
 	for (const e of entries) {
+		const pts = e.eventLabel.startsWith('Macro#') ? 2 : 1;
 		const key = e.winnerDiscordId || e.winnerTag.toLowerCase();
 		const existing = wins.get(key);
 		if (existing) {
-			existing.count++;
+			existing.count += pts;
 		} else {
-			wins.set(key, { tag: e.winnerTag, discordId: e.winnerDiscordId, count: 1 });
+			wins.set(key, { tag: e.winnerTag, discordId: e.winnerDiscordId, count: pts });
 		}
 	}
 
@@ -187,7 +191,7 @@ export function buildLeaderboardText(entries: FastestRegEntry[]): string {
 		if (rank > 3) break;
 		const medal = medals[rank - 1] ?? '';
 		const mention = player.discordId && /^\d{17,20}$/.test(player.discordId) ? `<@${player.discordId}>` : player.tag;
-		const winLabel = player.count === 1 ? '1 win' : `${player.count} wins`;
+		const winLabel = player.count === 1 ? '1 pt' : `${player.count} pts`;
 
 		// Find others at same rank
 		const sameRank = sorted.filter((p) => p.count === player.count);

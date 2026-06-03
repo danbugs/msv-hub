@@ -41,8 +41,10 @@ async function resolveTournamentId(eventSlug: string): Promise<number | null> {
 }
 
 function extractEventLabel(slug: string): string {
-	const match = slug.match(/microspacing-vancouver-(\d+)/i);
-	if (match) return `MSV#${match[1]}`;
+	const micro = slug.match(/microspacing-vancouver-(\d+)/i);
+	if (micro) return `MSV#${micro[1]}`;
+	const macro = slug.match(/macrospacing-vancouver-(\d+)/i);
+	if (macro) return `Macro#${macro[1]}`;
 	return shortenSlug(slug);
 }
 
@@ -291,19 +293,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 			await sendMessage(threadId, funMessage);
 			await saveFastestRegLeaderboard({
-				entries: allEntries, threadId, leaderboardMessageId, updatedAt: Date.now()
+				entries: allEntries, threadId, leaderboardMessageId,
+				seasonNumber: lb?.seasonNumber, updatedAt: Date.now()
 			});
 		} else {
 			// No thread at all — create one
 			const entries = [newEntry];
 			const leaderboardText = buildLeaderboardText(entries);
-			const threadName = truncateTo100(`Fastest Registrant — Season`);
+			const prevLb = await getFastestRegLeaderboard();
+			const seasonNumber = (prevLb?.seasonNumber ?? 0) + 1;
+			const threadName = truncateTo100(`Fastest Registrant — Season ${seasonNumber}`);
 			const thread = await createForumPost(FASTEST_REG_FORUM_ID, threadName, leaderboardText);
 			await sendMessage(thread.id, funMessage);
 			const msgs = await getMessages(thread.id, 1);
 			await saveFastestRegLeaderboard({
 				entries, threadId: thread.id,
-				leaderboardMessageId: msgs[0]?.id ?? '', updatedAt: Date.now()
+				leaderboardMessageId: msgs[0]?.id ?? '', seasonNumber, updatedAt: Date.now()
 			});
 		}
 
@@ -331,7 +336,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// Create new forum thread with empty leaderboard
-		const threadName = truncateTo100(`Fastest Registrant — New Season`);
+		const seasonNumber = (oldLb?.seasonNumber ?? 0) + 1;
+		const threadName = truncateTo100(`Fastest Registrant — Season ${seasonNumber}`);
 		const thread = await createForumPost(FASTEST_REG_FORUM_ID, threadName, 'No fastest registrant data yet. Season starts now!');
 
 		const msgs = await getMessages(thread.id, 1);
@@ -339,6 +345,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			entries: [],
 			threadId: thread.id,
 			leaderboardMessageId: msgs[0]?.id ?? '',
+			seasonNumber,
 			updatedAt: Date.now()
 		});
 
