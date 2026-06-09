@@ -326,6 +326,187 @@ describe('generateBracket', () => {
 		expect(new Set(lr4Players).size).toBe(lr4Players.length);
 	});
 
+	it('32-player bracket matches StartGG reference layout (all progressions)', () => {
+		// Verified against StartGG's 32-player double-elimination bracket:
+		//   Winners: A-P (WR1), Q-X (WR2), Y-AB (WQF), AC-AD (WSF), AE (WF), AF (GF)
+		//   Losers:  AH-AO (LR1), AP-AW (LR2), AX-BA (LR3), BB-BE (LR4),
+		//            BF-BG (LR5), BH-BI (LQF), BJ (LSF), BK (LF)
+
+		const entrants32: Entrant[] = Array.from({ length: 32 }, (_, i) => ({
+			id: `p-${i + 1}`,
+			gamerTag: `${i + 1}Test`,
+			initialSeed: i + 1
+		}));
+		const standings32 = entrants32.map((e) => ({
+			rank: e.initialSeed, entrantId: e.id, gamerTag: e.gamerTag,
+			wins: 0, losses: 0, initialSeed: e.initialSeed, totalScore: 0,
+			basePoints: 0, winPoints: 0, lossPoints: 0, cinderellaBonus: 0,
+			expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
+		}));
+		const players32 = entrants32.map((e) => ({ entrantId: e.id, seed: e.initialSeed }));
+		const bracket = generateBracket('main', players32, standings32);
+
+		// Helper: get matches by round sorted by matchIndex
+		const byRound = (r: number) =>
+			bracket.matches.filter((m) => m.round === r).sort((a, b) => a.matchIndex - b.matchIndex);
+
+		const wr1 = byRound(1);  // A-P  (16 matches)
+		const wr2 = byRound(2);  // Q-X  (8 matches)
+		const wqf = byRound(3);  // Y-AB (4 matches)
+		const wsf = byRound(4);  // AC-AD (2 matches)
+		const wf  = byRound(5);  // AE   (1 match)
+		const gf  = bracket.matches.filter(m => m.id.includes('-GF-'));
+
+		const lr1 = byRound(-1); // AH-AO (8 matches)
+		const lr2 = byRound(-2); // AP-AW (8 matches)
+		const lr3 = byRound(-3); // AX-BA (4 matches)
+		const lr4 = byRound(-4); // BB-BE (4 matches)
+		const lr5 = byRound(-5); // BF-BG (2 matches)
+		const lr6 = byRound(-6); // BH-BI / LQF (2 matches)
+		const lr7 = byRound(-7); // BJ / LSF (1 match)
+		const lr8 = byRound(-8); // BK / LF (1 match)
+
+		// Verify round counts
+		expect(wr1.length).toBe(16);
+		expect(wr2.length).toBe(8);
+		expect(wqf.length).toBe(4);
+		expect(wsf.length).toBe(2);
+		expect(wf.length).toBe(1);
+		expect(gf.length).toBe(1);
+		expect(lr1.length).toBe(8);
+		expect(lr2.length).toBe(8);
+		expect(lr3.length).toBe(4);
+		expect(lr4.length).toBe(4);
+		expect(lr5.length).toBe(2);
+		expect(lr6.length).toBe(2);
+		expect(lr7.length).toBe(1);
+		expect(lr8.length).toBe(1);
+
+		// ── WR1 seeding (A-P) ──
+		// Standard 32-player bracket seeding
+		const expectedWR1: [number, number][] = [
+			[1,32],[16,17],[8,25],[9,24],[4,29],[13,20],[5,28],[12,21],
+			[2,31],[15,18],[7,26],[10,23],[3,30],[14,19],[6,27],[11,22]
+		];
+		for (let i = 0; i < 16; i++) {
+			const [topSeed, botSeed] = expectedWR1[i];
+			expect(wr1[i].topPlayerId).toBe(`p-${topSeed}`);
+			expect(wr1[i].bottomPlayerId).toBe(`p-${botSeed}`);
+		}
+
+		// ── Winners progressions ──
+		// WR1 winners → WR2: Q gets winner of A+B, R gets winner of C+D, etc.
+		for (let i = 0; i < 8; i++) {
+			expect(wr1[i * 2].winnerNextMatchId).toBe(wr2[i].id);     // A→Q, C→R, E→S, ...
+			expect(wr1[i * 2 + 1].winnerNextMatchId).toBe(wr2[i].id); // B→Q, D→R, F→S, ...
+		}
+		// WR2 winners → WQF: Y gets winner of Q+R, Z gets winner of S+T, etc.
+		for (let i = 0; i < 4; i++) {
+			expect(wr2[i * 2].winnerNextMatchId).toBe(wqf[i].id);
+			expect(wr2[i * 2 + 1].winnerNextMatchId).toBe(wqf[i].id);
+		}
+		// WQF winners → WSF
+		for (let i = 0; i < 2; i++) {
+			expect(wqf[i * 2].winnerNextMatchId).toBe(wsf[i].id);
+			expect(wqf[i * 2 + 1].winnerNextMatchId).toBe(wsf[i].id);
+		}
+		// WSF winners → WF
+		expect(wsf[0].winnerNextMatchId).toBe(wf[0].id);
+		expect(wsf[1].winnerNextMatchId).toBe(wf[0].id);
+		// WF winner → GF
+		expect(wf[0].winnerNextMatchId).toBe(gf[0].id);
+
+		// ── LR1: WR1 losers pair up (AH = loser A + loser B, etc.) ──
+		for (let i = 0; i < 8; i++) {
+			expect(wr1[i * 2].loserNextMatchId).toBe(lr1[i].id);     // A→AH, C→AI, ...
+			expect(wr1[i * 2 + 1].loserNextMatchId).toBe(lr1[i].id); // B→AH, D→AI, ...
+		}
+
+		// ── LR2 drop-in (Drop 1 — odd — full reversal) ──
+		// AP gets loser of X (WR2[7]), AQ gets loser of W (WR2[6]), ..., AW gets loser of Q (WR2[0])
+		for (let i = 0; i < 8; i++) {
+			const expectedWR2Idx = 7 - i; // full reversal
+			expect(wr2[expectedWR2Idx].loserNextMatchId).toBe(lr2[i].id);
+		}
+		// LR1 winners → LR2 top
+		for (let i = 0; i < 8; i++) {
+			expect(lr1[i].winnerNextMatchId).toBe(lr2[i].id);
+		}
+
+		// ── LR3: LR2 winners pair up ──
+		for (let i = 0; i < 4; i++) {
+			expect(lr2[i * 2].winnerNextMatchId).toBe(lr3[i].id);
+			expect(lr2[i * 2 + 1].winnerNextMatchId).toBe(lr3[i].id);
+		}
+
+		// ── LR4 drop-in (Drop 2 — even — XOR 1) ──
+		// BB gets loser of Z (WQF[1]), BC gets loser of Y (WQF[0]),
+		// BD gets loser of AB (WQF[3]), BE gets loser of AA (WQF[2])
+		const expectedLR4DropMap = [1, 0, 3, 2]; // XOR 1
+		for (let i = 0; i < 4; i++) {
+			expect(wqf[expectedLR4DropMap[i]].loserNextMatchId).toBe(lr4[i].id);
+		}
+		// LR3 winners → LR4
+		for (let i = 0; i < 4; i++) {
+			expect(lr3[i].winnerNextMatchId).toBe(lr4[i].id);
+		}
+
+		// ── LR5: LR4 winners pair up ──
+		for (let i = 0; i < 2; i++) {
+			expect(lr4[i * 2].winnerNextMatchId).toBe(lr5[i].id);
+			expect(lr4[i * 2 + 1].winnerNextMatchId).toBe(lr5[i].id);
+		}
+
+		// ── LR6/LQF drop-in (Drop 3 — odd — full reversal) ──
+		// BH gets loser of AD (WSF[1]), BI gets loser of AC (WSF[0])
+		expect(wsf[1].loserNextMatchId).toBe(lr6[0].id); // AD → BH
+		expect(wsf[0].loserNextMatchId).toBe(lr6[1].id); // AC → BI
+		// LR5 winners → LQF
+		for (let i = 0; i < 2; i++) {
+			expect(lr5[i].winnerNextMatchId).toBe(lr6[i].id);
+		}
+
+		// ── LR7/LSF: LQF winners pair up ──
+		expect(lr6[0].winnerNextMatchId).toBe(lr7[0].id);
+		expect(lr6[1].winnerNextMatchId).toBe(lr7[0].id);
+
+		// ── LR8/LF drop-in (Drop 4 — even — single match) ──
+		// BK gets loser of AE (WF[0])
+		expect(wf[0].loserNextMatchId).toBe(lr8[0].id);
+		// LSF winner → LF
+		expect(lr7[0].winnerNextMatchId).toBe(lr8[0].id);
+
+		// ── GF ──
+		// LF winner → GF (bottom)
+		expect(lr8[0].winnerNextMatchId).toBe(gf[0].id);
+		// WF winner → GF (top) — already checked above
+
+		// ── Play through entire bracket (higher seed always wins) and verify no duplicates ──
+		let b = bracket;
+		const roundOrder = [1, -1, 2, -2, 3, -3, 4, -4, 5, -5, -6, -7, -8];
+		for (const r of roundOrder) {
+			const ready = b.matches.filter(
+				(m) => m.round === r && m.topPlayerId && m.bottomPlayerId && !m.winnerId
+			);
+			for (const m of ready) {
+				const topSeed = entrants32.find((e) => e.id === m.topPlayerId)?.initialSeed ?? 999;
+				const botSeed = entrants32.find((e) => e.id === m.bottomPlayerId)?.initialSeed ?? 999;
+				b = reportBracketMatch(b, m.id, topSeed < botSeed ? m.topPlayerId! : m.bottomPlayerId!);
+			}
+		}
+		// Play GF
+		const gfReady = b.matches.find(m => m.id.includes('-GF-') && m.topPlayerId && m.bottomPlayerId && !m.winnerId);
+		if (gfReady) {
+			b = reportBracketMatch(b, gfReady.id, gfReady.topPlayerId!);
+		}
+
+		// Every non-bye match should have a winner
+		const incompleteNonBye = b.matches.filter(
+			(m) => m.topPlayerId && m.bottomPlayerId && !m.winnerId && !m.id.includes('-GFR-')
+		);
+		expect(incompleteNonBye.length).toBe(0);
+	});
+
 	it('no player appears in two matches after full bracket generation with byes', () => {
 		const entrants20: Entrant[] = Array.from({ length: 20 }, (_, i) => ({
 			id: `p-${i + 1}`,
