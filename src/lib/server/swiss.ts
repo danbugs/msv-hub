@@ -525,9 +525,9 @@ export function assignBracketStations(
 	}
 
 	for (const rm of ready) {
-		if (rm.station !== undefined) continue;
 		const i = updated.matches.findIndex((m) => m.id === rm.id);
 		if (i < 0) continue;
+		if (updated.matches[i].station !== undefined) continue;
 		for (const s of stationPool) {
 			if (usedStations.has(s)) continue;
 			updated.matches[i] = { ...updated.matches[i], station: s };
