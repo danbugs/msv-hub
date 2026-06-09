@@ -172,7 +172,7 @@
 		if (!input) { error = 'Enter an event slug or number'; return; }
 
 		const slug = /^\d+$/.test(input) ? `microspacing-vancouver-${input}` : input;
-		const weightPct = addEventWeight.trim() ? parseInt(addEventWeight.trim(), 10) : 100;
+		const weightPct = addEventWeight !== '' ? parseInt(String(addEventWeight), 10) : 100;
 		if (isNaN(weightPct) || weightPct <= 0) { error = 'Weight must be a positive number'; return; }
 		const weight = weightPct / 100;
 		addEventNumber = '';
