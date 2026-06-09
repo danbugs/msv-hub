@@ -311,13 +311,12 @@ describe('generateBracket', () => {
 			.sort((a, b) => a.matchIndex - b.matchIndex);
 		expect(wr3.length).toBe(4);
 
-		// LR4 has 4 drop-ins (n=4), so uses swap-halves:
-		// WR3 losers [0,1,2,3] → LR4 bottom slots [2,3,0,1]
+		// LR4 is the 2nd drop-in (even) so uses XOR 1 (swap adjacent pairs):
+		// WR3 losers [0,1,2,3] → LR4 bottom slots [1,0,3,2]
 		const wr3Losers = wr3.map((m) =>
 			m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId
 		);
-		const half = Math.floor(wr3Losers.length / 2);
-		const expectedOrder = [...wr3Losers.slice(half), ...wr3Losers.slice(0, half)];
+		const expectedOrder = wr3Losers.map((_, i) => wr3Losers[i ^ 1]);
 		for (let i = 0; i < expectedOrder.length; i++) {
 			expect(lr4[i].bottomPlayerId).toBe(expectedOrder[i]);
 		}
