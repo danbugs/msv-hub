@@ -328,6 +328,16 @@
 		await loadTournament();
 	}
 
+	let retryingPending = $state(false);
+	async function retryPendingReports() {
+		retryingPending = true;
+		const res = await fetch('/api/tournament/startgg-sync', { method: 'POST' });
+		const data = await res.json().catch(() => ({}));
+		if (!res.ok) error = (data as { error?: string }).error ?? 'Retry failed';
+		retryingPending = false;
+		await loadTournament();
+	}
+
 	async function clearStartggErrors() {
 		await fetch('/api/tournament/startgg-sync', { method: 'DELETE' });
 		await loadTournament();
@@ -394,7 +404,7 @@
 
 			// Show StartGG reporting status
 			const sg = (data as { startgg?: { ok?: boolean; queued?: boolean; error?: string } }).startgg;
-			if (sg && !sg.ok && !sg.queued && sg.error) {
+			if (sg && !sg.ok && sg.error) {
 				error = `StartGG: ${sg.error}`;
 			}
 
@@ -502,10 +512,13 @@
 	<!-- StartGG pending reports -->
 	{#if tournament?.startggSync?.pendingBracketMatchIds?.length}
 		<div class="mt-3 flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-xs text-amber-700 dark:text-amber-400">
-			{#if redemptionSyncing || splitConfirming}
+			{#if redemptionSyncing || splitConfirming || retryingPending}
 				<svg class="h-3.5 w-3.5 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
 			{/if}
-			<span><span class="font-semibold">StartGG:</span> {tournament.startggSync.pendingBracketMatchIds.length} match report{tournament.startggSync.pendingBracketMatchIds.length === 1 ? '' : 's'} pending{#if redemptionSyncing || splitConfirming} — syncing...{:else} — will be sent when bracket sync completes.{/if}</span>
+			<span class="flex-1"><span class="font-semibold">StartGG:</span> {tournament.startggSync.pendingBracketMatchIds.length} match report{tournament.startggSync.pendingBracketMatchIds.length === 1 ? '' : 's'} pending{#if redemptionSyncing || splitConfirming || retryingPending} — syncing...{:else if tournament.startggSync.splitConfirmed} — failed to report.{:else} — will be sent when bracket sync completes.{/if}</span>
+			{#if tournament.startggSync.splitConfirmed && !redemptionSyncing && !splitConfirming && !retryingPending}
+				<button onclick={retryPendingReports} class="shrink-0 font-semibold underline hover:no-underline">Retry</button>
+			{/if}
 		</div>
 	{/if}
 
