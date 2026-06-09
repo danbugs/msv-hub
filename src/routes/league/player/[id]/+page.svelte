@@ -383,17 +383,32 @@
 					{#each s.matchesByEvent as evt, evtIdx}
 						{@const histIdx = s.player.rankHistory.findIndex((h) => h.eventNumber === evt.eventNumber)}
 						{@const ptsDelta = histIdx > 0 ? s.player.rankHistory[histIdx].points - s.player.rankHistory[histIdx - 1].points : null}
+						{@const evtWeight = evt.weight}
 						<div>
 							<div class="flex items-center justify-between mb-1.5">
-								<a href="https://www.start.gg/tournament/{evt.slug}" target="_blank" rel="noopener"
-									class="text-xs font-semibold text-foreground hover:text-primary transition-colors">
-									{evt.name} ↗
-								</a>
+								<div class="flex items-center gap-1.5">
+									<a href="https://www.start.gg/tournament/{evt.slug}" target="_blank" rel="noopener"
+										class="text-xs font-semibold text-foreground hover:text-primary transition-colors">
+										{evt.name} ↗
+									</a>
+									{#if evtWeight != null && evtWeight !== 1.0}
+										<span class="text-[10px] font-bold px-1 py-0.5 rounded bg-amber-500/10 text-amber-400">{Math.round(evtWeight * 100)}%</span>
+									{/if}
+								</div>
 								<div class="flex items-center gap-2">
 									{#if ptsDelta !== null}
-										<span class="text-[10px] font-bold {ptsDelta >= 0 ? 'text-success' : 'text-destructive'}">
-											{ptsDelta >= 0 ? '+' : ''}{ptsDelta} pts
-										</span>
+										{#if evtWeight != null && evtWeight !== 1.0}
+											{@const unweighted = Math.round(ptsDelta / evtWeight)}
+											<span class="text-[10px] font-bold">
+												<span class="line-through text-muted-foreground">{unweighted >= 0 ? '+' : ''}{unweighted}</span>
+												<span class="text-muted-foreground mx-0.5">×{Math.round(evtWeight * 100)}%=</span>
+												<span class="{ptsDelta >= 0 ? 'text-success' : 'text-destructive'}">{ptsDelta >= 0 ? '+' : ''}{ptsDelta} pts</span>
+											</span>
+										{:else}
+											<span class="text-[10px] font-bold {ptsDelta >= 0 ? 'text-success' : 'text-destructive'}">
+												{ptsDelta >= 0 ? '+' : ''}{ptsDelta} pts
+											</span>
+										{/if}
 									{/if}
 									{#if evt.placement}
 										<span class="text-[10px] font-bold text-muted-foreground">#{evt.placement}</span>

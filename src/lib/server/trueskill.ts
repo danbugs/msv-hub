@@ -88,7 +88,7 @@ export function rate1v1(winner: Rating, loser: Rating): { winner: Rating; loser:
 
 export function rate1v1Weighted(winner: Rating, loser: Rating, weight: number): { winner: Rating; loser: Rating } {
 	const result = rate1v1(winner, loser);
-	if (weight >= 1.0) return result;
+	if (weight === 1.0) return result;
 	const wMuDelta = (result.winner.mu - winner.mu) * weight;
 	const lMuDelta = (result.loser.mu - loser.mu) * weight;
 	return {

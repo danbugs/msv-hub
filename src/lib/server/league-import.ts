@@ -403,7 +403,7 @@ export async function importSeason(
 		}
 
 		const eventWeight = opts.weights?.[slug] ?? 1.0;
-		if (eventWeight < 1.0) {
+		if (eventWeight !== 1.0) {
 			for (const m of eventMatches) m.weight = eventWeight;
 		}
 		allMatches.push(...eventMatches);
@@ -413,7 +413,7 @@ export async function importSeason(
 		events.push({
 			slug, name: info.tournamentName, date: dateStr,
 			eventNumber, entrantCount: info.numEntrants,
-			placements, weight: eventWeight < 1.0 ? eventWeight : undefined
+			placements, weight: eventWeight !== 1.0 ? eventWeight : undefined
 		});
 
 		log(`Processed ${info.tournamentName}: ${eventMatches.length} matches, ${entrantMap.size} players`);
@@ -455,7 +455,7 @@ export async function importSeason(
 				const r2 = ratings.get(match.player2Id)!;
 				const p1Before = ratingToPoints(r1);
 				const p2Before = ratingToPoints(r2);
-				const rateFn = weight < 1.0
+				const rateFn = weight !== 1.0
 					? (w: Rating, l: Rating) => rate1v1Weighted(w, l, weight)
 					: rate1v1;
 				const result = match.winnerId === match.player1Id ? rateFn(r1, r2) : rateFn(r2, r1);

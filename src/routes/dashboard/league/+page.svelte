@@ -6,7 +6,7 @@
 		name: string;
 		startDate: string;
 		endDate: string;
-		events: { slug: string; name: string; date: string; eventNumber: number; entrantCount: number }[];
+		events: { slug: string; name: string; date: string; eventNumber: number; entrantCount: number; weight?: number }[];
 		rankings: { playerId: string; gamerTag: string; points: number; rank: number }[];
 		totalMatches: number;
 		plannedSlugs: string[];
@@ -18,6 +18,7 @@
 	let importLogs = $state<string[]>([]);
 	let error = $state('');
 	let addEventNumber = $state('');
+	let addEventWeight = $state('');
 	let mergeSearch1 = $state('');
 	let mergeSearch2 = $state('');
 	let mergePlayer1 = $state<{ id: string; tag: string } | null>(null);
@@ -94,7 +95,7 @@
 		return Math.max(...season.events.map((e) => e.eventNumber)) + 1;
 	}
 
-	async function runImportWithSlugs(slugs: string[], forceRefetch = false) {
+	async function runImportWithSlugs(slugs: string[], forceRefetch = false, weights?: Record<string, number>) {
 		const sid = getSeasonId();
 		importing = true;
 		importLogs = [];
@@ -110,7 +111,8 @@
 					startDate: '',
 					endDate: '',
 					tournamentSlugs: slugs,
-					forceRefetch
+					forceRefetch,
+					weights
 				})
 			});
 
@@ -156,11 +158,13 @@
 		return season.events.map((e) => e.slug);
 	}
 
-	async function importSlug(slug: string) {
+	async function importSlug(slug: string, weight?: number) {
 		const allSlugs = [...getAllSeasonSlugs(), slug];
 		const unique = [...new Set(allSlugs)];
-		if (!confirm(`Add ${slug} to Season ${getSeasonId()}? This will re-process ratings with the new event included.`)) return;
-		await runImportWithSlugs(unique);
+		const weightLabel = weight && weight !== 1.0 ? ` at ${Math.round(weight * 100)}% weight` : '';
+		if (!confirm(`Add ${slug}${weightLabel} to Season ${getSeasonId()}? This will re-process ratings with the new event included.`)) return;
+		const weights = weight && weight !== 1.0 ? { [slug]: weight } : undefined;
+		await runImportWithSlugs(unique, false, weights);
 	}
 
 	async function addEvent() {
@@ -168,8 +172,12 @@
 		if (!input) { error = 'Enter an event slug or number'; return; }
 
 		const slug = /^\d+$/.test(input) ? `microspacing-vancouver-${input}` : input;
+		const weightPct = addEventWeight.trim() ? parseInt(addEventWeight.trim(), 10) : 100;
+		if (isNaN(weightPct) || weightPct <= 0) { error = 'Weight must be a positive number'; return; }
+		const weight = weightPct / 100;
 		addEventNumber = '';
-		await importSlug(slug);
+		addEventWeight = '';
+		await importSlug(slug, weight);
 	}
 
 	async function createSeason() {
@@ -573,7 +581,12 @@
 				<div class="space-y-1">
 					{#each season.events as evt}
 						<div class="flex items-center justify-between rounded-lg bg-card px-3 py-2 text-sm">
-							<span class="text-foreground">{evt.name}</span>
+							<div class="flex items-center gap-2">
+								<span class="text-foreground">{evt.name}</span>
+								{#if evt.weight != null && evt.weight !== 1.0}
+									<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">{Math.round(evt.weight * 100)}%</span>
+								{/if}
+							</div>
 							<div class="flex items-center gap-3">
 								<span class="text-muted-foreground">{evt.entrantCount} entrants · {evt.date}</span>
 								<button onclick={() => deleteEvent(evt.slug)} disabled={importing}
@@ -601,13 +614,22 @@
 					placeholder={String(getNextEventNumber()) + ' or full slug'}
 					type="text"
 					class="flex-1 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
+				<div class="flex items-center gap-1 shrink-0">
+					<input
+						bind:value={addEventWeight}
+						placeholder="100"
+						type="number"
+						min="1"
+						class="w-16 rounded-lg border border-input bg-secondary px-2 py-1.5 text-sm text-foreground text-right focus:border-ring focus:outline-none" />
+					<span class="text-xs text-muted-foreground">%</span>
+				</div>
 				<button onclick={addEvent} disabled={importing}
 					class="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
 					{importing ? 'Importing...' : 'Add'}
 				</button>
 			</div>
 			<p class="mt-2 text-xs text-muted-foreground">
-				Enter a number (e.g., 138) for microspacing, or a full slug (e.g., macrospacing-vancouver-7). Existing events use cached data.
+				Enter a number (e.g., 138) for microspacing, or a full slug (e.g., macrospacing-vancouver-7). Weight controls how much rating changes count (default 100%).
 			</p>
 		</div>
 

@@ -27,7 +27,8 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			name: e.name,
 			date: e.date,
 			eventNumber: e.eventNumber,
-			entrantCount: e.entrantCount
+			entrantCount: e.entrantCount,
+			weight: e.weight
 		})),
 		rankings,
 		totalMatches: season.matches.length,

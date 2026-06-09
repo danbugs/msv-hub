@@ -172,6 +172,7 @@ export interface LeaguePlayerStats {
 		date: string;
 		eventNumber: number;
 		placement?: number;
+		weight?: number;
 		matches: LeagueMatch[];
 	}[];
 	bestWins: {

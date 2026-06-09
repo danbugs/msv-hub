@@ -80,6 +80,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			date: evt.date,
 			eventNumber: evt.eventNumber,
 			entrantCount: evt.entrantCount,
+			weight: evt.weight,
 			...tier
 		};
 	});

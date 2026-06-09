@@ -5,13 +5,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
 	const body = await request.json();
-	const { seasonId, seasonName, startDate, endDate, tournamentSlugs, forceRefetch } = body as {
+	const { seasonId, seasonName, startDate, endDate, tournamentSlugs, forceRefetch, weights } = body as {
 		seasonId: number;
 		seasonName: string;
 		startDate: string;
 		endDate: string;
 		tournamentSlugs: string[];
 		forceRefetch?: boolean;
+		weights?: Record<string, number>;
 	};
 
 	if (!seasonId || !seasonName || !tournamentSlugs?.length) {
@@ -26,7 +27,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		endDate,
 		tournamentSlugs,
 		(msg) => logs.push(msg),
-		{ forceRefetch: forceRefetch ?? false, twoPass: true }
+		{ forceRefetch: forceRefetch ?? false, twoPass: true, weights }
 	);
 
 	return Response.json({

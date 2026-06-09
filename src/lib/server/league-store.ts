@@ -189,7 +189,7 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 				const w = ratings.get(m.winnerId) ?? createRating();
 				const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
 				const l = ratings.get(loserId) ?? createRating();
-				const result = weight < 1.0 ? rate1v1Weighted(w, l, weight) : rate1v1(w, l);
+				const result = weight !== 1.0 ? rate1v1Weighted(w, l, weight) : rate1v1(w, l);
 				const wPrev = ratingToPoints(w);
 				const lPrev = ratingToPoints(l);
 				ratings.set(m.winnerId, result.winner);
@@ -349,6 +349,7 @@ export function getPlayerStats(season: LeagueSeason, playerId: string, config?: 
 			date: evt.date,
 			eventNumber: evt.eventNumber,
 			placement: evt.placements.find((p) => p.playerId === playerId)?.placement,
+			weight: evt.weight,
 			matches: eventMatchMap.get(evt.slug)!
 		}))
 		.reverse();
