@@ -452,9 +452,9 @@ async function _doReportBracketMatch(
 	// use internal REST — same reliable fast path as Swiss reports.
 	// Falls through to GQL path on failure (e.g. bracket not yet started → 404).
 	if (!hasCharData) {
-		const bracketPhaseGroupId = await getBracketPhaseGroupId(bracketEventId);
+		let bracketPhaseGroupId = await getBracketPhaseGroupId(bracketEventId);
 		if (bracketPhaseGroupId) {
-			const result = await completeSetViaAdminRest(
+			let result = await completeSetViaAdminRest(
 				bracketPhaseGroupId,
 				bracketTopEntrantId,
 				bracketBotEntrantId,
@@ -463,6 +463,24 @@ async function _doReportBracketMatch(
 				loserScore ?? 0,
 				match.isDQ ?? false
 			);
+			// "Set not found" may mean the PG was re-created — invalidate cache and retry
+			if (!result.ok && result.error?.includes('Set not found')) {
+				console.log(`[StartGG] Set not found in PG ${bracketPhaseGroupId} — clearing cache and retrying`);
+				_bracketPgIdCache.delete(bracketEventId);
+				const freshPgId = await getBracketPhaseGroupId(bracketEventId);
+				if (freshPgId && freshPgId !== bracketPhaseGroupId) {
+					bracketPhaseGroupId = freshPgId;
+					result = await completeSetViaAdminRest(
+						freshPgId,
+						bracketTopEntrantId,
+						bracketBotEntrantId,
+						bracketWinnerEntrantId,
+						winnerScore ?? 2,
+						loserScore ?? 0,
+						match.isDQ ?? false
+					);
+				}
+			}
 			if (result.ok) {
 				match.startggSetId = result.realSetId;
 				clearErrorsForMatch(sync, match.id);
