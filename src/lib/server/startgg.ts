@@ -800,24 +800,29 @@ export async function pushBracketSeeding(
 		if (playerId && seed.id) bracketPlayerToSeedId.set(Number(playerId), String(seed.id));
 	}
 
-	// Build seed mapping: Swiss entrant order → bracket seedId assignment
-	const seedMapping: { seedId: string; phaseGroupId: string; seedNum: number }[] = [];
-	let matched = 0;
-	swissEntrantIds.forEach((swissEntrantId, i) => {
+	// Build seed mapping: Swiss entrant order → bracket seedId assignment.
+	// Collect matched entries first, then assign contiguous seedNums (StartGG
+	// rejects gaps like 1,2,5,8 when some players don't match).
+	const matched: { seedId: string }[] = [];
+	swissEntrantIds.forEach((swissEntrantId) => {
 		const playerId = swissEntrantToPlayer.get(swissEntrantId);
 		if (!playerId) return;
 		const bracketSeedId = bracketPlayerToSeedId.get(playerId);
 		if (!bracketSeedId) return;
-		seedMapping.push({ seedId: bracketSeedId, phaseGroupId: String(bracketPhaseGroupId), seedNum: i + 1 });
-		matched++;
+		matched.push({ seedId: bracketSeedId });
 	});
 
-	if (!seedMapping.length) {
+	if (!matched.length) {
 		return { ok: false, error: `No player matches found between Swiss and bracket (${swissEntrantToPlayer.size} Swiss players, ${bracketPlayerToSeedId.size} bracket players)` };
 	}
 
-	console.log(`[StartGG] pushBracketSeeding: matched ${matched}/${swissEntrantIds.length} players`);
-	seedMapping.sort((a, b) => a.seedNum - b.seedNum);
+	const seedMapping = matched.map((m, i) => ({
+		seedId: m.seedId,
+		phaseGroupId: String(bracketPhaseGroupId),
+		seedNum: i + 1
+	}));
+
+	console.log(`[StartGG] pushBracketSeeding: matched ${seedMapping.length}/${swissEntrantIds.length} players`);
 
 	const data = await gql(
 		UPDATE_PHASE_SEEDING_MUTATION,
