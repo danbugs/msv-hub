@@ -122,8 +122,8 @@
 
 	const CARD_W = 168;
 	const CARD_H = 52;
-	const H_GAP = 28;
-	const BASE_SLOT_H = 60;
+	const H_GAP = 32;
+	const BASE_SLOT_H = 80;
 	const BADGE_SIZE = 20;
 
 	function getEntrant(id?: string): Entrant | undefined {
