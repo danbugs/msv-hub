@@ -11,6 +11,12 @@
 	let activeBracket = $state<'main' | 'redemption'>('main');
 	let error = $state('');
 
+	function toErrorString(v: unknown): string {
+		if (typeof v === 'string') return v;
+		if (v && typeof v === 'object') return JSON.stringify(v);
+		return String(v ?? '');
+	}
+
 	let reportingMatch = $state<BracketMatch | null>(null);
 	let reportWinnerId = $state('');
 	let reportScore = $state('');
@@ -322,7 +328,7 @@
 			splitResult = { reported: data.reported, failed: data.failed };
 			if (data.logs?.length) console.log('[split-done logs]', data.logs.join('\n'));
 		} else {
-			error = (data as { error?: string }).error ?? 'Failed to confirm split';
+			error = toErrorString((data as { error?: unknown }).error) || 'Failed to confirm split';
 		}
 		splitConfirming = false;
 		await loadTournament();
@@ -333,7 +339,7 @@
 		retryingPending = true;
 		const res = await fetch('/api/tournament/startgg-sync', { method: 'POST' });
 		const data = await res.json().catch(() => ({}));
-		if (!res.ok) error = (data as { error?: string }).error ?? 'Retry failed';
+		if (!res.ok) error = toErrorString((data as { error?: unknown }).error) || 'Retry failed';
 		retryingPending = false;
 		await loadTournament();
 	}
@@ -358,10 +364,9 @@
 		});
 		const data = await res.json();
 		if (res.ok) {
-			const dbg = data.debug ? `\n\n${data.debug.join('\n')}` : '';
-			syncResult = `Synced ${data.synced}/${data.totalSetsOnStartGG} matches (${data.notFound} unmatched)${dbg}`;
+			syncResult = JSON.stringify({ summary: `Synced ${data.synced}/${data.totalSetsOnStartGG} matches (${data.notFound} unmatched)`, debug: data.debug ?? [] });
 		}
-		else error = data.error ?? 'Sync failed';
+		else error = toErrorString(data.error) || 'Sync failed';
 		syncingFromStartGG = false;
 		await loadTournament();
 	}
@@ -394,7 +399,7 @@
 
 		if (!res.ok) {
 			const data = await res.json();
-			error = data.error ?? 'Failed to report match';
+			error = toErrorString(data.error) || 'Failed to report match';
 			submittingReport = false;
 		} else {
 			const data = await res.json();
@@ -598,7 +603,14 @@
 						</div>
 
 						{#if syncResult && activeBracket === bracketName}
-							<pre class="mt-1 text-xs text-success whitespace-pre-wrap">{syncResult}</pre>
+							{@const parsed = JSON.parse(syncResult)}
+							<p class="mt-1 text-xs text-success">{parsed.summary}</p>
+							{#if parsed.debug?.length}
+								<details class="mt-1">
+									<summary class="text-xs text-muted-foreground cursor-pointer hover:text-foreground">Full sync log</summary>
+									<pre class="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">{parsed.debug.join('\n')}</pre>
+								</details>
+							{/if}
 						{/if}
 
 						<div class="mt-3 overflow-x-auto">
@@ -615,7 +627,7 @@
 										body: JSON.stringify({ bracketName, matchId, slot, entrantId })
 									});
 									const data = await res.json();
-									if (!res.ok) error = data.error ?? 'Failed to place player';
+									if (!res.ok) error = toErrorString(data.error) || 'Failed to place player';
 									await loadTournament();
 								}}
 								{waveMap} />
