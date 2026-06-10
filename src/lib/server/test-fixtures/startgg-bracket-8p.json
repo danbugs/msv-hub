@@ -1,0 +1,217 @@
+{
+  "phaseGroupId": 3346598,
+  "playerCount": 8,
+  "sets": [
+    {
+      "identifier": "A",
+      "round": 1,
+      "fullRoundText": "Winners Round 1",
+      "topSlot": {
+        "prereqSetIdentifier": "?40492000",
+        "prereqType": "seed",
+        "seedNum": 1,
+        "gamerTag": "1Test"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "?40492016",
+        "prereqType": "seed",
+        "seedNum": 8,
+        "gamerTag": "8Test"
+      }
+    },
+    {
+      "identifier": "B",
+      "round": 1,
+      "fullRoundText": "Winners Round 1",
+      "topSlot": {
+        "prereqSetIdentifier": "?40492022",
+        "prereqType": "seed",
+        "seedNum": 4,
+        "gamerTag": "4Test"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "?40492024",
+        "prereqType": "seed",
+        "seedNum": 5,
+        "gamerTag": "5Test"
+      }
+    },
+    {
+      "identifier": "C",
+      "round": 1,
+      "fullRoundText": "Winners Round 1",
+      "topSlot": {
+        "prereqSetIdentifier": "?40492003",
+        "prereqType": "seed",
+        "seedNum": 2,
+        "gamerTag": "2Test"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "?40492019",
+        "prereqType": "seed",
+        "seedNum": 7,
+        "gamerTag": "7Test"
+      }
+    },
+    {
+      "identifier": "D",
+      "round": 1,
+      "fullRoundText": "Winners Round 1",
+      "topSlot": {
+        "prereqSetIdentifier": "?40492001",
+        "prereqType": "seed",
+        "seedNum": 3,
+        "gamerTag": "3Test"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "?40492020",
+        "prereqType": "seed",
+        "seedNum": 6,
+        "gamerTag": "6Test"
+      }
+    },
+    {
+      "identifier": "E",
+      "round": 2,
+      "fullRoundText": "Winners Semi-Final",
+      "topSlot": {
+        "prereqSetIdentifier": "A",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "B",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "F",
+      "round": 2,
+      "fullRoundText": "Winners Semi-Final",
+      "topSlot": {
+        "prereqSetIdentifier": "C",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "D",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "G",
+      "round": 3,
+      "fullRoundText": "Winners Final",
+      "topSlot": {
+        "prereqSetIdentifier": "E",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "F",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "H",
+      "round": 4,
+      "fullRoundText": "Grand Final",
+      "topSlot": {
+        "prereqSetIdentifier": "G",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "O",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "I",
+      "round": 4,
+      "fullRoundText": "Grand Final Reset",
+      "topSlot": {
+        "prereqSetIdentifier": "H",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "H",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "J",
+      "round": -3,
+      "fullRoundText": "Losers Round 1",
+      "topSlot": {
+        "prereqSetIdentifier": "?preview_3346598_-2_0",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "?preview_3346598_-2_1",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "K",
+      "round": -3,
+      "fullRoundText": "Losers Round 1",
+      "topSlot": {
+        "prereqSetIdentifier": "?preview_3346598_-2_2",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "?preview_3346598_-2_3",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "L",
+      "round": -4,
+      "fullRoundText": "Losers Quarter-Final",
+      "topSlot": {
+        "prereqSetIdentifier": "F",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "J",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "M",
+      "round": -4,
+      "fullRoundText": "Losers Quarter-Final",
+      "topSlot": {
+        "prereqSetIdentifier": "E",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "K",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "N",
+      "round": -5,
+      "fullRoundText": "Losers Semi-Final",
+      "topSlot": {
+        "prereqSetIdentifier": "L",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "M",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "O",
+      "round": -6,
+      "fullRoundText": "Losers Final",
+      "topSlot": {
+        "prereqSetIdentifier": "G",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "N",
+        "prereqType": "set"
+      }
+    }
+  ]
+}

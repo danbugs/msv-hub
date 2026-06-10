@@ -550,22 +550,31 @@ describe('generateBracket', () => {
 		}
 	});
 
-	it('32-player bracket topology matches StartGG reference fixture', () => {
-		const fixture = require('./test-fixtures/startgg-bracket-32p.json');
+	it.each([8, 14, 15, 16, 29, 30, 31, 32])('%i-player bracket topology matches StartGG reference fixture', (size) => {
+		const fixture = require(`./test-fixtures/startgg-bracket-${size}p.json`);
 
-		const entrants32: Entrant[] = Array.from({ length: 32 }, (_, i) => ({
+		const entrantsN: Entrant[] = Array.from({ length: size }, (_, i) => ({
 			id: `p-${i + 1}`, gamerTag: `${i + 1}Test`, initialSeed: i + 1
 		}));
-		const standings32 = entrants32.map((e) => ({
+		const standingsN = entrantsN.map((e) => ({
 			rank: e.initialSeed, entrantId: e.id, gamerTag: e.gamerTag,
 			wins: 0, losses: 0, initialSeed: e.initialSeed, totalScore: 0,
 			basePoints: 0, winPoints: 0, lossPoints: 0, cinderellaBonus: 0,
 			expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
 		}));
-		const players32 = entrants32.map((e) => ({ entrantId: e.id, seed: e.initialSeed }));
-		const bracket = generateBracket('main', players32, standings32);
+		const playersN = entrantsN.map((e) => ({ entrantId: e.id, seed: e.initialSeed }));
+		const bracket = generateBracket('main', playersN, standingsN);
 
-		// Build letter map (same logic as BracketView.svelte)
+		// Identify bye matches to skip in letter assignment (StartGG omits these)
+		const byeMatchIds = new Set<string>();
+		for (const m of bracket.matches) {
+			if (m.round === 1 && m.winnerId) {
+				byeMatchIds.add(m.id);
+				if (m.loserNextMatchId) byeMatchIds.add(m.loserNextMatchId);
+			}
+		}
+
+		// Build letter map (same logic as BracketView.svelte, skipping byes)
 		function toMatchLetter(n: number): string {
 			let result = ''; let idx = n;
 			do { result = String.fromCharCode(65 + (idx % 26)) + result; idx = Math.floor(idx / 26) - 1; } while (idx >= 0);
@@ -573,6 +582,7 @@ describe('generateBracket', () => {
 		}
 		const byRound = new Map<number, typeof bracket.matches>();
 		for (const m of bracket.matches) {
+			if (byeMatchIds.has(m.id)) continue;
 			if (!byRound.has(m.round)) byRound.set(m.round, []);
 			byRound.get(m.round)!.push(m);
 		}
@@ -645,12 +655,15 @@ describe('generateBracket', () => {
 			}
 
 			// StartGG bottom slot: prereq from a losers set = winner of that set
+			// Skip ?preview references (bye auto-advances that we don't create matches for)
 			const expectedBotLetter = fSet.bottomSlot.prereqSetIdentifier;
-			const actualBot = ourSource.bottom;
-			if (!actualBot) {
-				errors.push(`${letter} bottom: expected winner of ${expectedBotLetter}, got nothing`);
-			} else if (actualBot.letter !== expectedBotLetter || actualBot.type !== 'winner') {
-				errors.push(`${letter} bottom: expected winner of ${expectedBotLetter}, got ${actualBot.type} of ${actualBot.letter}`);
+			if (expectedBotLetter && !expectedBotLetter.startsWith('?')) {
+				const actualBot = ourSource.bottom;
+				if (!actualBot) {
+					errors.push(`${letter} bottom: expected winner of ${expectedBotLetter}, got nothing`);
+				} else if (actualBot.letter !== expectedBotLetter || actualBot.type !== 'winner') {
+					errors.push(`${letter} bottom: expected winner of ${expectedBotLetter}, got ${actualBot.type} of ${actualBot.letter}`);
+				}
 			}
 		}
 

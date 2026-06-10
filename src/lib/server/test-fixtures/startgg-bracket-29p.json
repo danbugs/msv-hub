@@ -1,26 +1,9 @@
 {
   "phaseGroupId": 3346598,
-  "playerCount": 32,
+  "playerCount": 29,
   "sets": [
     {
       "identifier": "A",
-      "round": 1,
-      "fullRoundText": "Winners Round 1",
-      "topSlot": {
-        "prereqSetIdentifier": "?40492000",
-        "prereqType": "seed",
-        "seedNum": 1,
-        "gamerTag": "1Test"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "?40492961",
-        "prereqType": "seed",
-        "seedNum": 32,
-        "gamerTag": "32Test"
-      }
-    },
-    {
-      "identifier": "B",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -37,7 +20,7 @@
       }
     },
     {
-      "identifier": "C",
+      "identifier": "B",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -54,7 +37,7 @@
       }
     },
     {
-      "identifier": "D",
+      "identifier": "C",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -71,7 +54,7 @@
       }
     },
     {
-      "identifier": "E",
+      "identifier": "D",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -88,7 +71,7 @@
       }
     },
     {
-      "identifier": "F",
+      "identifier": "E",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -105,7 +88,7 @@
       }
     },
     {
-      "identifier": "G",
+      "identifier": "F",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -122,7 +105,7 @@
       }
     },
     {
-      "identifier": "H",
+      "identifier": "G",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -139,24 +122,7 @@
       }
     },
     {
-      "identifier": "I",
-      "round": 1,
-      "fullRoundText": "Winners Round 1",
-      "topSlot": {
-        "prereqSetIdentifier": "?40492003",
-        "prereqType": "seed",
-        "seedNum": 2,
-        "gamerTag": "2Test"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "?40491965",
-        "prereqType": "seed",
-        "seedNum": 31,
-        "gamerTag": "31Test"
-      }
-    },
-    {
-      "identifier": "J",
+      "identifier": "H",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -173,7 +139,7 @@
       }
     },
     {
-      "identifier": "K",
+      "identifier": "I",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -190,7 +156,7 @@
       }
     },
     {
-      "identifier": "L",
+      "identifier": "J",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -207,24 +173,7 @@
       }
     },
     {
-      "identifier": "M",
-      "round": 1,
-      "fullRoundText": "Winners Round 1",
-      "topSlot": {
-        "prereqSetIdentifier": "?40492001",
-        "prereqType": "seed",
-        "seedNum": 3,
-        "gamerTag": "3Test"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "?40492006",
-        "prereqType": "seed",
-        "seedNum": 30,
-        "gamerTag": "30Test"
-      }
-    },
-    {
-      "identifier": "N",
+      "identifier": "K",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -241,7 +190,7 @@
       }
     },
     {
-      "identifier": "O",
+      "identifier": "L",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -258,7 +207,7 @@
       }
     },
     {
-      "identifier": "P",
+      "identifier": "M",
       "round": 1,
       "fullRoundText": "Winners Round 1",
       "topSlot": {
@@ -275,15 +224,56 @@
       }
     },
     {
+      "identifier": "N",
+      "round": 2,
+      "fullRoundText": "Winners Round 2",
+      "topSlot": {
+        "prereqSetIdentifier": "?preview_3346598_1_0",
+        "prereqType": "set",
+        "seedNum": 1,
+        "gamerTag": "1Test"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "A",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "O",
+      "round": 2,
+      "fullRoundText": "Winners Round 2",
+      "topSlot": {
+        "prereqSetIdentifier": "B",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "C",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "P",
+      "round": 2,
+      "fullRoundText": "Winners Round 2",
+      "topSlot": {
+        "prereqSetIdentifier": "D",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "E",
+        "prereqType": "set"
+      }
+    },
+    {
       "identifier": "Q",
       "round": 2,
       "fullRoundText": "Winners Round 2",
       "topSlot": {
-        "prereqSetIdentifier": "A",
+        "prereqSetIdentifier": "F",
         "prereqType": "set"
       },
       "bottomSlot": {
-        "prereqSetIdentifier": "B",
+        "prereqSetIdentifier": "G",
         "prereqType": "set"
       }
     },
@@ -292,34 +282,10 @@
       "round": 2,
       "fullRoundText": "Winners Round 2",
       "topSlot": {
-        "prereqSetIdentifier": "C",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "D",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "S",
-      "round": 2,
-      "fullRoundText": "Winners Round 2",
-      "topSlot": {
-        "prereqSetIdentifier": "E",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "F",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "T",
-      "round": 2,
-      "fullRoundText": "Winners Round 2",
-      "topSlot": {
-        "prereqSetIdentifier": "G",
-        "prereqType": "set"
+        "prereqSetIdentifier": "?preview_3346598_1_8",
+        "prereqType": "set",
+        "seedNum": 2,
+        "gamerTag": "2Test"
       },
       "bottomSlot": {
         "prereqSetIdentifier": "H",
@@ -327,7 +293,7 @@
       }
     },
     {
-      "identifier": "U",
+      "identifier": "S",
       "round": 2,
       "fullRoundText": "Winners Round 2",
       "topSlot": {
@@ -340,67 +306,69 @@
       }
     },
     {
-      "identifier": "V",
+      "identifier": "T",
       "round": 2,
       "fullRoundText": "Winners Round 2",
       "topSlot": {
+        "prereqSetIdentifier": "?preview_3346598_1_12",
+        "prereqType": "set",
+        "seedNum": 3,
+        "gamerTag": "3Test"
+      },
+      "bottomSlot": {
         "prereqSetIdentifier": "K",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "U",
+      "round": 2,
+      "fullRoundText": "Winners Round 2",
+      "topSlot": {
+        "prereqSetIdentifier": "L",
         "prereqType": "set"
       },
       "bottomSlot": {
-        "prereqSetIdentifier": "L",
+        "prereqSetIdentifier": "M",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "V",
+      "round": 3,
+      "fullRoundText": "Winners Quarter-Final",
+      "topSlot": {
+        "prereqSetIdentifier": "N",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "O",
         "prereqType": "set"
       }
     },
     {
       "identifier": "W",
-      "round": 2,
-      "fullRoundText": "Winners Round 2",
+      "round": 3,
+      "fullRoundText": "Winners Quarter-Final",
       "topSlot": {
-        "prereqSetIdentifier": "M",
+        "prereqSetIdentifier": "P",
         "prereqType": "set"
       },
       "bottomSlot": {
-        "prereqSetIdentifier": "N",
+        "prereqSetIdentifier": "Q",
         "prereqType": "set"
       }
     },
     {
       "identifier": "X",
-      "round": 2,
-      "fullRoundText": "Winners Round 2",
-      "topSlot": {
-        "prereqSetIdentifier": "O",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "P",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "AA",
       "round": 3,
       "fullRoundText": "Winners Quarter-Final",
       "topSlot": {
-        "prereqSetIdentifier": "U",
+        "prereqSetIdentifier": "R",
         "prereqType": "set"
       },
       "bottomSlot": {
-        "prereqSetIdentifier": "V",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "AB",
-      "round": 3,
-      "fullRoundText": "Winners Quarter-Final",
-      "topSlot": {
-        "prereqSetIdentifier": "W",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "X",
+        "prereqSetIdentifier": "S",
         "prereqType": "set"
       }
     },
@@ -409,107 +377,81 @@
       "round": 3,
       "fullRoundText": "Winners Quarter-Final",
       "topSlot": {
-        "prereqSetIdentifier": "Q",
+        "prereqSetIdentifier": "T",
         "prereqType": "set"
       },
       "bottomSlot": {
-        "prereqSetIdentifier": "R",
+        "prereqSetIdentifier": "U",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "AA",
+      "round": 4,
+      "fullRoundText": "Winners Semi-Final",
+      "topSlot": {
+        "prereqSetIdentifier": "X",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "Y",
         "prereqType": "set"
       }
     },
     {
       "identifier": "Z",
-      "round": 3,
-      "fullRoundText": "Winners Quarter-Final",
+      "round": 4,
+      "fullRoundText": "Winners Semi-Final",
       "topSlot": {
-        "prereqSetIdentifier": "S",
+        "prereqSetIdentifier": "V",
         "prereqType": "set"
       },
       "bottomSlot": {
-        "prereqSetIdentifier": "T",
+        "prereqSetIdentifier": "W",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "AB",
+      "round": 5,
+      "fullRoundText": "Winners Final",
+      "topSlot": {
+        "prereqSetIdentifier": "Z",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "AA",
         "prereqType": "set"
       }
     },
     {
       "identifier": "AC",
-      "round": 4,
-      "fullRoundText": "Winners Semi-Final",
+      "round": 6,
+      "fullRoundText": "Grand Final",
       "topSlot": {
-        "prereqSetIdentifier": "Y",
+        "prereqSetIdentifier": "AB",
         "prereqType": "set"
       },
       "bottomSlot": {
-        "prereqSetIdentifier": "Z",
+        "prereqSetIdentifier": "BE",
         "prereqType": "set"
       }
     },
     {
       "identifier": "AD",
-      "round": 4,
-      "fullRoundText": "Winners Semi-Final",
-      "topSlot": {
-        "prereqSetIdentifier": "AA",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "AB",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "AE",
-      "round": 5,
-      "fullRoundText": "Winners Final",
+      "round": 6,
+      "fullRoundText": "Grand Final Reset",
       "topSlot": {
         "prereqSetIdentifier": "AC",
         "prereqType": "set"
       },
       "bottomSlot": {
-        "prereqSetIdentifier": "AD",
+        "prereqSetIdentifier": "AC",
         "prereqType": "set"
       }
     },
     {
-      "identifier": "AF",
-      "round": 6,
-      "fullRoundText": "Grand Final",
-      "topSlot": {
-        "prereqSetIdentifier": "AE",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "BK",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "AG",
-      "round": 6,
-      "fullRoundText": "Grand Final Reset",
-      "topSlot": {
-        "prereqSetIdentifier": "AF",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "AF",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "AH",
-      "round": -3,
-      "fullRoundText": "Losers Round 1",
-      "topSlot": {
-        "prereqSetIdentifier": "?preview_3346598_-2_0",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "?preview_3346598_-2_1",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "AI",
+      "identifier": "AE",
       "round": -3,
       "fullRoundText": "Losers Round 1",
       "topSlot": {
@@ -522,7 +464,7 @@
       }
     },
     {
-      "identifier": "AJ",
+      "identifier": "AF",
       "round": -3,
       "fullRoundText": "Losers Round 1",
       "topSlot": {
@@ -535,7 +477,7 @@
       }
     },
     {
-      "identifier": "AK",
+      "identifier": "AG",
       "round": -3,
       "fullRoundText": "Losers Round 1",
       "topSlot": {
@@ -548,20 +490,7 @@
       }
     },
     {
-      "identifier": "AL",
-      "round": -3,
-      "fullRoundText": "Losers Round 1",
-      "topSlot": {
-        "prereqSetIdentifier": "?preview_3346598_-2_8",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "?preview_3346598_-2_9",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "AM",
+      "identifier": "AH",
       "round": -3,
       "fullRoundText": "Losers Round 1",
       "topSlot": {
@@ -574,20 +503,7 @@
       }
     },
     {
-      "identifier": "AN",
-      "round": -3,
-      "fullRoundText": "Losers Round 1",
-      "topSlot": {
-        "prereqSetIdentifier": "?preview_3346598_-2_12",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "?preview_3346598_-2_13",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "AO",
+      "identifier": "AI",
       "round": -3,
       "fullRoundText": "Losers Round 1",
       "topSlot": {
@@ -600,11 +516,76 @@
       }
     },
     {
-      "identifier": "AP",
+      "identifier": "AJ",
       "round": -4,
       "fullRoundText": "Losers Round 2",
       "topSlot": {
-        "prereqSetIdentifier": "X",
+        "prereqSetIdentifier": "U",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "?preview_3346598_-3_0",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "AK",
+      "round": -4,
+      "fullRoundText": "Losers Round 2",
+      "topSlot": {
+        "prereqSetIdentifier": "T",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "AE",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "AL",
+      "round": -4,
+      "fullRoundText": "Losers Round 2",
+      "topSlot": {
+        "prereqSetIdentifier": "S",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "AF",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "AM",
+      "round": -4,
+      "fullRoundText": "Losers Round 2",
+      "topSlot": {
+        "prereqSetIdentifier": "R",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "AG",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "AN",
+      "round": -4,
+      "fullRoundText": "Losers Round 2",
+      "topSlot": {
+        "prereqSetIdentifier": "Q",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "?preview_3346598_-3_4",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "AO",
+      "round": -4,
+      "fullRoundText": "Losers Round 2",
+      "topSlot": {
+        "prereqSetIdentifier": "P",
         "prereqType": "set"
       },
       "bottomSlot": {
@@ -613,11 +594,24 @@
       }
     },
     {
+      "identifier": "AP",
+      "round": -4,
+      "fullRoundText": "Losers Round 2",
+      "topSlot": {
+        "prereqSetIdentifier": "O",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
+        "prereqSetIdentifier": "?preview_3346598_-3_6",
+        "prereqType": "set"
+      }
+    },
+    {
       "identifier": "AQ",
       "round": -4,
       "fullRoundText": "Losers Round 2",
       "topSlot": {
-        "prereqSetIdentifier": "W",
+        "prereqSetIdentifier": "N",
         "prereqType": "set"
       },
       "bottomSlot": {
@@ -627,23 +621,10 @@
     },
     {
       "identifier": "AR",
-      "round": -4,
-      "fullRoundText": "Losers Round 2",
+      "round": -5,
+      "fullRoundText": "Losers Round 3",
       "topSlot": {
-        "prereqSetIdentifier": "V",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
         "prereqSetIdentifier": "AJ",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "AS",
-      "round": -4,
-      "fullRoundText": "Losers Round 2",
-      "topSlot": {
-        "prereqSetIdentifier": "U",
         "prereqType": "set"
       },
       "bottomSlot": {
@@ -652,24 +633,11 @@
       }
     },
     {
-      "identifier": "AT",
-      "round": -4,
-      "fullRoundText": "Losers Round 2",
+      "identifier": "AS",
+      "round": -5,
+      "fullRoundText": "Losers Round 3",
       "topSlot": {
-        "prereqSetIdentifier": "T",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
         "prereqSetIdentifier": "AL",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "AU",
-      "round": -4,
-      "fullRoundText": "Losers Round 2",
-      "topSlot": {
-        "prereqSetIdentifier": "S",
         "prereqType": "set"
       },
       "bottomSlot": {
@@ -678,24 +646,11 @@
       }
     },
     {
-      "identifier": "AV",
-      "round": -4,
-      "fullRoundText": "Losers Round 2",
+      "identifier": "AT",
+      "round": -5,
+      "fullRoundText": "Losers Round 3",
       "topSlot": {
-        "prereqSetIdentifier": "R",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
         "prereqSetIdentifier": "AN",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "AW",
-      "round": -4,
-      "fullRoundText": "Losers Round 2",
-      "topSlot": {
-        "prereqSetIdentifier": "Q",
         "prereqType": "set"
       },
       "bottomSlot": {
@@ -704,7 +659,7 @@
       }
     },
     {
-      "identifier": "AX",
+      "identifier": "AU",
       "round": -5,
       "fullRoundText": "Losers Round 3",
       "topSlot": {
@@ -717,11 +672,24 @@
       }
     },
     {
-      "identifier": "AY",
-      "round": -5,
-      "fullRoundText": "Losers Round 3",
+      "identifier": "AV",
+      "round": -6,
+      "fullRoundText": "Losers Round 4",
       "topSlot": {
+        "prereqSetIdentifier": "W",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
         "prereqSetIdentifier": "AR",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "AW",
+      "round": -6,
+      "fullRoundText": "Losers Round 4",
+      "topSlot": {
+        "prereqSetIdentifier": "V",
         "prereqType": "set"
       },
       "bottomSlot": {
@@ -730,11 +698,24 @@
       }
     },
     {
-      "identifier": "AZ",
-      "round": -5,
-      "fullRoundText": "Losers Round 3",
+      "identifier": "AX",
+      "round": -6,
+      "fullRoundText": "Losers Round 4",
       "topSlot": {
+        "prereqSetIdentifier": "Y",
+        "prereqType": "set"
+      },
+      "bottomSlot": {
         "prereqSetIdentifier": "AT",
+        "prereqType": "set"
+      }
+    },
+    {
+      "identifier": "AY",
+      "round": -6,
+      "fullRoundText": "Losers Round 4",
+      "topSlot": {
+        "prereqSetIdentifier": "X",
         "prereqType": "set"
       },
       "bottomSlot": {
@@ -743,9 +724,9 @@
       }
     },
     {
-      "identifier": "BA",
-      "round": -5,
-      "fullRoundText": "Losers Round 3",
+      "identifier": "AZ",
+      "round": -7,
+      "fullRoundText": "Losers Round 5",
       "topSlot": {
         "prereqSetIdentifier": "AV",
         "prereqType": "set"
@@ -756,24 +737,11 @@
       }
     },
     {
-      "identifier": "BB",
-      "round": -6,
-      "fullRoundText": "Losers Round 4",
+      "identifier": "BA",
+      "round": -7,
+      "fullRoundText": "Losers Round 5",
       "topSlot": {
-        "prereqSetIdentifier": "Z",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
         "prereqSetIdentifier": "AX",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "BC",
-      "round": -6,
-      "fullRoundText": "Losers Round 4",
-      "topSlot": {
-        "prereqSetIdentifier": "Y",
         "prereqType": "set"
       },
       "bottomSlot": {
@@ -782,11 +750,11 @@
       }
     },
     {
-      "identifier": "BD",
-      "round": -6,
-      "fullRoundText": "Losers Round 4",
+      "identifier": "BB",
+      "round": -8,
+      "fullRoundText": "Losers Quarter-Final",
       "topSlot": {
-        "prereqSetIdentifier": "AB",
+        "prereqSetIdentifier": "AA",
         "prereqType": "set"
       },
       "bottomSlot": {
@@ -795,11 +763,11 @@
       }
     },
     {
-      "identifier": "BE",
-      "round": -6,
-      "fullRoundText": "Losers Round 4",
+      "identifier": "BC",
+      "round": -8,
+      "fullRoundText": "Losers Quarter-Final",
       "topSlot": {
-        "prereqSetIdentifier": "AA",
+        "prereqSetIdentifier": "Z",
         "prereqType": "set"
       },
       "bottomSlot": {
@@ -808,9 +776,9 @@
       }
     },
     {
-      "identifier": "BF",
-      "round": -7,
-      "fullRoundText": "Losers Round 5",
+      "identifier": "BD",
+      "round": -9,
+      "fullRoundText": "Losers Semi-Final",
       "topSlot": {
         "prereqSetIdentifier": "BB",
         "prereqType": "set"
@@ -821,67 +789,15 @@
       }
     },
     {
-      "identifier": "BG",
-      "round": -7,
-      "fullRoundText": "Losers Round 5",
-      "topSlot": {
-        "prereqSetIdentifier": "BD",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "BE",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "BH",
-      "round": -8,
-      "fullRoundText": "Losers Quarter-Final",
-      "topSlot": {
-        "prereqSetIdentifier": "AD",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "BF",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "BI",
-      "round": -8,
-      "fullRoundText": "Losers Quarter-Final",
-      "topSlot": {
-        "prereqSetIdentifier": "AC",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "BG",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "BJ",
-      "round": -9,
-      "fullRoundText": "Losers Semi-Final",
-      "topSlot": {
-        "prereqSetIdentifier": "BH",
-        "prereqType": "set"
-      },
-      "bottomSlot": {
-        "prereqSetIdentifier": "BI",
-        "prereqType": "set"
-      }
-    },
-    {
-      "identifier": "BK",
+      "identifier": "BE",
       "round": -10,
       "fullRoundText": "Losers Final",
       "topSlot": {
-        "prereqSetIdentifier": "AE",
+        "prereqSetIdentifier": "AB",
         "prereqType": "set"
       },
       "bottomSlot": {
-        "prereqSetIdentifier": "BJ",
+        "prereqSetIdentifier": "BD",
         "prereqType": "set"
       }
     }
