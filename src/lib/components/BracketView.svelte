@@ -83,15 +83,15 @@
 		const hasGFR = allMatches.some((m) => m.id.includes('-GFR-'));
 		const gfRound = hasGFR ? maxRound - 1 : maxRound;
 
-		const ordered: BracketMatch[] = [];
-		for (let r = 1; r < gfRound; r++) ordered.push(...(byRound.get(r) ?? []));
-		ordered.push(...(byRound.get(gfRound) ?? []));
-		if (hasGFR) ordered.push(...(byRound.get(maxRound) ?? []));
-		const losRounds = [...byRound.keys()].filter((r) => r < 0).sort((a, b) => Math.abs(a) - Math.abs(b));
-		for (const r of losRounds) ordered.push(...(byRound.get(r) ?? []));
-
 		const map = new Map<string, string>();
-		for (let i = 0; i < ordered.length; i++) map.set(ordered[i].id, toMatchLetter(i));
+		let idx = 0;
+		for (let r = 1; r < gfRound; r++) for (const m of byRound.get(r) ?? []) map.set(m.id, toMatchLetter(idx++));
+		for (const m of byRound.get(gfRound) ?? []) map.set(m.id, toMatchLetter(idx++));
+		// Always reserve a slot for GFR to match StartGG's convention
+		if (hasGFR) { for (const m of byRound.get(maxRound) ?? []) map.set(m.id, toMatchLetter(idx++)); }
+		else { idx++; }
+		const losRounds = [...byRound.keys()].filter((r) => r < 0).sort((a, b) => Math.abs(a) - Math.abs(b));
+		for (const r of losRounds) for (const m of byRound.get(r) ?? []) map.set(m.id, toMatchLetter(idx++));
 		return map;
 	});
 
@@ -120,10 +120,11 @@
 		return `${src.type === 'winner' ? 'W' : 'L'}. of ${letter}`;
 	}
 
-	const CARD_W = 192;
-	const CARD_H = 100;
-	const H_GAP = 40;
-	const BASE_SLOT_H = 120;
+	const CARD_W = 168;
+	const CARD_H = 52;
+	const H_GAP = 28;
+	const BASE_SLOT_H = 60;
+	const BADGE_SIZE = 20;
 
 	function getEntrant(id?: string): Entrant | undefined {
 		if (!id) return undefined;
@@ -284,24 +285,25 @@
 
 		const winnersH = Math.max(maxMatchesW * BASE_SLOT_H, CARD_H + 8);
 		const losersH = Math.max(maxMatchesL * BASE_SLOT_H, maxMatchesL > 0 ? CARD_H + 8 : 0);
-		const SECTION_GAP = losersH > 0 ? 48 : 0;
+		const SECTION_GAP = losersH > 0 ? 32 : 0;
 		const losersSectionY = winnersH + SECTION_GAP;
 
 		const posMap = new Map<string, { x: number; y: number }>();
+		const LEFT_PAD = BADGE_SIZE / 2 + 2;
 
 		for (let ri = 0; ri < winRounds.length; ri++) {
 			const round = winRounds[ri];
 			const ms = byRound.get(round)!;
 			const numM = ms.length;
 			const slotH = winnersH / numM;
-			const colX = ri * (CARD_W + H_GAP);
+			const colX = LEFT_PAD + ri * (CARD_W + H_GAP);
 			for (let mi = 0; mi < numM; mi++) {
 				posMap.set(ms[mi].id, { x: colX, y: mi * slotH + (slotH - CARD_H) / 2 });
 			}
 		}
 
 		const gfMs = byRound.get(gfRound);
-		const gfColX = winRounds.length * (CARD_W + H_GAP);
+		const gfColX = LEFT_PAD + winRounds.length * (CARD_W + H_GAP);
 		if (gfMs?.length) {
 			posMap.set(gfMs[0].id, { x: gfColX, y: (winnersH - CARD_H) / 2 });
 		}
@@ -318,7 +320,7 @@
 			const ms = byRound.get(round)!;
 			const numM = ms.length;
 			const slotH = losersH > 0 ? losersH / numM : BASE_SLOT_H;
-			const colX = ri * (CARD_W + H_GAP);
+			const colX = LEFT_PAD + ri * (CARD_W + H_GAP);
 			for (let mi = 0; mi < numM; mi++) {
 				posMap.set(ms[mi].id, { x: colX, y: losersSectionY + mi * slotH + (slotH - CARD_H) / 2 });
 			}
@@ -391,7 +393,7 @@
 		Show Projected
 	</label>
 </div>
-<div class="overflow-x-auto rounded-xl border border-border bg-background/60 p-5 cursor-grab active:cursor-grabbing"
+<div class="overflow-x-auto rounded-xl border border-border bg-background/60 p-3 cursor-grab active:cursor-grabbing"
 	role="region" aria-label="Bracket"
 	onmousedown={(e) => {
 		const el = e.currentTarget;
@@ -406,9 +408,9 @@
 		window.addEventListener('mouseup', onUp);
 	}}>
 	<!-- Winners round labels -->
-	<div class="relative" style="width: {layout.width}px; height: 20px; margin-bottom: 4px">
+	<div class="relative" style="width: {layout.width}px; height: 16px; margin-bottom: 2px">
 		{#each winnersRoundLabels as [x, match]}
-			<div class="absolute text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate" style="left: {x}px; width: {CARD_W}px">
+			<div class="absolute text-[9px] font-semibold text-muted-foreground uppercase tracking-wider truncate" style="left: {x}px; width: {CARD_W}px">
 				{getRoundName(match.round, match.id.includes('-GFR-'))}
 			</div>
 		{/each}
@@ -417,8 +419,8 @@
 		<!-- Losers round labels (inside bracket at losers section y) -->
 		{#if losersRoundLabels.length > 0 && losersSectionY < Infinity}
 			{#each losersRoundLabels as [x, match]}
-				<div class="absolute text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate pointer-events-none"
-					style="left: {x}px; top: {losersSectionY - 20}px; width: {CARD_W}px">
+				<div class="absolute text-[9px] font-semibold text-muted-foreground uppercase tracking-wider truncate pointer-events-none"
+					style="left: {x}px; top: {losersSectionY - 16}px; width: {CARD_W}px">
 					{getRoundName(match.round, false)}
 				</div>
 			{/each}
@@ -448,28 +450,37 @@
 			{@const waveInfo = waveMap?.get(match.id)}
 			{@const letter = matchLetterMap.get(match.id) ?? ''}
 
-			<div class="absolute rounded-lg border border-border bg-card match-card {editingSlot?.matchId === match.id ? '' : 'overflow-hidden'} {called ? 'msv-pulse accent-glow-called' : ''} {ready ? 'match-card-interactive' : ''}"
+			<!-- Letter badge -->
+			{#if letter}
+				<div class="absolute rounded-full bg-zinc-700 dark:bg-zinc-600 flex items-center justify-center text-white font-bold pointer-events-none"
+					style="left: {x - BADGE_SIZE / 2 - 1}px; top: {y}px; width: {BADGE_SIZE}px; height: {BADGE_SIZE}px; font-size: {letter.length > 1 ? '7px' : '9px'}; z-index: 10;">
+					{letter}
+				</div>
+			{/if}
+
+			<div class="absolute rounded border border-border bg-card match-card {editingSlot?.matchId === match.id ? '' : 'overflow-hidden'} {called ? 'msv-pulse accent-glow-called' : ''} {ready ? 'match-card-interactive' : ''}"
 				style="left: {x}px; top: {y}px; width: {CARD_W}px; border-left: 3px solid {accent}; {waveInfo && !match.winnerId ? `background: ${waveInfo.color}` : ''}{editingSlot?.matchId === match.id ? '; z-index: 60;' : ''}"
 			>
 
 				<!-- Top player -->
-				<div class="flex items-center gap-1.5 px-2 py-1.5 border-b border-border/50
+				<div class="flex items-center gap-1 px-1.5 border-b border-border/50
 					{match.winnerId === match.topPlayerId ? 'bg-bracket-winner-bg' :
-					 match.winnerId && match.topPlayerId ? 'opacity-40' : ''}">
-					<span class="text-[10px] font-mono text-muted-foreground w-5 text-right shrink-0 tabular-nums">
-						{top ? top.initialSeed : letter}
+					 match.winnerId && match.topPlayerId ? 'opacity-40' : ''}"
+					style="height: {CARD_H / 2}px;">
+					<span class="text-[9px] font-mono text-muted-foreground w-4 text-right shrink-0 tabular-nums">
+						{top ? top.initialSeed : ''}
 					</span>
 					{#if !match.winnerId && onPlacePlayer && editingSlot?.matchId === match.id && editingSlot?.slot === 'top'}
 						<div class="flex-1 relative">
 							<input type="text" bind:value={editSearch} placeholder="Search..."
-								class="w-full rounded border border-input bg-secondary px-1 py-0.5 text-xs text-foreground"
+								class="w-full rounded border border-input bg-secondary px-1 py-0.5 text-[10px] text-foreground"
 								autofocus
 								onkeydown={(e) => { if (e.key === 'Escape') editingSlot = null; }}
 							/>
-							<div class="absolute left-0 top-full z-50 mt-0.5 w-44 max-h-40 overflow-y-auto rounded border border-border bg-card shadow-lg">
+							<div class="absolute left-0 top-full z-50 mt-0.5 w-40 max-h-36 overflow-y-auto rounded border border-border bg-card shadow-lg">
 								{#each editFilteredEntrants as e}
 									<button onclick={() => pickPlayer(e.id)}
-										class="block w-full text-left px-2 py-1 text-xs text-foreground hover:bg-accent truncate">
+										class="block w-full text-left px-2 py-0.5 text-[10px] text-foreground hover:bg-accent truncate">
 										{e.gamerTag}
 									</button>
 								{/each}
@@ -478,40 +489,41 @@
 					{:else}
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<span class="flex-1 truncate text-sm {topIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.topPlayerId ? 'text-bracket-winner font-semibold' : !top && !match.topPlayerId ? 'text-muted-foreground italic' : 'text-foreground font-medium'} {!match.winnerId && onPlacePlayer ? 'cursor-pointer hover:underline' : ''}"
+						<span class="flex-1 truncate text-xs {topIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.topPlayerId ? 'text-bracket-winner font-semibold' : !top && !match.topPlayerId ? 'text-muted-foreground italic text-[10px]' : 'text-foreground font-medium'} {!match.winnerId && onPlacePlayer ? 'cursor-pointer hover:underline' : ''}"
 							onclick={() => { if (!match.winnerId && onPlacePlayer) startEdit(match.id, 'top'); }}>
 							{top?.gamerTag ?? (match.topPlayerId ? '?' : slotLabel(match.id, 'top'))}
 						</span>
 					{/if}
 					{#if match.topScore !== undefined}
-						<span class="text-xs font-mono tabular-nums {match.winnerId === match.topPlayerId ? 'text-bracket-winner font-bold' : 'text-muted-foreground'} shrink-0">
+						<span class="text-[10px] font-mono tabular-nums {match.winnerId === match.topPlayerId ? 'text-bracket-winner font-bold' : 'text-muted-foreground'} shrink-0">
 							{match.topScore}
 						</span>
 					{/if}
 					{#if waveInfo && !match.winnerId}
-						<span class="shrink-0 rounded-full w-4 h-4 flex items-center justify-center text-[8px] font-bold text-white"
+						<span class="shrink-0 rounded-full w-3.5 h-3.5 flex items-center justify-center text-[7px] font-bold text-white"
 							style="background: {waveInfo.badgeColor}">{waveInfo.wave}</span>
 					{/if}
 				</div>
 
 				<!-- Bottom player -->
-				<div class="flex items-center gap-1.5 px-2 py-1.5
+				<div class="flex items-center gap-1 px-1.5
 					{match.winnerId === match.bottomPlayerId ? 'bg-bracket-winner-bg' :
-					 match.winnerId && match.bottomPlayerId ? 'opacity-40' : ''}">
-					<span class="text-[10px] font-mono text-muted-foreground w-5 text-right shrink-0 tabular-nums">
+					 match.winnerId && match.bottomPlayerId ? 'opacity-40' : ''}"
+					style="height: {CARD_H / 2}px;">
+					<span class="text-[9px] font-mono text-muted-foreground w-4 text-right shrink-0 tabular-nums">
 						{bot ? bot.initialSeed : ''}
 					</span>
 					{#if !match.winnerId && onPlacePlayer && editingSlot?.matchId === match.id && editingSlot?.slot === 'bottom'}
 						<div class="flex-1 relative">
 							<input type="text" bind:value={editSearch} placeholder="Search..."
-								class="w-full rounded border border-input bg-secondary px-1 py-0.5 text-xs text-foreground"
+								class="w-full rounded border border-input bg-secondary px-1 py-0.5 text-[10px] text-foreground"
 								autofocus
 								onkeydown={(e) => { if (e.key === 'Escape') editingSlot = null; }}
 							/>
-							<div class="absolute left-0 top-full z-50 mt-0.5 w-44 max-h-40 overflow-y-auto rounded border border-border bg-card shadow-lg">
+							<div class="absolute left-0 top-full z-50 mt-0.5 w-40 max-h-36 overflow-y-auto rounded border border-border bg-card shadow-lg">
 								{#each editFilteredEntrants as e}
 									<button onclick={() => pickPlayer(e.id)}
-										class="block w-full text-left px-2 py-1 text-xs text-foreground hover:bg-accent truncate">
+										class="block w-full text-left px-2 py-0.5 text-[10px] text-foreground hover:bg-accent truncate">
 											{e.gamerTag}
 									</button>
 								{/each}
@@ -520,54 +532,47 @@
 					{:else}
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<span class="flex-1 truncate text-sm {botIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.bottomPlayerId ? 'text-bracket-winner font-semibold' : !bot && !match.bottomPlayerId ? 'text-muted-foreground italic' : 'text-foreground font-medium'} {!match.winnerId && onPlacePlayer ? 'cursor-pointer hover:underline' : ''}"
+						<span class="flex-1 truncate text-xs {botIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.bottomPlayerId ? 'text-bracket-winner font-semibold' : !bot && !match.bottomPlayerId ? 'text-muted-foreground italic text-[10px]' : 'text-foreground font-medium'} {!match.winnerId && onPlacePlayer ? 'cursor-pointer hover:underline' : ''}"
 							onclick={() => { if (!match.winnerId && onPlacePlayer) startEdit(match.id, 'bottom'); }}>
 							{bot?.gamerTag ?? (match.bottomPlayerId ? '?' : slotLabel(match.id, 'bottom'))}
 						</span>
 					{/if}
 					{#if match.bottomScore !== undefined}
-						<span class="text-xs font-mono tabular-nums {match.winnerId === match.bottomPlayerId ? 'text-bracket-winner font-bold' : 'text-muted-foreground'} shrink-0">
+						<span class="text-[10px] font-mono tabular-nums {match.winnerId === match.bottomPlayerId ? 'text-bracket-winner font-bold' : 'text-muted-foreground'} shrink-0">
 							{match.bottomScore}
 						</span>
 					{/if}
 				</div>
 
-				<!-- Characters (if reported) -->
-				{#if match.winnerId && (match.topCharacters?.length || match.bottomCharacters?.length)}
-					<div class="px-2 py-1 text-xs text-muted-foreground border-t border-border/50 leading-relaxed">
-						{#if match.topCharacters?.length}<span class="text-muted-foreground">{top?.gamerTag}:</span> {match.topCharacters.join(', ')}{/if}{#if match.topCharacters?.length && match.bottomCharacters?.length} · {/if}{#if match.bottomCharacters?.length}<span class="text-muted-foreground">{bot?.gamerTag}:</span> {match.bottomCharacters.join(', ')}{/if}
-					</div>
-				{/if}
-
-				<!-- Footer: station + action buttons -->
+				<!-- Footer: station + action buttons (compact) -->
 				{#if ready || match.winnerId}
-					<div class="flex items-center justify-between px-2 py-1 border-t border-border/50 bg-muted/20">
-						<div class="flex items-center gap-1.5 min-w-0 overflow-hidden">
+					<div class="flex items-center justify-between px-1.5 py-0.5 border-t border-border/50 bg-muted/20">
+						<div class="flex items-center gap-1 min-w-0 overflow-hidden">
 							{#if match.station !== undefined}
 								{#if match.isStream}
 									<a href="https://twitch.tv/microspacing" target="_blank"
-										class="text-xs text-primary hover:text-primary/80 shrink-0">STREAM ↗</a>
+										class="text-[10px] text-primary hover:text-primary/80 shrink-0">STREAM</a>
 								{:else}
-									<span class="text-xs text-muted-foreground shrink-0">Stn {match.station}</span>
+									<span class="text-[10px] text-muted-foreground shrink-0">Stn {match.station}</span>
 								{/if}
 							{:else if ready}
-								<span class="text-xs text-warning shrink-0">Waiting</span>
+								<span class="text-[10px] text-warning shrink-0">Waiting</span>
 							{/if}
 						</div>
-						<div class="flex items-center gap-1 shrink-0">
+						<div class="flex items-center gap-0.5 shrink-0">
 							{#if onCall && ready}
 								<button onclick={() => onCall!(match)}
-									class="rounded px-2 py-0.5 text-xs font-medium transition-colors
+									class="rounded px-1.5 py-px text-[10px] font-medium transition-colors
 										{called ? 'bg-amber-900/30 text-amber-400 hover:bg-amber-900/50' : 'border border-border text-muted-foreground hover:text-amber-400 hover:border-amber-600'}">
 									{#if called && match.calledAt}{elapsed(match.calledAt)}{:else}{called ? 'Called' : 'Call'}{/if}
 								</button>
 							{/if}
 							{#if onStream && ready}
 								<button onclick={() => onStream!(match)}
-									class="rounded px-1.5 py-0.5 text-xs transition-colors inline-flex items-center
+									class="rounded px-1 py-px text-[10px] transition-colors inline-flex items-center
 										{match.isStream ? 'text-primary bg-primary/10 hover:bg-red-900/20 hover:text-red-400' : 'text-muted-foreground hover:text-primary hover:bg-primary/10'}"
 									title={match.isStream ? 'Remove from stream' : 'Set as stream match'}>
-									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 										<rect x="2" y="3" width="20" height="14" rx="2" />
 										<path d="M8 21h8" /><path d="M12 17v4" />
 									</svg>
@@ -576,12 +581,12 @@
 							{#if onReport}
 								{#if ready}
 									<button onclick={() => onReport!(match)}
-										class="rounded bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:bg-primary/90">
+										class="rounded bg-primary px-1.5 py-px text-[10px] font-medium text-primary-foreground hover:bg-primary/90">
 										Report
 									</button>
 								{:else if match.winnerId && match.topPlayerId && match.bottomPlayerId && canFix(match)}
 									<button onclick={() => onReport!(match)}
-										class="rounded border border-yellow-700/50 px-2 py-0.5 text-xs text-yellow-500 hover:bg-yellow-900/20">
+										class="rounded border border-yellow-700/50 px-1.5 py-px text-[10px] text-yellow-500 hover:bg-yellow-900/20">
 										Fix
 									</button>
 								{/if}
