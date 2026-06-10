@@ -973,7 +973,7 @@
 					{:else if tournamentMode === 'experimental1'}
 						<span class="self-end pb-2 text-xs text-muted-foreground">3 rounds</span>
 					{/if}
-					{#if !quickPreview}
+					{#if !quickPreview && tournamentMode !== 'default' && tournamentMode !== 'experimental1'}
 						<button onclick={previewFromEvent} disabled={loadingPreview || !eventUrl.trim()}
 							class="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50">
 							{loadingPreview ? 'Loading...' : 'Preview Seeding'}
