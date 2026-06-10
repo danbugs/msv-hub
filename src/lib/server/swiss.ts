@@ -1020,10 +1020,11 @@ export function generateBracket(
 				if (w1b) { w1b.loserNextMatchId = roundMatches[i].id; w1b.loserNextSlot = 'bottom'; }
 			}
 		} else if (lRound % 2 === 0) {
-			// Even losers round: L(prev) survivors → top; W losers → bottom.
+			// Even losers round: W losers drop in → top; L(prev) survivors → bottom.
 			// Drop number alternates the avoidance pattern:
 			//   Odd drops (1st, 3rd, 5th):  full reversal
-			//   Even drops (2nd, 4th, 6th): identity (same order)
+			//   Even drops (2nd, 4th, 6th): XOR 1 (swap adjacent pairs) for 4+,
+			//                                identity for ≤2 (XOR 1 degenerates to reversal)
 			const dropNumber = lRound / 2;
 			const isOddDrop = dropNumber % 2 === 1;
 			const dropWinnersRound = dropNumber + 1;
@@ -1031,17 +1032,19 @@ export function generateBracket(
 			const dropCount = winnersDropMatches.length;
 			for (let i = 0; i < numMatches; i++) {
 				const prev = losersPrevMatches[i];
-				if (prev) { prev.winnerNextMatchId = roundMatches[i].id; prev.winnerNextSlot = 'top'; }
+				if (prev) { prev.winnerNextMatchId = roundMatches[i].id; prev.winnerNextSlot = 'bottom'; }
 				let wdIdx: number;
 				if (dropCount <= 1) {
 					wdIdx = 0;
 				} else if (isOddDrop) {
 					wdIdx = dropCount - 1 - i;
-				} else {
+				} else if (dropCount <= 2) {
 					wdIdx = i;
+				} else {
+					wdIdx = i ^ 1;
 				}
 				const wd = winnersDropMatches[wdIdx];
-				if (wd) { wd.loserNextMatchId = roundMatches[i].id; wd.loserNextSlot = 'bottom'; }
+				if (wd) { wd.loserNextMatchId = roundMatches[i].id; wd.loserNextSlot = 'top'; }
 			}
 		} else {
 			// Odd ≥ 3: pair up L(prev) survivors

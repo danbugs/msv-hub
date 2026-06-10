@@ -311,14 +311,14 @@ describe('generateBracket', () => {
 			.sort((a, b) => a.matchIndex - b.matchIndex);
 		expect(wr3.length).toBe(4);
 
-		// LR4 is the 2nd drop-in (even) so uses identity (same order):
-		// WR3 losers [0,1,2,3] → LR4 bottom slots [0,1,2,3]
+		// LR4 is the 2nd drop-in (even, 4 items) so uses XOR 1 (swap adjacent pairs):
+		// WR3 losers [0,1,2,3] → LR4 top slots [1,0,3,2]
 		const wr3Losers = wr3.map((m) =>
 			m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId
 		);
-		const expectedOrder = wr3Losers;
+		const expectedOrder = wr3Losers.map((_, i) => wr3Losers[i ^ 1]);
 		for (let i = 0; i < expectedOrder.length; i++) {
-			expect(lr4[i].bottomPlayerId).toBe(expectedOrder[i]);
+			expect(lr4[i].topPlayerId).toBe(expectedOrder[i]);
 		}
 
 		// No player appears in multiple LR4 matches
@@ -427,10 +427,12 @@ describe('generateBracket', () => {
 		for (let i = 0; i < 8; i++) {
 			const expectedWR2Idx = 7 - i; // full reversal
 			expect(wr2[expectedWR2Idx].loserNextMatchId).toBe(lr2[i].id);
+			expect(wr2[expectedWR2Idx].loserNextSlot).toBe('top');
 		}
-		// LR1 winners → LR2 top
+		// LR1 winners → LR2 bottom
 		for (let i = 0; i < 8; i++) {
 			expect(lr1[i].winnerNextMatchId).toBe(lr2[i].id);
+			expect(lr1[i].winnerNextSlot).toBe('bottom');
 		}
 
 		// ── LR3: LR2 winners pair up ──
@@ -439,16 +441,18 @@ describe('generateBracket', () => {
 			expect(lr2[i * 2 + 1].winnerNextMatchId).toBe(lr3[i].id);
 		}
 
-		// ── LR4 drop-in (Drop 2 — even — identity) ──
-		// BB gets loser of Y (WQF[0]), BC gets loser of Z (WQF[1]),
-		// BD gets loser of AA (WQF[2]), BE gets loser of AB (WQF[3])
-		const expectedLR4DropMap = [0, 1, 2, 3]; // identity
+		// ── LR4 drop-in (Drop 2 — even, 4 items — XOR 1) ──
+		// BB gets loser of Z (WQF[1]), BC gets loser of Y (WQF[0]),
+		// BD gets loser of AB (WQF[3]), BE gets loser of AA (WQF[2])
+		const expectedLR4DropMap = [1, 0, 3, 2]; // XOR 1
 		for (let i = 0; i < 4; i++) {
 			expect(wqf[expectedLR4DropMap[i]].loserNextMatchId).toBe(lr4[i].id);
+			expect(wqf[expectedLR4DropMap[i]].loserNextSlot).toBe('top');
 		}
-		// LR3 winners → LR4
+		// LR3 winners → LR4 bottom
 		for (let i = 0; i < 4; i++) {
 			expect(lr3[i].winnerNextMatchId).toBe(lr4[i].id);
+			expect(lr3[i].winnerNextSlot).toBe('bottom');
 		}
 
 		// ── LR5: LR4 winners pair up ──
@@ -460,10 +464,13 @@ describe('generateBracket', () => {
 		// ── LR6/LQF drop-in (Drop 3 — odd — full reversal) ──
 		// BH gets loser of AD (WSF[1]), BI gets loser of AC (WSF[0])
 		expect(wsf[1].loserNextMatchId).toBe(lr6[0].id); // AD → BH
+		expect(wsf[1].loserNextSlot).toBe('top');
 		expect(wsf[0].loserNextMatchId).toBe(lr6[1].id); // AC → BI
-		// LR5 winners → LQF
+		expect(wsf[0].loserNextSlot).toBe('top');
+		// LR5 winners → LQF bottom
 		for (let i = 0; i < 2; i++) {
 			expect(lr5[i].winnerNextMatchId).toBe(lr6[i].id);
+			expect(lr5[i].winnerNextSlot).toBe('bottom');
 		}
 
 		// ── LR7/LSF: LQF winners pair up ──
