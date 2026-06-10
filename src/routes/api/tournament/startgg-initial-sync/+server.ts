@@ -357,11 +357,13 @@ async function _doInitialSync(tournament: Awaited<ReturnType<typeof getActiveTou
 		}
 	}
 
-	// Mark split as confirmed so match reports go through immediately (not queued)
+	// Default mode needs a separate bracket split later (Swiss → Main/Redemption),
+	// so only confirm split for modes where players are already in the bracket event.
+	const confirmNow = tournament.mode === 'gauntlet' || tournament.mode === 'experimental1';
 	if (!tournament.startggSync) {
-		tournament.startggSync = { splitConfirmed: true, pendingBracketMatchIds: [], errors: [] };
+		tournament.startggSync = { splitConfirmed: confirmNow, pendingBracketMatchIds: [], errors: [] };
 	} else {
-		tournament.startggSync.splitConfirmed = true;
+		tournament.startggSync.splitConfirmed = confirmNow;
 	}
 
 	await saveTournament(tournament);
