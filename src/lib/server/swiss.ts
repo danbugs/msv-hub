@@ -1023,7 +1023,7 @@ export function generateBracket(
 			// Even losers round: L(prev) survivors → top; W losers → bottom.
 			// Drop number alternates the avoidance pattern:
 			//   Odd drops (1st, 3rd, 5th):  full reversal
-			//   Even drops (2nd, 4th, 6th): swap adjacent pairs (XOR 1)
+			//   Even drops (2nd, 4th, 6th): identity (same order)
 			const dropNumber = lRound / 2;
 			const isOddDrop = dropNumber % 2 === 1;
 			const dropWinnersRound = dropNumber + 1;
@@ -1038,7 +1038,7 @@ export function generateBracket(
 				} else if (isOddDrop) {
 					wdIdx = dropCount - 1 - i;
 				} else {
-					wdIdx = i ^ 1;
+					wdIdx = i;
 				}
 				const wd = winnersDropMatches[wdIdx];
 				if (wd) { wd.loserNextMatchId = roundMatches[i].id; wd.loserNextSlot = 'bottom'; }

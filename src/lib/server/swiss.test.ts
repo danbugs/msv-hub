@@ -311,12 +311,12 @@ describe('generateBracket', () => {
 			.sort((a, b) => a.matchIndex - b.matchIndex);
 		expect(wr3.length).toBe(4);
 
-		// LR4 is the 2nd drop-in (even) so uses XOR 1 (swap adjacent pairs):
-		// WR3 losers [0,1,2,3] → LR4 bottom slots [1,0,3,2]
+		// LR4 is the 2nd drop-in (even) so uses identity (same order):
+		// WR3 losers [0,1,2,3] → LR4 bottom slots [0,1,2,3]
 		const wr3Losers = wr3.map((m) =>
 			m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId
 		);
-		const expectedOrder = wr3Losers.map((_, i) => wr3Losers[i ^ 1]);
+		const expectedOrder = wr3Losers;
 		for (let i = 0; i < expectedOrder.length; i++) {
 			expect(lr4[i].bottomPlayerId).toBe(expectedOrder[i]);
 		}
@@ -439,10 +439,10 @@ describe('generateBracket', () => {
 			expect(lr2[i * 2 + 1].winnerNextMatchId).toBe(lr3[i].id);
 		}
 
-		// ── LR4 drop-in (Drop 2 — even — XOR 1) ──
-		// BB gets loser of Z (WQF[1]), BC gets loser of Y (WQF[0]),
-		// BD gets loser of AB (WQF[3]), BE gets loser of AA (WQF[2])
-		const expectedLR4DropMap = [1, 0, 3, 2]; // XOR 1
+		// ── LR4 drop-in (Drop 2 — even — identity) ──
+		// BB gets loser of Y (WQF[0]), BC gets loser of Z (WQF[1]),
+		// BD gets loser of AA (WQF[2]), BE gets loser of AB (WQF[3])
+		const expectedLR4DropMap = [0, 1, 2, 3]; // identity
 		for (let i = 0; i < 4; i++) {
 			expect(wqf[expectedLR4DropMap[i]].loserNextMatchId).toBe(lr4[i].id);
 		}
