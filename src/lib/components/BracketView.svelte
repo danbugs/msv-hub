@@ -60,6 +60,66 @@
 		return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 	}
 
+	function toMatchLetter(n: number): string {
+		let result = '';
+		let idx = n;
+		do {
+			result = String.fromCharCode(65 + (idx % 26)) + result;
+			idx = Math.floor(idx / 26) - 1;
+		} while (idx >= 0);
+		return result;
+	}
+
+	const matchLetterMap = $derived.by(() => {
+		const allMatches = bracket.matches;
+		const byRound = new Map<number, BracketMatch[]>();
+		for (const m of allMatches) {
+			if (!byRound.has(m.round)) byRound.set(m.round, []);
+			byRound.get(m.round)!.push(m);
+		}
+		for (const ms of byRound.values()) ms.sort((a, b) => a.matchIndex - b.matchIndex);
+
+		const maxRound = Math.max(...allMatches.map((m) => m.round));
+		const hasGFR = allMatches.some((m) => m.id.includes('-GFR-'));
+		const gfRound = hasGFR ? maxRound - 1 : maxRound;
+
+		const ordered: BracketMatch[] = [];
+		for (let r = 1; r < gfRound; r++) ordered.push(...(byRound.get(r) ?? []));
+		ordered.push(...(byRound.get(gfRound) ?? []));
+		if (hasGFR) ordered.push(...(byRound.get(maxRound) ?? []));
+		const losRounds = [...byRound.keys()].filter((r) => r < 0).sort((a, b) => Math.abs(a) - Math.abs(b));
+		for (const r of losRounds) ordered.push(...(byRound.get(r) ?? []));
+
+		const map = new Map<string, string>();
+		for (let i = 0; i < ordered.length; i++) map.set(ordered[i].id, toMatchLetter(i));
+		return map;
+	});
+
+	const slotSourceMap = $derived.by(() => {
+		const map = new Map<string, { top?: { matchId: string; type: 'winner' | 'loser' }; bottom?: { matchId: string; type: 'winner' | 'loser' } }>();
+		for (const m of bracket.matches) {
+			if (m.winnerNextMatchId && m.winnerNextSlot) {
+				const entry = map.get(m.winnerNextMatchId) ?? {};
+				entry[m.winnerNextSlot] = { matchId: m.id, type: 'winner' };
+				map.set(m.winnerNextMatchId, entry);
+			}
+			if (m.loserNextMatchId && m.loserNextSlot) {
+				const entry = map.get(m.loserNextMatchId) ?? {};
+				entry[m.loserNextSlot] = { matchId: m.id, type: 'loser' };
+				map.set(m.loserNextMatchId, entry);
+			}
+		}
+		return map;
+	});
+
+	function slotLabel(matchId: string, slot: 'top' | 'bottom'): string {
+		const src = slotSourceMap.get(matchId)?.[slot];
+		if (!src) return '—';
+		const letter = matchLetterMap.get(src.matchId);
+		if (!letter) return '—';
+		return `${src.type === 'winner' ? 'W' : 'L'}. of ${letter}`;
+	}
+
 	const CARD_W = 192;
 	const CARD_H = 100;
 	const H_GAP = 40;
@@ -386,6 +446,7 @@
 			{@const called = ready && !!match.calledAt}
 			{@const accent = called ? 'var(--accent-called)' : match.isStream && ready ? 'var(--accent-stream)' : ready ? 'var(--accent-ready)' : match.winnerId ? 'var(--accent-completed)' : 'var(--accent-waiting)'}
 			{@const waveInfo = waveMap?.get(match.id)}
+			{@const letter = matchLetterMap.get(match.id) ?? ''}
 
 			<div class="absolute rounded-lg border border-border bg-card match-card {editingSlot?.matchId === match.id ? '' : 'overflow-hidden'} {called ? 'msv-pulse accent-glow-called' : ''} {ready ? 'match-card-interactive' : ''}"
 				style="left: {x}px; top: {y}px; width: {CARD_W}px; border-left: 3px solid {accent}; {waveInfo && !match.winnerId ? `background: ${waveInfo.color}` : ''}{editingSlot?.matchId === match.id ? '; z-index: 60;' : ''}"
@@ -396,7 +457,7 @@
 					{match.winnerId === match.topPlayerId ? 'bg-bracket-winner-bg' :
 					 match.winnerId && match.topPlayerId ? 'opacity-40' : ''}">
 					<span class="text-[10px] font-mono text-muted-foreground w-5 text-right shrink-0 tabular-nums">
-						{top ? top.initialSeed : ''}
+						{top ? top.initialSeed : letter}
 					</span>
 					{#if !match.winnerId && onPlacePlayer && editingSlot?.matchId === match.id && editingSlot?.slot === 'top'}
 						<div class="flex-1 relative">
@@ -417,9 +478,9 @@
 					{:else}
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<span class="flex-1 truncate text-sm {topIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.topPlayerId ? 'text-bracket-winner font-semibold' : 'text-foreground font-medium'} {!match.winnerId && onPlacePlayer ? 'cursor-pointer hover:underline' : ''}"
+						<span class="flex-1 truncate text-sm {topIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.topPlayerId ? 'text-bracket-winner font-semibold' : !top && !match.topPlayerId ? 'text-muted-foreground italic' : 'text-foreground font-medium'} {!match.winnerId && onPlacePlayer ? 'cursor-pointer hover:underline' : ''}"
 							onclick={() => { if (!match.winnerId && onPlacePlayer) startEdit(match.id, 'top'); }}>
-							{top?.gamerTag ?? (match.topPlayerId ? '?' : '—')}
+							{top?.gamerTag ?? (match.topPlayerId ? '?' : slotLabel(match.id, 'top'))}
 						</span>
 					{/if}
 					{#if match.topScore !== undefined}
@@ -459,9 +520,9 @@
 					{:else}
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<span class="flex-1 truncate text-sm {botIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.bottomPlayerId ? 'text-bracket-winner font-semibold' : 'text-foreground font-medium'} {!match.winnerId && onPlacePlayer ? 'cursor-pointer hover:underline' : ''}"
+						<span class="flex-1 truncate text-sm {botIsProjected ? 'text-bracket-projected italic' : match.winnerId === match.bottomPlayerId ? 'text-bracket-winner font-semibold' : !bot && !match.bottomPlayerId ? 'text-muted-foreground italic' : 'text-foreground font-medium'} {!match.winnerId && onPlacePlayer ? 'cursor-pointer hover:underline' : ''}"
 							onclick={() => { if (!match.winnerId && onPlacePlayer) startEdit(match.id, 'bottom'); }}>
-							{bot?.gamerTag ?? (match.bottomPlayerId ? '?' : '—')}
+							{bot?.gamerTag ?? (match.bottomPlayerId ? '?' : slotLabel(match.id, 'bottom'))}
 						</span>
 					{/if}
 					{#if match.bottomScore !== undefined}
