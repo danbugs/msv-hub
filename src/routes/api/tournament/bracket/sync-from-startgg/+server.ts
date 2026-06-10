@@ -213,8 +213,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		if (!ds) return {};
 		const parts = ds.split(' - ');
 		if (parts.length !== 2) return {};
-		const s1 = Number(parts[0].replace(/[^0-9]/g, ''));
-		const s2 = Number(parts[1].replace(/[^0-9]/g, ''));
+		// Extract the trailing number from each part (tag may contain digits, e.g. "13Test 2")
+		const m1 = parts[0].trim().match(/\s(\d+)$/);
+		const m2 = parts[1].trim().match(/\s(\d+)$/);
+		if (!m1 || !m2) return {};
+		const s1 = Number(m1[1]);
+		const s2 = Number(m2[1]);
 		if (isNaN(s1) || isNaN(s2)) return {};
 		if (msvE1Id === topId) return { topScore: s1, bottomScore: s2 };
 		return { topScore: s2, bottomScore: s1 };
