@@ -549,6 +549,116 @@ describe('generateBracket', () => {
 			}
 		}
 	});
+
+	it('32-player bracket topology matches StartGG reference fixture', () => {
+		const fixture = require('./test-fixtures/startgg-bracket-32p.json');
+
+		const entrants32: Entrant[] = Array.from({ length: 32 }, (_, i) => ({
+			id: `p-${i + 1}`, gamerTag: `${i + 1}Test`, initialSeed: i + 1
+		}));
+		const standings32 = entrants32.map((e) => ({
+			rank: e.initialSeed, entrantId: e.id, gamerTag: e.gamerTag,
+			wins: 0, losses: 0, initialSeed: e.initialSeed, totalScore: 0,
+			basePoints: 0, winPoints: 0, lossPoints: 0, cinderellaBonus: 0,
+			expectedWins: 0, winsAboveExpected: 0, bracket: 'main' as const
+		}));
+		const players32 = entrants32.map((e) => ({ entrantId: e.id, seed: e.initialSeed }));
+		const bracket = generateBracket('main', players32, standings32);
+
+		// Build letter map (same logic as BracketView.svelte)
+		function toMatchLetter(n: number): string {
+			let result = ''; let idx = n;
+			do { result = String.fromCharCode(65 + (idx % 26)) + result; idx = Math.floor(idx / 26) - 1; } while (idx >= 0);
+			return result;
+		}
+		const byRound = new Map<number, typeof bracket.matches>();
+		for (const m of bracket.matches) {
+			if (!byRound.has(m.round)) byRound.set(m.round, []);
+			byRound.get(m.round)!.push(m);
+		}
+		for (const ms of byRound.values()) ms.sort((a, b) => a.matchIndex - b.matchIndex);
+		const maxRound = Math.max(...bracket.matches.map((m) => m.round));
+		const hasGFR = bracket.matches.some((m) => m.id.includes('-GFR-'));
+		const gfRound = hasGFR ? maxRound - 1 : maxRound;
+		const letterToMatch = new Map<string, (typeof bracket.matches)[0]>();
+		const matchToLetter = new Map<string, string>();
+		let idx = 0;
+		for (let r = 1; r < gfRound; r++) for (const m of byRound.get(r) ?? []) { const l = toMatchLetter(idx++); letterToMatch.set(l, m); matchToLetter.set(m.id, l); }
+		for (const m of byRound.get(gfRound) ?? []) { const l = toMatchLetter(idx++); letterToMatch.set(l, m); matchToLetter.set(m.id, l); }
+		if (hasGFR) { for (const m of byRound.get(maxRound) ?? []) { const l = toMatchLetter(idx++); letterToMatch.set(l, m); matchToLetter.set(m.id, l); } }
+		else { idx++; }
+		const losRounds = [...byRound.keys()].filter((r) => r < 0).sort((a, b) => Math.abs(a) - Math.abs(b));
+		for (const r of losRounds) for (const m of byRound.get(r) ?? []) { const l = toMatchLetter(idx++); letterToMatch.set(l, m); matchToLetter.set(m.id, l); }
+
+		// Build reverse prereq map: for each match, what feeds into its top and bottom slots
+		const slotSource = new Map<string, { top?: { letter: string; type: 'winner' | 'loser' }; bottom?: { letter: string; type: 'winner' | 'loser' } }>();
+		for (const m of bracket.matches) {
+			const mLetter = matchToLetter.get(m.id);
+			if (!mLetter) continue;
+			if (m.winnerNextMatchId) {
+				const nextLetter = matchToLetter.get(m.winnerNextMatchId);
+				if (nextLetter) {
+					const entry = slotSource.get(nextLetter) ?? {};
+					entry[m.winnerNextSlot as 'top' | 'bottom'] = { letter: mLetter, type: 'winner' };
+					slotSource.set(nextLetter, entry);
+				}
+			}
+			if (m.loserNextMatchId) {
+				const nextLetter = matchToLetter.get(m.loserNextMatchId);
+				if (nextLetter) {
+					const entry = slotSource.get(nextLetter) ?? {};
+					entry[m.loserNextSlot as 'top' | 'bottom'] = { letter: mLetter, type: 'loser' };
+					slotSource.set(nextLetter, entry);
+				}
+			}
+		}
+
+		// Compare drop-in rounds against StartGG fixture.
+		// Focus on losers even rounds (drop-in rounds) where slot assignment and order matter.
+		const fixtureByLetter = new Map(fixture.sets.map((s: { identifier: string }) => [s.identifier, s]));
+
+		// For each losers set in the fixture that has a winners-round prereq (drop-in),
+		// verify our bracket matches.
+		const dropInRounds = fixture.sets.filter(
+			(s: { round: number; topSlot: { prereqSetIdentifier?: string }; }) => {
+				if (s.round >= 0) return false;
+				const topPrereq = s.topSlot.prereqSetIdentifier;
+				if (!topPrereq || topPrereq.startsWith('?')) return false;
+				const topPrereqSet = fixtureByLetter.get(topPrereq);
+				return topPrereqSet && topPrereqSet.round > 0;
+			}
+		);
+
+		const errors: string[] = [];
+		for (const fSet of dropInRounds) {
+			const letter = fSet.identifier;
+			const ourSource = slotSource.get(letter);
+			if (!ourSource) { errors.push(`${letter}: no source found in our bracket`); continue; }
+
+			// StartGG top slot: prereq from a winners set = loser of that set
+			const expectedTopLetter = fSet.topSlot.prereqSetIdentifier;
+			const actualTop = ourSource.top;
+			if (!actualTop) {
+				errors.push(`${letter} top: expected loser of ${expectedTopLetter}, got nothing`);
+			} else if (actualTop.letter !== expectedTopLetter || actualTop.type !== 'loser') {
+				errors.push(`${letter} top: expected loser of ${expectedTopLetter}, got ${actualTop.type} of ${actualTop.letter}`);
+			}
+
+			// StartGG bottom slot: prereq from a losers set = winner of that set
+			const expectedBotLetter = fSet.bottomSlot.prereqSetIdentifier;
+			const actualBot = ourSource.bottom;
+			if (!actualBot) {
+				errors.push(`${letter} bottom: expected winner of ${expectedBotLetter}, got nothing`);
+			} else if (actualBot.letter !== expectedBotLetter || actualBot.type !== 'winner') {
+				errors.push(`${letter} bottom: expected winner of ${expectedBotLetter}, got ${actualBot.type} of ${actualBot.letter}`);
+			}
+		}
+
+		if (errors.length > 0) {
+			throw new Error(`Bracket topology mismatches vs StartGG:\n  ${errors.join('\n  ')}`);
+		}
+		expect(dropInRounds.length).toBeGreaterThan(0);
+	});
 });
 
 describe('Full tournament integration', () => {
