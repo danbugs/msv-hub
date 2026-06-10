@@ -753,7 +753,8 @@ export async function pushBracketSeeding(
 	bracketPhaseId: number,
 	bracketPhaseGroupId: number,
 	swissEntrantIds: number[],
-	swissPhaseGroupId: number
+	swissPhaseGroupId: number,
+	entrantGamerTags?: Map<number, string>
 ): Promise<{ ok: boolean; error?: string }> {
 	// Fetch seeds from BOTH phase groups to get player IDs
 	const [swissSeeds, bracketSeeds] = await Promise.all([
@@ -793,11 +794,14 @@ export async function pushBracketSeeding(
 		if (entrantId && playerId) swissEntrantToPlayer.set(Number(entrantId), Number(playerId));
 	}
 
-	// Build bracket playerId → seedId map
+	// Build bracket playerId → seedId map AND bracket gamerTag → seedId map (fallback)
 	const bracketPlayerToSeedId = new Map<number, string>();
+	const bracketTagToSeedId = new Map<string, string>();
 	for (const seed of bracketSeeds as GqlRecord[]) {
 		const playerId = seed.entrant?.participants?.[0]?.player?.id;
+		const tag = seed.entrant?.participants?.[0]?.player?.gamerTag as string | undefined;
 		if (playerId && seed.id) bracketPlayerToSeedId.set(Number(playerId), String(seed.id));
+		if (tag && seed.id) bracketTagToSeedId.set(tag.toLowerCase(), String(seed.id));
 	}
 
 	// Build seed mapping: Swiss entrant order → bracket seedId assignment.
@@ -806,10 +810,18 @@ export async function pushBracketSeeding(
 	const matched: { seedId: string }[] = [];
 	swissEntrantIds.forEach((swissEntrantId) => {
 		const playerId = swissEntrantToPlayer.get(swissEntrantId);
-		if (!playerId) return;
-		const bracketSeedId = bracketPlayerToSeedId.get(playerId);
-		if (!bracketSeedId) return;
-		matched.push({ seedId: bracketSeedId });
+		if (playerId) {
+			const bracketSeedId = bracketPlayerToSeedId.get(playerId);
+			if (bracketSeedId) { matched.push({ seedId: bracketSeedId }); return; }
+		}
+		// Fallback: match by gamerTag when Swiss PG is empty (e.g. gauntlet mode)
+		if (entrantGamerTags) {
+			const tag = entrantGamerTags.get(swissEntrantId);
+			if (tag) {
+				const bracketSeedId = bracketTagToSeedId.get(tag.toLowerCase());
+				if (bracketSeedId) { matched.push({ seedId: bracketSeedId }); return; }
+			}
+		}
 	});
 
 	if (!matched.length) {

@@ -167,6 +167,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 	if (!swissPgId) log('WARNING: Could not resolve Swiss phase group — seeding will not be pushed');
 	const bracketEntrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+	// Build startggEntrantId → gamerTag map for fallback matching in pushBracketSeeding
+	// (needed when Swiss PG is empty, e.g. gauntlet mode)
+	const entrantGamerTags = new Map<number, string>();
+	for (const ent of tournament.entrants) {
+		if (ent.startggEntrantId && ent.gamerTag) {
+			entrantGamerTags.set(ent.startggEntrantId, ent.gamerTag);
+		}
+	}
 	for (const [bName, bEventId] of [
 		['main', mainEventId] as const,
 		['redemption', redEventId] as const
@@ -189,12 +197,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				.map((p) => bracketEntrantMap.get(p.entrantId)?.startggEntrantId)
 				.filter((id): id is number => id !== undefined);
 			if (rankedSwissEntrantIds.length) {
-				const result = await pushBracketSeeding(bracketPhase.id, bPgId, rankedSwissEntrantIds, swissPgId)
+				const result = await pushBracketSeeding(bracketPhase.id, bPgId, rankedSwissEntrantIds, swissPgId, entrantGamerTags)
 					.catch((e) => ({ ok: false as const, error: String(e) }));
 				if (result.ok) {
 					log(`Pushed ${bName} bracket seeding`);
-					// No dummy report needed — preview IDs work for first bracket report.
-					// Real IDs are cached via admin REST after the first report.
 				} else {
 					log(`${bName} bracket seeding failed: ${result.error}`);
 				}

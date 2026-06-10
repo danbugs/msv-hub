@@ -246,13 +246,17 @@ async function _doInitialSync(tournament: Awaited<ReturnType<typeof getActiveTou
 		if (mainPhaseId && mainPgId && swissPgId && tournament.brackets?.main) {
 			log(`Step 2: Pushing seeding to Main bracket...`);
 			const entrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+			const entrantGamerTags = new Map<number, string>();
+			for (const ent of tournament.entrants) {
+				if (ent.startggEntrantId && ent.gamerTag) entrantGamerTags.set(ent.startggEntrantId, ent.gamerTag);
+			}
 			const rankedEntrantIds = tournament.brackets.main.players
 				.sort((a, b) => a.seed - b.seed)
 				.map((p) => entrantMap.get(p.entrantId)?.startggEntrantId)
 				.filter((id): id is number => id !== undefined);
 
 			if (rankedEntrantIds.length) {
-				const result = await pushBracketSeeding(mainPhaseId, mainPgId, rankedEntrantIds, swissPgId)
+				const result = await pushBracketSeeding(mainPhaseId, mainPgId, rankedEntrantIds, swissPgId, entrantGamerTags)
 					.catch((e) => ({ ok: false as const, error: String(e) }));
 				if (result.ok) {
 					seedingResult = `Pushed seeding for ${rankedEntrantIds.length} players`;
@@ -311,6 +315,10 @@ async function _doInitialSync(tournament: Awaited<ReturnType<typeof getActiveTou
 		// Step 2: Push seeding + update entrant IDs
 		if (actuallyMoved > 0 && swissPgId && swissPhaseId) {
 			log('Step 2: Pushing seeding to Swiss...');
+			const defaultEntrantTags = new Map<number, string>();
+			for (const ent of tournament.entrants) {
+				if (ent.startggEntrantId && ent.gamerTag) defaultEntrantTags.set(ent.startggEntrantId, ent.gamerTag);
+			}
 			const rankedEntrantIds = tournament.entrants
 				.sort((a, b) => a.initialSeed - b.initialSeed)
 				.map((e) => e.startggEntrantId)
@@ -324,7 +332,7 @@ async function _doInitialSync(tournament: Awaited<ReturnType<typeof getActiveTou
 				}
 
 				const result = mainPgId
-					? await pushBracketSeeding(swissPhaseId, swissPgId, rankedEntrantIds, mainPgId)
+					? await pushBracketSeeding(swissPhaseId, swissPgId, rankedEntrantIds, mainPgId, defaultEntrantTags)
 						.catch((e) => ({ ok: false as const, error: String(e) }))
 					: await pushFinalStandingsSeeding(swissPhaseId, swissPgId, rankedEntrantIds)
 						.catch((e) => ({ ok: false as const, error: String(e) }));
