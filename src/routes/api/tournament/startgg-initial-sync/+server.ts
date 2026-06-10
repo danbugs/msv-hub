@@ -69,6 +69,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
 
+	try { return await _doInitialSync(tournament, bodySlug); }
+	catch (e) {
+		console.error('[initial-sync] Unhandled error:', e);
+		return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+	}
+};
+
+async function _doInitialSync(tournament: Awaited<ReturnType<typeof getActiveTournament>> & object, bodySlug: string) {
+
 	let eventSlug = tournament.startggEventSlug ?? bodySlug;
 	let swissEventId = tournament.startggEventId;
 
@@ -358,4 +367,4 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	await saveTournament(tournament);
 
 	return Response.json({ ok: true, moved, cleaned, failed, seedingResult, logs });
-};
+}

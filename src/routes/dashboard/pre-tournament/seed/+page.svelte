@@ -495,7 +495,8 @@
 		const syncData = await syncRes.json().catch(() => ({}));
 		if (!syncRes.ok) {
 			syncStatus = '';
-			error = `StartGG sync: ${(syncData as { error?: string }).error ?? 'failed'}`;
+			const rawErr = (syncData as Record<string, unknown>).error ?? (syncData as Record<string, unknown>).message ?? 'failed';
+			error = `StartGG sync: ${typeof rawErr === 'string' ? rawErr : JSON.stringify(rawErr)}`;
 			return false;
 		}
 		const { moved, cleaned, failed: syncFailed, seedingResult } = syncData as { moved: number; cleaned: number; failed: number; seedingResult?: string };
