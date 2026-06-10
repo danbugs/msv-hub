@@ -169,7 +169,10 @@ async function _doInitialSync(tournament: Awaited<ReturnType<typeof getActiveTou
 
 	const allParticipants = await getTournamentParticipants(tournamentSlug);
 	const entrantTags = new Set(tournament.entrants.map((e) => e.gamerTag.toLowerCase()));
-	const participants = allParticipants.filter((p) => entrantTags.has(p.gamerTag.toLowerCase()));
+	const participants = allParticipants.filter((p) =>
+		entrantTags.has(p.gamerTag.toLowerCase()) ||
+		(p.playerGamerTag && entrantTags.has(p.playerGamerTag.toLowerCase()))
+	);
 	log(`Found ${allParticipants.length} participants, ${participants.length} are tournament entrants`);
 
 	// Refresh stored entrant IDs to current Swiss event IDs.
@@ -271,7 +274,10 @@ async function _doInitialSync(tournament: Awaited<ReturnType<typeof getActiveTou
 		// Step 3: Remove players from Swiss
 		log(`Step 3: Removing players from Swiss...`);
 		const freshAll = await getTournamentParticipants(tournamentSlug);
-		const freshParticipants = freshAll.filter((p) => entrantTags.has(p.gamerTag.toLowerCase()));
+		const freshParticipants = freshAll.filter((p) =>
+			entrantTags.has(p.gamerTag.toLowerCase()) ||
+			(p.playerGamerTag && entrantTags.has(p.playerGamerTag.toLowerCase()))
+		);
 		let removedFromSwiss = 0;
 		for (const p of freshParticipants) {
 			if (!p.currentEventIds.includes(swissEventId)) continue;
@@ -345,7 +351,10 @@ async function _doInitialSync(tournament: Awaited<ReturnType<typeof getActiveTou
 		if (needsCleanup) {
 			log(`Step 3: Removing players from non-Swiss events...`);
 			const freshAll2 = await getTournamentParticipants(tournamentSlug);
-			const freshParticipants2 = freshAll2.filter((p) => entrantTags.has(p.gamerTag.toLowerCase()));
+			const freshParticipants2 = freshAll2.filter((p) =>
+				entrantTags.has(p.gamerTag.toLowerCase()) ||
+				(p.playerGamerTag && entrantTags.has(p.playerGamerTag.toLowerCase()))
+			);
 			for (const p of freshParticipants2) {
 				const nonSwiss = p.currentEventIds.filter((id) => id !== swissEventId);
 				if (nonSwiss.length === 0) continue;

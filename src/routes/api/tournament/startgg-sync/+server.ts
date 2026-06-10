@@ -110,7 +110,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					const participants = await getTournamentParticipants(tournamentSlug);
 					let redOk = 0;
 					for (const p of participants) {
-						if (!redTags.has(p.gamerTag.toLowerCase())) continue;
+						const ptag = p.playerGamerTag?.toLowerCase() ?? p.gamerTag.toLowerCase();
+						if (!redTags.has(p.gamerTag.toLowerCase()) && !redTags.has(ptag)) continue;
 						if (p.currentEventIds.includes(redEventId)) { redOk++; continue; }
 						const newEvents = [...new Set([...p.currentEventIds, redEventId])];
 						const phaseDests = redPhaseId ? [{ eventId: redEventId, phaseId: redPhaseId }] : [];

@@ -379,28 +379,58 @@ async function _doReportBracketMatch(
 	// Stored IDs may be Swiss or Main bracket IDs; the bracket event has its own IDs.
 	if (!_bracketEntrantCache) _bracketEntrantCache = new Map();
 	const cacheKey = `${_bracketName}-${bracketEventId}`;
-	let translation = _bracketEntrantCache.get(cacheKey);
 
-	if (!translation) {
-		translation = new Map();
-		const bracketEntrants = await fetchAllEntrants(bracketEventId, undefined).catch(() => []);
-		type BracketEnt = { id?: number; participants?: { player?: { gamerTag?: string } }[] };
-		const tagToBracketEid = new Map<string, number>();
-		for (const e of bracketEntrants as BracketEnt[]) {
+	type BracketEnt = { id?: number; participants?: { player?: { gamerTag?: string } }[] };
+	function buildTranslation(bracketEntrants: BracketEnt[]) {
+		const t = new Map<number, number>();
+		const tagMap = new Map<string, number>();
+		for (const e of bracketEntrants) {
 			const tag = e.participants?.[0]?.player?.gamerTag;
-			if (tag && e.id) tagToBracketEid.set(tag.toLowerCase(), Number(e.id));
+			if (tag && e.id) tagMap.set(tag.toLowerCase(), Number(e.id));
 		}
 		for (const [, ent] of entrantMap) {
 			if (!ent.startggEntrantId) continue;
-			const bracketEid = tagToBracketEid.get(ent.gamerTag.toLowerCase());
-			if (bracketEid) translation.set(ent.startggEntrantId, bracketEid);
+			const bracketEid = tagMap.get(ent.gamerTag.toLowerCase());
+			if (bracketEid) t.set(ent.startggEntrantId, bracketEid);
 		}
-		if (translation.size > 0) _bracketEntrantCache.set(cacheKey, translation);
+		return { translation: t, tagMap };
 	}
 
-	let bracketTopEntrantId = translation.get(topEntrant.startggEntrantId) ?? topEntrant.startggEntrantId;
-	let bracketBotEntrantId = translation.get(botEntrant.startggEntrantId) ?? botEntrant.startggEntrantId;
-	let bracketWinnerEntrantId = translation.get(winnerEntrant.startggEntrantId) ?? winnerEntrant.startggEntrantId;
+	let cached = _bracketEntrantCache.get(cacheKey);
+	if (!cached) {
+		const bracketEntrants = await fetchAllEntrants(bracketEventId, undefined).catch(() => []);
+		const { translation: t } = buildTranslation(bracketEntrants as BracketEnt[]);
+		cached = t;
+		if (cached.size > 0) _bracketEntrantCache.set(cacheKey, cached);
+	}
+
+	let bracketTopEntrantId = cached.get(topEntrant.startggEntrantId) ?? topEntrant.startggEntrantId;
+	let bracketBotEntrantId = cached.get(botEntrant.startggEntrantId) ?? botEntrant.startggEntrantId;
+	let bracketWinnerEntrantId = cached.get(winnerEntrant.startggEntrantId) ?? winnerEntrant.startggEntrantId;
+
+	// If any entrant missed the cache, it might be stale — rebuild from fresh data
+	const hasMiss = !cached.has(topEntrant.startggEntrantId!) ||
+		!cached.has(botEntrant.startggEntrantId!) ||
+		!cached.has(winnerEntrant.startggEntrantId!);
+	if (hasMiss) {
+		console.log(`[StartGG] Translation cache miss — rebuilding for ${_bracketName} bracket`);
+		_bracketEntrantCache.delete(cacheKey);
+		const freshEntrants = await fetchAllEntrants(bracketEventId, undefined).catch(() => []);
+		const { translation: fresh, tagMap } = buildTranslation(freshEntrants as BracketEnt[]);
+		if (fresh.size > 0) _bracketEntrantCache.set(cacheKey, fresh);
+
+		// Use fresh translation, fall back to direct gamerTag lookup for players
+		// whose stored ID doesn't appear in the translation (e.g. stale from another event)
+		bracketTopEntrantId = fresh.get(topEntrant.startggEntrantId!)
+			?? tagMap.get(topEntrant.gamerTag.toLowerCase())
+			?? topEntrant.startggEntrantId;
+		bracketBotEntrantId = fresh.get(botEntrant.startggEntrantId!)
+			?? tagMap.get(botEntrant.gamerTag.toLowerCase())
+			?? botEntrant.startggEntrantId;
+		bracketWinnerEntrantId = fresh.get(winnerEntrant.startggEntrantId!)
+			?? tagMap.get(winnerEntrant.gamerTag.toLowerCase())
+			?? winnerEntrant.startggEntrantId;
+	}
 
 	const loserEntrant = winnerEntrant === topEntrant ? botEntrant : topEntrant;
 	const bracketLoserEntrantId = winnerEntrant === topEntrant ? bracketBotEntrantId : bracketTopEntrantId;

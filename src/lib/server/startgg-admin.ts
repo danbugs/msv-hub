@@ -137,6 +137,7 @@ async function adminGql<T = Record<string, unknown>>(
 interface ParticipantInfo {
 	participantId: number;
 	gamerTag: string;
+	playerGamerTag?: string;
 	currentEventIds: number[];
 }
 
@@ -147,12 +148,12 @@ export async function getTournamentParticipants(
 	tournamentSlug: string
 ): Promise<ParticipantInfo[]> {
 	// Use the public API for reads
-	type TData = { tournament: { participants: { nodes: { id: number; gamerTag: string; events: { id: number }[] }[] } } };
+	type TData = { tournament: { participants: { nodes: { id: number; gamerTag: string; player?: { gamerTag?: string }; events: { id: number }[] }[] } } };
 	const data = await gql<TData>(
 		`query($slug: String!) {
 			tournament(slug: $slug) {
 				participants(query: { page: 1, perPage: 100 }) {
-					nodes { id gamerTag events { id } }
+					nodes { id gamerTag player { gamerTag } events { id } }
 				}
 			}
 		}`,
@@ -162,6 +163,7 @@ export async function getTournamentParticipants(
 	return (data?.tournament?.participants?.nodes ?? []).map((p) => ({
 		participantId: p.id,
 		gamerTag: p.gamerTag,
+		playerGamerTag: p.player?.gamerTag ?? undefined,
 		currentEventIds: (p.events ?? []).map((e) => e.id)
 	}));
 }
@@ -258,13 +260,14 @@ export async function assignBracketSplit(
 
 	for (const p of participants) {
 		const tag = p.gamerTag.toLowerCase();
+		const ptag = p.playerGamerTag?.toLowerCase() ?? tag;
 		let targetEventIds: number[];
 		let phaseDests: { eventId: number; phaseId: number }[] = [];
 
-		if (mainTagSet.has(tag)) {
+		if (mainTagSet.has(tag) || mainTagSet.has(ptag)) {
 			targetEventIds = [swissEventId, mainEventId];
 			phaseDests = [{ eventId: mainEventId, phaseId: mainPhaseId }];
-		} else if (redTagSet.has(tag)) {
+		} else if (redTagSet.has(tag) || redTagSet.has(ptag)) {
 			targetEventIds = [swissEventId, redemptionEventId];
 			phaseDests = [{ eventId: redemptionEventId, phaseId: redPhaseId }];
 		} else {
@@ -276,17 +279,17 @@ export async function assignBracketSplit(
 		const currentSet = new Set(p.currentEventIds);
 		const targetSet = new Set(targetEventIds);
 		if (currentSet.size === targetSet.size && [...targetSet].every((id) => currentSet.has(id))) {
-			if (mainTagSet.has(tag)) mainOk++;
-			else if (redTagSet.has(tag)) redemptionOk++;
+			if (mainTagSet.has(tag) || mainTagSet.has(ptag)) mainOk++;
+			else if (redTagSet.has(tag) || redTagSet.has(ptag)) redemptionOk++;
 			continue;
 		}
 
 		const result = await updateParticipantEvents(p.participantId, targetEventIds, phaseDests);
 		if (result.ok) {
-			if (mainTagSet.has(tag)) {
+			if (mainTagSet.has(tag) || mainTagSet.has(ptag)) {
 				mainOk++;
 				_log(`  ✓ ${p.gamerTag} → Main`);
-			} else if (redTagSet.has(tag)) {
+			} else if (redTagSet.has(tag) || redTagSet.has(ptag)) {
 				redemptionOk++;
 				_log(`  ✓ ${p.gamerTag} → Redemption`);
 			} else {
