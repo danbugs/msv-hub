@@ -550,7 +550,7 @@ describe('generateBracket', () => {
 		}
 	});
 
-	it.each([8, 14, 15, 16, 29, 30, 31, 32])('%i-player bracket topology matches StartGG reference fixture', (size) => {
+	it.each([8, 14, 15, 16, 29, 30, 31, 32, 60, 61, 62, 63, 64])('%i-player bracket topology matches StartGG reference fixture', (size) => {
 		const fixture = require(`./test-fixtures/startgg-bracket-${size}p.json`);
 
 		const entrantsN: Entrant[] = Array.from({ length: size }, (_, i) => ({

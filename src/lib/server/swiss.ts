@@ -1021,12 +1021,11 @@ export function generateBracket(
 			}
 		} else if (lRound % 2 === 0) {
 			// Even losers round: W losers drop in → top; L(prev) survivors → bottom.
-			// Drop number alternates the avoidance pattern:
-			//   Odd drops (1st, 3rd, 5th):  full reversal
-			//   Even drops (2nd, 4th, 6th): XOR 1 (swap adjacent pairs) for 4+,
-			//                                identity for ≤2 (XOR 1 degenerates to reversal)
+			// Drop avoidance XOR mask (matches StartGG topology):
+			//   Drop 1:        XOR (n-1)   — full reversal
+			//   Even drops 2+: XOR (n/2-1) — reverse within halves
+			//   Odd drops 3+:  XOR (n/2)   — swap halves
 			const dropNumber = lRound / 2;
-			const isOddDrop = dropNumber % 2 === 1;
 			const dropWinnersRound = dropNumber + 1;
 			const winnersDropMatches = matches.filter((m) => m.round === dropWinnersRound);
 			const dropCount = winnersDropMatches.length;
@@ -1036,12 +1035,12 @@ export function generateBracket(
 				let wdIdx: number;
 				if (dropCount <= 1) {
 					wdIdx = 0;
-				} else if (isOddDrop) {
+				} else if (dropNumber === 1) {
 					wdIdx = dropCount - 1 - i;
-				} else if (dropCount <= 2) {
-					wdIdx = i;
+				} else if (dropNumber % 2 === 0) {
+					wdIdx = i ^ ((dropCount >> 1) - 1);
 				} else {
-					wdIdx = i ^ 1;
+					wdIdx = i ^ (dropCount >> 1);
 				}
 				const wd = winnersDropMatches[wdIdx];
 				if (wd) { wd.loserNextMatchId = roundMatches[i].id; wd.loserNextSlot = 'top'; }
