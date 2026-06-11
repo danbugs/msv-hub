@@ -625,7 +625,7 @@ describe('generateBracket', () => {
 
 		// Compare drop-in rounds against StartGG fixture.
 		// Focus on losers even rounds (drop-in rounds) where slot assignment and order matter.
-		const fixtureByLetter = new Map(fixture.sets.map((s: { identifier: string }) => [s.identifier, s]));
+		const fixtureByLetter = new Map<string, { identifier: string; round: number }>(fixture.sets.map((s: { identifier: string; round: number }) => [s.identifier, s]));
 
 		// For each losers set in the fixture that has a winners-round prereq (drop-in),
 		// verify our bracket matches.
