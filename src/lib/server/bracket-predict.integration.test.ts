@@ -1,8 +1,15 @@
 import { describe, it, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
 import { fetchRecentMatchups } from './bracket-predict';
 import { gql, TOURNAMENT_QUERY, fetchAllSets } from './startgg';
 
-describe('bracket collision detection', () => {
+const envPath = path.resolve(import.meta.dirname ?? '.', '../../..', '.env');
+let hasEnvFile = false;
+try { hasEnvFile = fs.existsSync(envPath); } catch { /* */ }
+const describeIntegration = hasEnvFile ? describe : describe.skip;
+
+describeIntegration('bracket collision detection', () => {
 	it('finds recent matchups from MSV events', async () => {
 		// Get player IDs from Macrospacing Vancouver 7
 		const tData = await gql<{ tournament: { name: string; startAt: number; events: { id: number; name: string; numEntrants: number }[] } }>(
