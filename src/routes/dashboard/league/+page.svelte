@@ -584,7 +584,7 @@
 							<div class="flex items-center gap-2">
 								<span class="text-foreground">{evt.name}</span>
 								{#if evt.weight != null && evt.weight !== 1.0}
-									<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">{Math.round(evt.weight * 100)}%</span>
+									<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">{Math.round(evt.weight * 100)}%</span>
 								{/if}
 							</div>
 							<div class="flex items-center gap-3">

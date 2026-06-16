@@ -227,7 +227,7 @@
 									</a>
 								{/if}
 								<button onclick={resetStartGG} disabled={resettingStartGG}
-									class="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-amber-700 hover:text-amber-400 transition-colors disabled:opacity-50"
+									class="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-amber-500 hover:text-amber-700 dark:hover:border-amber-700 dark:hover:text-amber-400 transition-colors disabled:opacity-50"
 									title="Restart all StartGG phases, remove bracket registrations, reset to Swiss Round 1">
 									{resettingStartGG ? 'Resetting...' : 'Reset StartGG'}
 								</button>

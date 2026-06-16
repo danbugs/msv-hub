@@ -563,7 +563,7 @@
 							{#if onCall && ready}
 								<button onclick={() => onCall!(match)}
 									class="rounded px-1.5 py-px text-[10px] font-medium transition-colors
-										{called ? 'bg-amber-900/30 text-amber-400 hover:bg-amber-900/50' : 'border border-border text-muted-foreground hover:text-amber-400 hover:border-amber-600'}">
+										{called ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50' : 'border border-border text-muted-foreground hover:text-amber-700 hover:border-amber-500 dark:hover:text-amber-400 dark:hover:border-amber-600'}">
 									{#if called && match.calledAt}{elapsed(match.calledAt)}{:else}{called ? 'Called' : 'Call'}{/if}
 								</button>
 							{/if}
@@ -586,7 +586,7 @@
 									</button>
 								{:else if match.winnerId && match.topPlayerId && match.bottomPlayerId && canFix(match)}
 									<button onclick={() => onReport!(match)}
-										class="rounded border border-yellow-700/50 px-1.5 py-px text-[10px] text-yellow-500 hover:bg-yellow-900/20">
+										class="rounded border border-yellow-500/50 px-1.5 py-px text-[10px] text-yellow-700 hover:bg-yellow-100 dark:border-yellow-700/50 dark:text-yellow-500 dark:hover:bg-yellow-900/20">
 										Fix
 									</button>
 								{/if}

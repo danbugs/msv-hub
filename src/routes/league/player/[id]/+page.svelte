@@ -118,11 +118,11 @@
 	});
 
 	function phaseLabel(phase: string): { text: string; classes: string } {
-		if (phase === 'swiss') return { text: 'Swiss', classes: 'bg-blue-500/10 text-blue-400' };
-		if (phase === 'winners') return { text: 'Winners', classes: 'bg-green-500/10 text-green-400' };
-		if (phase === 'losers') return { text: 'Losers', classes: 'bg-red-500/10 text-red-400' };
-		if (phase === 'redemption-winners') return { text: 'Redem. W', classes: 'bg-amber-500/10 text-amber-400' };
-		if (phase === 'redemption-losers') return { text: 'Redem. L', classes: 'bg-orange-500/10 text-orange-400' };
+		if (phase === 'swiss') return { text: 'Swiss', classes: 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400' };
+		if (phase === 'winners') return { text: 'Winners', classes: 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400' };
+		if (phase === 'losers') return { text: 'Losers', classes: 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400' };
+		if (phase === 'redemption-winners') return { text: 'Redem. W', classes: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' };
+		if (phase === 'redemption-losers') return { text: 'Redem. L', classes: 'bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400' };
 		return { text: phase, classes: 'bg-secondary text-muted-foreground' };
 	}
 </script>
@@ -392,7 +392,7 @@
 										{evt.name} ↗
 									</a>
 									{#if evtWeight != null && evtWeight !== 1.0}
-										<span class="text-[10px] font-bold px-1 py-0.5 rounded bg-amber-500/10 text-amber-400">{Math.round(evtWeight * 100)}%</span>
+										<span class="text-[10px] font-bold px-1 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">{Math.round(evtWeight * 100)}%</span>
 									{/if}
 								</div>
 								<div class="flex items-center gap-2">

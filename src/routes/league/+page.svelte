@@ -187,7 +187,7 @@
 									<a href="https://www.start.gg/tournament/{evt.slug}" target="_blank" rel="noopener"
 										class="text-foreground hover:text-primary transition-colors">{evt.name} ↗</a>
 									{#if evt.weight != null && evt.weight !== 1.0}
-										<span class="text-[10px] font-bold px-1 py-0.5 rounded bg-amber-500/10 text-amber-400">{Math.round(evt.weight * 100)}%</span>
+										<span class="text-[10px] font-bold px-1 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">{Math.round(evt.weight * 100)}%</span>
 									{/if}
 								</div>
 								<span class="text-xs text-muted-foreground">{evt.entrantCount} entrants · {evt.date}</span>
