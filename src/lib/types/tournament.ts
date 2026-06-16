@@ -53,6 +53,13 @@ export interface TournamentState {
 	startggSync?: StartggSyncState;
 	/** Attendance and setup tracking — persisted for TO collaboration */
 	attendance?: AttendeeStatus[];
+	/** Phase transition timestamps for timing reports */
+	phaseTimestamps?: {
+		swissStartedAt?: number;
+		swissCompletedAt?: number;
+		bracketsStartedAt?: number;
+		bracketsCompletedAt?: number;
+	};
 }
 
 export interface AttendeeStatus {
@@ -98,6 +105,8 @@ export interface SwissMatch {
 	isStream?: boolean;
 	/** StartGG set ID — cached after first successful match lookup */
 	startggSetId?: string;
+	/** Timestamp (ms) when result was reported */
+	reportedAt?: number;
 }
 
 export interface SwissRound {
@@ -105,6 +114,10 @@ export interface SwissRound {
 	status: 'pending' | 'active' | 'completed';
 	matches: SwissMatch[];
 	byePlayerId?: string;
+	/** Timestamp (ms) when this round was started */
+	startedAt?: number;
+	/** Timestamp (ms) when all matches in this round were reported */
+	completedAt?: number;
 }
 
 export interface FinalStanding {
@@ -150,6 +163,8 @@ export interface BracketMatch {
 	isStream?: boolean;
 	/** Timestamp (ms) when TO called this match to the station */
 	calledAt?: number;
+	/** Timestamp (ms) when result was reported */
+	reportedAt?: number;
 	/** StartGG set ID — cached after first successful match lookup */
 	startggSetId?: string;
 }

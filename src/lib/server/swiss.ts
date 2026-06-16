@@ -1189,6 +1189,7 @@ export function reportBracketMatch(
 	if (!match) throw new Error(`Match ${matchId} not found`);
 
 	match.winnerId = winnerId;
+	match.reportedAt = Date.now();
 	if (isDQ) {
 		match.isDQ = true;
 		match.topScore = undefined;

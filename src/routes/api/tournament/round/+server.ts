@@ -48,6 +48,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		// Mark previous round as completed
 		if (lastRound.status === 'active') {
 			lastRound.status = 'completed';
+			if (!lastRound.completedAt) lastRound.completedAt = Date.now();
 		}
 	}
 
@@ -92,6 +93,10 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			};
 		}
 		tournament.phase = 'brackets';
+		const phaseNow = Date.now();
+		if (!tournament.phaseTimestamps) tournament.phaseTimestamps = {};
+		tournament.phaseTimestamps.swissCompletedAt = phaseNow;
+		tournament.phaseTimestamps.bracketsStartedAt = phaseNow;
 
 		if (!isExperimental1) {
 			// Assign stations: split non-stream stations evenly between main and redemption.
@@ -284,8 +289,14 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		number: nextRound,
 		status: 'active',
 		matches: assignedMatches,
-		byePlayerId: bye ? bye[0] : undefined
+		byePlayerId: bye ? bye[0] : undefined,
+		startedAt: Date.now()
 	};
+
+	if (nextRound === 1) {
+		if (!tournament.phaseTimestamps) tournament.phaseTimestamps = {};
+		tournament.phaseTimestamps.swissStartedAt = Date.now();
+	}
 
 	tournament.rounds.push(round);
 	tournament.currentRound = nextRound;
@@ -442,6 +453,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	const origBottomScore = match.bottomScore;
 	const origIsDQ = match.isDQ;
 	match.winnerId = winnerId;
+	match.reportedAt = Date.now();
 	if (isDQ) { match.isDQ = true; match.topScore = undefined; match.bottomScore = undefined; }
 	else { match.isDQ = false; if (topScore !== undefined) match.topScore = topScore; if (bottomScore !== undefined) match.bottomScore = bottomScore; }
 
@@ -508,6 +520,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		const freshMatch = freshRound?.matches.find((m) => m.id === matchId);
 		if (freshMatch) {
 			freshMatch.winnerId = match.winnerId;
+			freshMatch.reportedAt = match.reportedAt;
 			freshMatch.topScore = match.topScore;
 			freshMatch.bottomScore = match.bottomScore;
 			freshMatch.isDQ = match.isDQ;
@@ -619,6 +632,18 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const roundComplete = targetRound.matches.every((m) => m.winnerId);
+	if (roundComplete && !targetRound.completedAt) {
+		targetRound.completedAt = Date.now();
+		// Persist the completedAt to the fresh state
+		const latestForComplete = await getActiveTournament();
+		if (latestForComplete) {
+			const lr = latestForComplete.rounds.find((r) => r.number === targetRound.number);
+			if (lr && !lr.completedAt) {
+				lr.completedAt = targetRound.completedAt;
+				await saveTournament(latestForComplete);
+			}
+		}
+	}
 
 	return Response.json({
 		ok: true,

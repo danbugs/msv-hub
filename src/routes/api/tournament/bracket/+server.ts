@@ -4,6 +4,8 @@ import { reportBracketMatch, isGauntletRedemptionReady, generateGauntletRedempti
 import { reportBracketMatch as reportBracketMatchToStartGG } from '$lib/server/startgg-reporter';
 import { gql, EVENT_PHASES_QUERY, pushBracketSeeding, fetchPhaseGroups } from '$lib/server/startgg';
 import { getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
+import { sendMessage } from '$lib/server/discord';
+import { formatTimingReportForDiscord } from '$lib/server/timing-report';
 
 /** PATCH — report a bracket match result */
 export const PATCH: RequestHandler = async ({ request, locals }) => {
@@ -184,7 +186,11 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		b!.matches.filter((m) => m.topPlayerId && m.bottomPlayerId).every((m) => m.winnerId)
 	);
 
-	if (allComplete) tournament.phase = 'completed';
+	if (allComplete) {
+		tournament.phase = 'completed';
+		if (!tournament.phaseTimestamps) tournament.phaseTimestamps = {};
+		tournament.phaseTimestamps.bracketsCompletedAt = Date.now();
+	}
 
 	// Report to StartGG (queued if split not yet confirmed or report fails).
 	const reportedMatch = tournament.brackets[bracketName].matches.find((m) => m.id === matchId)!;
@@ -231,6 +237,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			if (om.station !== undefined && fm.station === undefined) fm.station = om.station;
 			if (om.isStream && !fm.isStream) fm.isStream = om.isStream;
 			if (om.calledAt && !fm.calledAt) fm.calledAt = om.calledAt;
+			if (om.reportedAt && !fm.reportedAt) fm.reportedAt = om.reportedAt;
 		}
 
 		// Append matches that exist in OUR bracket but not fresh (e.g. newly-created GFR)
@@ -243,7 +250,10 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		// Remove matches that OUR bracket dropped (e.g. GFR deleted when GF flipped to top-winner)
 		freshBracket.matches = freshBracket.matches.filter((fm) => ourMatchMap.has(fm.id));
 
-		if (tournament.phase === 'completed') fresh.phase = 'completed';
+		if (tournament.phase === 'completed') {
+			fresh.phase = 'completed';
+			fresh.phaseTimestamps = { ...fresh.phaseTimestamps, ...tournament.phaseTimestamps };
+		}
 		if (redemptionGenerated && tournament.brackets.redemption) {
 			fresh.brackets!.redemption = tournament.brackets.redemption;
 			// Reset splitConfirmed so match reports queue until redemption sync completes
@@ -267,6 +277,17 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		}
 		await saveTournament(tournament);
 	}
+	// Send timing report to #talk-to-balrog when tournament completes
+	if (allComplete) {
+		const TALK_TO_BALROG = '1317322917129879562';
+		const reportText = formatTimingReportForDiscord(tournament);
+		if (reportText) {
+			sendMessage(TALK_TO_BALROG, reportText).catch((e) =>
+				console.error('[bracket] Failed to send timing report:', e)
+			);
+		}
+	}
+
 	return Response.json({
 		ok: true,
 		bracket: tournament.brackets[bracketName],
