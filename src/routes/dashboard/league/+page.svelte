@@ -28,6 +28,7 @@
 	let showEvents = $state(false);
 	let minEvents = $state(2);
 	let attendanceBonus = $state(50);
+	let defaultSeason = $state(11);
 	let awards = $state<{ title: string; description: string; playerId?: string; playerTag?: string; secondPlayerId?: string; secondPlayerTag?: string; value: string; candidates?: { playerId: string; playerTag: string; value: string }[] }[]>([]);
 	let awardsMinEvents = $state('');
 	let seasonsList = $state<{ id: number; name: string }[]>([]);
@@ -83,6 +84,7 @@
 			const cfg = await configRes.json();
 			minEvents = cfg.minEvents ?? 2;
 			attendanceBonus = sid === 0 ? 5 : (cfg.attendanceBonus ?? 50);
+			defaultSeason = cfg.defaultSeason ?? 11;
 		}
 		if (!awardsMinEvents && season) {
 			awardsMinEvents = String(Math.max(2, Math.floor(season.events.length * 0.4)));
@@ -355,7 +357,7 @@
 		await fetch('/api/league/config', {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ minEvents, attendanceBonus })
+			body: JSON.stringify({ minEvents, attendanceBonus, defaultSeason })
 		});
 		await loadSeason();
 	}
@@ -518,6 +520,11 @@
 				<div>
 					<label class="text-xs text-muted-foreground">Attendance bonus (pts/event)</label>
 					<input bind:value={attendanceBonus} type="number" min="0" max="200"
+						class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
+				</div>
+				<div>
+					<label class="text-xs text-muted-foreground">Default public season</label>
+					<input bind:value={defaultSeason} type="number" min="1"
 						class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
 				</div>
 				<button onclick={saveConfig}

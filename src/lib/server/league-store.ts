@@ -13,9 +13,10 @@ const LEAGUE_BIO_PREFIX = 'league:bio:';
 export interface LeagueConfig {
 	minEvents: number;
 	attendanceBonus: number;
+	defaultSeason: number;
 }
 
-const DEFAULT_CONFIG: LeagueConfig = { minEvents: 2, attendanceBonus: 50 };
+const DEFAULT_CONFIG: LeagueConfig = { minEvents: 2, attendanceBonus: 50, defaultSeason: 11 };
 
 export async function getLeagueConfig(): Promise<LeagueConfig> {
 	const redis = getRedis();
@@ -262,7 +263,7 @@ export function getRankings(
 	config?: { minEvents?: number; attendanceBonus?: number }
 ): { playerId: string; gamerTag: string; points: number; rank: number; eventsAttended: number }[] {
 	const bonus = config?.attendanceBonus ?? 0;
-	const minEvents = config?.minEvents ?? 0;
+	const minEvents = Math.min(config?.minEvents ?? 0, season.events.length);
 
 	const eventCounts = new Map<string, number>();
 	for (const evt of season.events) {
