@@ -6,7 +6,7 @@
 	let showGallery = $state(false);
 	let lightboxSeason = $state<number | null>(null);
 
-	const prGraphicSeasons = Array.from({ length: 9 }, (_, i) => i + 1);
+	const prGraphicSeasons = Array.from({ length: 10 }, (_, i) => i + 1);
 
 	function filteredRankings() {
 		if (!searchQuery.trim()) return data.rankings;
@@ -282,7 +282,7 @@
 		onkeydown={(e) => {
 			if (e.key === 'Escape') lightboxSeason = null;
 			if (e.key === 'ArrowLeft' && lightboxSeason !== null && lightboxSeason > 1) lightboxSeason--;
-			if (e.key === 'ArrowRight' && lightboxSeason !== null && lightboxSeason < 9) lightboxSeason++;
+			if (e.key === 'ArrowRight' && lightboxSeason !== null && lightboxSeason < prGraphicSeasons.length) lightboxSeason++;
 		}}>
 		<div class="relative max-w-4xl w-full mx-4" onclick={(e) => e.stopPropagation()}>
 			<div class="flex items-center justify-between mb-2">
@@ -291,9 +291,9 @@
 					<button onclick={() => { if (lightboxSeason! > 1) lightboxSeason!--; }}
 						disabled={lightboxSeason === 1}
 						class="text-white/70 hover:text-white disabled:text-white/30 text-lg px-2">&#8592;</button>
-					<span class="text-white/50 text-xs">{lightboxSeason} / 9</span>
-					<button onclick={() => { if (lightboxSeason! < 9) lightboxSeason!++; }}
-						disabled={lightboxSeason === 9}
+					<span class="text-white/50 text-xs">{lightboxSeason} / {prGraphicSeasons.length}</span>
+					<button onclick={() => { if (lightboxSeason! < prGraphicSeasons.length) lightboxSeason!++; }}
+						disabled={lightboxSeason === prGraphicSeasons.length}
 						class="text-white/70 hover:text-white disabled:text-white/30 text-lg px-2">&#8594;</button>
 					<button onclick={() => lightboxSeason = null}
 						class="text-white/70 hover:text-white text-xl px-2 ml-2">&#10005;</button>
