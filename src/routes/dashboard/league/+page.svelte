@@ -29,6 +29,7 @@
 	let minEvents = $state(2);
 	let attendanceBonus = $state(50);
 	let defaultSeason = $state(11);
+	let seasonMinEvents = $state<Record<string, number>>({});
 	let awards = $state<{ title: string; description: string; playerId?: string; playerTag?: string; secondPlayerId?: string; secondPlayerTag?: string; value: string; candidates?: { playerId: string; playerTag: string; value: string }[] }[]>([]);
 	let awardsMinEvents = $state('');
 	let seasonsList = $state<{ id: number; name: string }[]>([]);
@@ -82,7 +83,8 @@
 		if (awardsRes.ok) awards = await awardsRes.json();
 		if (configRes.ok) {
 			const cfg = await configRes.json();
-			minEvents = cfg.minEvents ?? 2;
+			seasonMinEvents = cfg.seasonMinEvents ?? {};
+			minEvents = seasonMinEvents[String(sid)] ?? cfg.minEvents ?? 2;
 			attendanceBonus = sid === 0 ? 5 : (cfg.attendanceBonus ?? 50);
 			defaultSeason = cfg.defaultSeason ?? 11;
 		}
@@ -354,11 +356,13 @@
 	}
 
 	async function saveConfig() {
+		const updated = { ...seasonMinEvents, [String(getSeasonId())]: minEvents };
 		await fetch('/api/league/config', {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ minEvents, attendanceBonus, defaultSeason })
+			body: JSON.stringify({ minEvents: 2, seasonMinEvents: updated, attendanceBonus, defaultSeason })
 		});
+		seasonMinEvents = updated;
 		await loadSeason();
 	}
 
@@ -513,7 +517,7 @@
 			<h2 class="text-sm font-bold text-foreground mb-3">Ranking Settings</h2>
 			<div class="flex flex-col sm:flex-row gap-4 items-end">
 				<div>
-					<label class="text-xs text-muted-foreground">Min events to qualify</label>
+					<label class="text-xs text-muted-foreground">Min events to qualify (Season {getSeasonId()})</label>
 					<input bind:value={minEvents} type="number" min="0" max="20"
 						class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
 				</div>
@@ -533,7 +537,7 @@
 				</button>
 			</div>
 			<p class="mt-2 text-xs text-muted-foreground">
-				Min events filters the public rankings. Attendance bonus adds points per event attended to reward showing up.
+				Min events is set per season — switching seasons loads that season's value. Attendance bonus adds points per event attended to reward showing up.
 			</p>
 		</div>
 
