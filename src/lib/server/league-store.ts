@@ -14,9 +14,14 @@ export interface LeagueConfig {
 	minEvents: number;
 	attendanceBonus: number;
 	defaultSeason: number;
+	seasonMinEvents: Record<string, number>;
 }
 
-const DEFAULT_CONFIG: LeagueConfig = { minEvents: 2, attendanceBonus: 50, defaultSeason: 11 };
+const DEFAULT_CONFIG: LeagueConfig = { minEvents: 2, attendanceBonus: 50, defaultSeason: 11, seasonMinEvents: {} };
+
+export function getMinEventsForSeason(config: LeagueConfig, seasonId: number): number {
+	return config.seasonMinEvents?.[String(seasonId)] ?? config.minEvents;
+}
 
 export async function getLeagueConfig(): Promise<LeagueConfig> {
 	const redis = getRedis();

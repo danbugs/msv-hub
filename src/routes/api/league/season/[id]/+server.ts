@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { getLeagueSeason, getRankings, getLeagueConfig } from '$lib/server/league-store';
+import { getLeagueSeason, getRankings, getLeagueConfig, getMinEventsForSeason } from '$lib/server/league-store';
 
 export const GET: RequestHandler = async ({ params, url }) => {
 	const id = parseInt(params.id, 10);
@@ -9,12 +9,11 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	if (!season) return Response.json({ error: 'Season not found' }, { status: 404 });
 
 	const minEventsParam = url.searchParams.get('minEvents');
-	let config;
-	if (minEventsParam) {
-		config = { minEvents: parseInt(minEventsParam, 10), attendanceBonus: (await getLeagueConfig()).attendanceBonus };
-	} else {
-		config = await getLeagueConfig();
-	}
+	const leagueConfig = await getLeagueConfig();
+	const config = {
+		minEvents: minEventsParam ? parseInt(minEventsParam, 10) : getMinEventsForSeason(leagueConfig, id),
+		attendanceBonus: leagueConfig.attendanceBonus
+	};
 	const rankings = getRankings(season, config);
 
 	return Response.json({

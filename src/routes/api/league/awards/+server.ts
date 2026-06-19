@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { getLeagueSeason, getLeagueConfig, computeSeasonAwards } from '$lib/server/league-store';
+import { getLeagueSeason, getLeagueConfig, computeSeasonAwards, getMinEventsForSeason } from '$lib/server/league-store';
 import { getEventConfig } from '$lib/server/store';
 
 export const GET: RequestHandler = async ({ locals, url }) => {
@@ -8,7 +8,9 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	const season = await getLeagueSeason(seasonId);
 	if (!season) return Response.json({ error: 'Season not found' }, { status: 404 });
 	const config = await getLeagueConfig();
-	const rankConfig = seasonId === 0 ? { ...config, attendanceBonus: 5 } : config;
+	const rankConfig = seasonId === 0
+		? { ...config, attendanceBonus: 5 }
+		: { ...config, minEvents: getMinEventsForSeason(config, seasonId) };
 	const minEventsParam = url.searchParams.get('minEvents');
 	const minEvents = minEventsParam ? parseInt(minEventsParam, 10) : undefined;
 
