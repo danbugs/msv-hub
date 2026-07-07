@@ -2,7 +2,7 @@ import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { reportBracketMatch, isGauntletRedemptionReady, generateGauntletRedemption, assignBracketStations } from '$lib/server/swiss';
 import { reportBracketMatch as reportBracketMatchToStartGG } from '$lib/server/startgg-reporter';
-import { gql, EVENT_PHASES_QUERY, pushBracketSeeding, fetchPhaseGroups } from '$lib/server/startgg';
+import { gql, EVENT_PHASES_QUERY, pushBracketSeeding, fetchPhaseGroups, StartGGAuthError } from '$lib/server/startgg';
 import { getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 import { sendMessage } from '$lib/server/discord';
 import { formatTimingReportForDiscord } from '$lib/server/timing-report';
@@ -196,6 +196,9 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	const reportedMatch = tournament.brackets[bracketName].matches.find((m) => m.id === matchId)!;
 	const sgResult = await reportBracketMatchToStartGG(tournament, bracketName, reportedMatch).catch(
 		(e) => {
+			if (e instanceof StartGGAuthError) {
+				return { ok: false as const, authError: true, error: e.message };
+			}
 			// Thrown errors get queued for retry instead of being lost
 			const sync = tournament.startggSync ?? { splitConfirmed: false, pendingBracketMatchIds: [], errors: [] };
 			if (!tournament.startggSync) tournament.startggSync = sync;
@@ -203,9 +206,13 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			if (!sync.pendingBracketMatchIds.includes(pendingKey)) {
 				sync.pendingBracketMatchIds.push(pendingKey);
 			}
-			return { ok: false, queued: true, error: e instanceof Error ? e.message : String(e) };
+			return { ok: false as const, queued: true, error: e instanceof Error ? e.message : String(e) };
 		}
 	);
+
+	if ('authError' in sgResult && sgResult.authError) {
+		return Response.json({ error: sgResult.error }, { status: 401 });
+	}
 
 	// Concurrency-safe save: reload the latest tournament from Redis and merge our
 	// bracket changes into it. Protects against two bracket reports racing where

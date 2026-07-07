@@ -4,6 +4,24 @@ const API_URL = 'https://api.start.gg/gql/alpha';
 const API_DELAY = 800;
 const SETS_PER_PAGE = 50;
 
+export class StartGGAuthError extends Error {
+	constructor(status: number) {
+		super(`StartGG token expired or invalid (HTTP ${status}). Re-authenticate and try again.`);
+		this.name = 'StartGGAuthError';
+	}
+}
+
+export async function validateStartGGToken(): Promise<void> {
+	const token = getToken();
+	const res = await fetch(API_URL, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+		body: JSON.stringify({ query: '{ currentUser { id } }', variables: {} })
+	});
+	if (res.status === 401 || res.status === 403) throw new StartGGAuthError(res.status);
+	if (!res.ok) throw new Error(`StartGG health check failed: HTTP ${res.status}`);
+}
+
 // StartGG character IDs for SSBU (videogame 1386) — fetched from StartGG API
 // Keys match MSV Hub's character list in brackets page; aliases added for API name mismatches.
 const SSBU_CHAR_IDS: Record<string, number> = {
@@ -75,6 +93,10 @@ export async function gql<T = Record<string, unknown>>(
 		console.warn('StartGG rate limited, waiting 10s...');
 		await sleep(10_000, signal);
 		return gql(query, variables, signal);
+	}
+
+	if (res.status === 401 || res.status === 403) {
+		throw new StartGGAuthError(res.status);
 	}
 
 	if (!res.ok) {
@@ -565,6 +587,10 @@ export async function reportSet(
 		return { ok: false, error: `Network error: ${e instanceof Error ? e.message : String(e)}` };
 	}
 
+	if (res.status === 401 || res.status === 403) {
+		throw new StartGGAuthError(res.status);
+	}
+
 	if (res.status === 429) {
 		console.warn('StartGG rate limited on reportSet, waiting 10s...');
 		await new Promise<void>((r) => setTimeout(r, 10_000));
@@ -613,6 +639,7 @@ export async function resetSet(setId: string): Promise<{ ok: boolean; error?: st
 			headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
 			body: JSON.stringify({ query: RESET_SET_MUTATION, variables: { setId } })
 		});
+		if (res.status === 401 || res.status === 403) throw new StartGGAuthError(res.status);
 		if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
 		const json = await res.json().catch(() => null);
 		if (!json || json.errors?.length) {

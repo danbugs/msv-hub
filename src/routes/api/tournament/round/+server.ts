@@ -3,7 +3,7 @@ import { env } from '$env/dynamic/private';
 import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
-import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
+import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups, validateStartGGToken, StartGGAuthError } from '$lib/server/startgg';
 import { addEntrantsToPhase, finalizePlacements } from '$lib/server/startgg-admin';
 import {
 	calculateStandings,
@@ -23,6 +23,15 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
 	if (tournament.phase !== 'swiss') return Response.json({ error: 'Tournament is not in Swiss phase' }, { status: 400 });
+
+	try {
+		await validateStartGGToken();
+	} catch (e) {
+		if (e instanceof StartGGAuthError) {
+			return Response.json({ error: e.message }, { status: 401 });
+		}
+		return Response.json({ error: 'Could not verify StartGG token. Check your connection and try again.' }, { status: 503 });
+	}
 
 	const body = await request.json().catch(() => ({}));
 	const regenerate = body.regenerate === true;
@@ -496,9 +505,20 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Report to StartGG.
-	const sgResult = await reportSwissMatch(tournament, targetRound.number, match).catch(
-		(e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) })
-	);
+	let sgResult: { ok: boolean; error?: string };
+	try {
+		sgResult = await reportSwissMatch(tournament, targetRound.number, match);
+	} catch (e) {
+		if (gotLock) await releaseLock(lockKey);
+		if (e instanceof StartGGAuthError) {
+			match.winnerId = origWinnerId;
+			match.topScore = origTopScore;
+			match.bottomScore = origBottomScore;
+			match.isDQ = origIsDQ;
+			return Response.json({ error: e.message }, { status: 401 });
+		}
+		sgResult = { ok: false, error: e instanceof Error ? e.message : String(e) };
+	}
 
 	if (gotLock) await releaseLock(lockKey);
 
