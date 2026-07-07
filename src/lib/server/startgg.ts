@@ -25,7 +25,8 @@ const SSBU_CHAR_IDS: Record<string, number> = {
 	'Piranha Plant': 1441, 'Joker': 1453, 'Hero': 1526, 'Banjo & Kazooie': 1530,
 	'Banjo-Kazooie': 1530, 'Terry': 1532, 'Byleth': 1539, 'Min Min': 1747, 'Steve': 1766,
 	'Sephiroth': 1777, 'Pyra/Mythra': 1795, 'Pyra & Mythra': 1795, 'Kazuya': 1846, 'Sora': 1897,
-	'Mii Brawler': 1311, 'Mii Gunner': 1415, 'Mii Swordfighter': 1414
+	'Mii Brawler': 1311, 'Mii Gunner': 1415, 'Mii Swordfighter': 1414,
+	'Random': 1746
 };
 
 function getToken(): string {

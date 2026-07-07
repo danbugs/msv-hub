@@ -39,7 +39,7 @@
 		'Ryu', 'Ken', 'Cloud', 'Corrin', 'Bayonetta', 'Inkling', 'Ridley', 'Simon', 'Richter',
 		'King K. Rool', 'Isabelle', 'Incineroar', 'Piranha Plant', 'Joker', 'Hero',
 		'Banjo & Kazooie', 'Terry', 'Byleth', 'Min Min', 'Steve', 'Sephiroth', 'Pyra/Mythra',
-		'Kazuya', 'Sora', 'Mii Brawler', 'Mii Swordfighter', 'Mii Gunner'
+		'Kazuya', 'Sora', 'Mii Brawler', 'Mii Swordfighter', 'Mii Gunner', 'Random'
 	];
 
 	function filteredChars(search: string, already: string[]): string[] {
