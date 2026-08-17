@@ -148,6 +148,22 @@
 		else error = 'Failed to reassign stream';
 	}
 
+	let repushingRound = $state<number | null>(null);
+	async function repushPairings(roundNumber: number) {
+		if (!confirm(`Re-push round ${roundNumber} pairings to StartGG? This will restart the phase if needed.`)) return;
+		repushingRound = roundNumber;
+		error = '';
+		const res = await fetch('/api/tournament/round/repush', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ roundNumber })
+		});
+		const data = await res.json();
+		if (!res.ok) error = data.error ?? 'Failed to re-push pairings';
+		repushingRound = null;
+		await loadTournament();
+	}
+
 	let phaseResetting = $state(false);
 	async function confirmPhaseReset() {
 		phaseResetting = true;
@@ -365,6 +381,13 @@
 						<span class="rounded-full px-2 py-0.5 text-xs font-medium {isCurrent ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}">
 							{round.status}
 						</span>
+						{#if round.number > 0}
+							<button onclick={() => repushPairings(round.number)} disabled={repushingRound === round.number}
+								class="rounded px-2 py-0.5 text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
+								title="Re-push pairings to StartGG (restarts phase if needed)">
+								{repushingRound === round.number ? 'Pushing...' : '↻ Re-push'}
+							</button>
+						{/if}
 						{#if round.byePlayerId}
 							<span class="text-xs text-warning min-w-0">BYE: <span class="truncate">{getEntrant(round.byePlayerId)?.gamerTag}</span></span>
 						{/if}
