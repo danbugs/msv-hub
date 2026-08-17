@@ -214,8 +214,11 @@
 		const totalPlayers = bracket.players.length;
 		if (totalPlayers <= 8) return true;
 		const maxWinnersRound = Math.max(...bracket.matches.filter((m) => m.round > 0).map((m) => m.round));
-		if (match.round > 0) return match.round >= maxWinnersRound - 2;
-		return match.round <= -(Math.max(...bracket.matches.filter((m) => m.round < 0).map((m) => Math.abs(m.round))) - 3);
+		// Top 8 on winners: WQF onwards (GF is maxWR, WF is maxWR-1, WSF is maxWR-2, WQF is maxWR-3)
+		if (match.round > 0) return match.round >= maxWinnersRound - 3;
+		// Top 8 on losers: the round where WQF losers drop in, and everything deeper
+		const maxAbsLR = Math.max(...bracket.matches.filter((m) => m.round < 0).map((m) => Math.abs(m.round)));
+		return match.round <= -(maxAbsLR - 4);
 	}
 
 	/** Redemption finals: only WF, LF, GF, GFR are BO5 */
