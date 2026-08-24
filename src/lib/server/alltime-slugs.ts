@@ -45,7 +45,7 @@ export function getAllTimeEvents(): AllTimeEventConfig[] {
 
 	events.push({ slug: 'microspacing-vancouver-prologue', weight: 1.0 });
 
-	for (let i = 1; i <= 138; i++) {
+	for (let i = 1; i <= 150; i++) {
 		const suffix = SPECIAL_SLUGS[i] ?? String(i);
 		events.push({
 			slug: `microspacing-vancouver-${suffix}`,
