@@ -27,6 +27,19 @@ const REDUCED_WEIGHT: Record<number, number> = {
 
 const SINGLES_ONLY = new Set([50]);
 
+export function getWeightForSlug(slug: string): number {
+	const match = slug.match(/microspacing-vancouver-(\d+)/);
+	if (!match) return 1.0;
+	const num = parseInt(match[1], 10);
+	return REDUCED_WEIGHT[num] ?? 1.0;
+}
+
+export function isSinglesOnlySlug(slug: string): boolean {
+	const match = slug.match(/microspacing-vancouver-(\d+)/);
+	if (!match) return false;
+	return SINGLES_ONLY.has(parseInt(match[1], 10));
+}
+
 export function getAllTimeEvents(): AllTimeEventConfig[] {
 	const events: AllTimeEventConfig[] = [];
 

@@ -1,9 +1,10 @@
 import { gql, TOURNAMENT_QUERY } from '$lib/server/startgg';
 import { createRating, rate1v1, rate1v1Weighted, ratingToPoints, DEFAULT_SIGMA } from '$lib/server/trueskill';
-import { getLeagueSeason, saveLeagueSeason, getMergeMap, clearBioCache } from '$lib/server/league-store';
+import { getLeagueSeason, getSeasonIndex, saveLeagueSeason, getMergeMap, clearBioCache } from '$lib/server/league-store';
 import type { MergeMap } from '$lib/server/league-store';
 import type { LeagueSeason, LeagueEvent, LeaguePlayer, LeagueMatch, LeaguePlacement, CharacterSelection } from '$lib/types/league';
 import type { Rating } from '$lib/server/trueskill';
+import { getWeightForSlug, isSinglesOnlySlug } from '$lib/server/alltime-slugs';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type GqlRecord = Record<string, any>;
@@ -535,4 +536,80 @@ function getLatestTag(matches: LeagueMatch[], playerId: string, tags?: Set<strin
 		if (m.player2Id === playerId) return m.player2Tag;
 	}
 	return [...tags][0];
+}
+
+/**
+ * Sync events to the All-Time season (ID 0). Adds any slugs not already
+ * present, then recomputes ratings with single-pass TrueSkill.
+ * Weights come from the import call first, then fall back to the
+ * alltime-slugs config for known special events.
+ */
+export async function syncEventsToAllTime(
+	newSlugs: string[],
+	importWeights?: Record<string, number>,
+	onProgress?: (msg: string) => void
+): Promise<LeagueSeason | null> {
+	const log = onProgress ?? console.log;
+
+	const allTime = await getLeagueSeason(0);
+	const existingSlugs = new Set(allTime?.events.map((e) => e.slug) ?? []);
+
+	const newToAllTime = newSlugs.filter((s) => !existingSlugs.has(s));
+	if (newToAllTime.length === 0) {
+		log('All-Time: all events already present, skipping sync');
+		return allTime;
+	}
+
+	// Combine existing slugs (in order) + new slugs
+	const allSlugs = [...(allTime?.events.map((e) => e.slug) ?? []), ...newToAllTime];
+
+	// Build weights for new events: import weight > alltime-slugs config > 1.0
+	const weights: Record<string, number> = {};
+	const singlesOnly = new Set<string>();
+	for (const slug of newToAllTime) {
+		const w = importWeights?.[slug] ?? getWeightForSlug(slug);
+		if (w !== 1.0) weights[slug] = w;
+		if (isSinglesOnlySlug(slug)) singlesOnly.add(slug);
+	}
+
+	log(`All-Time: syncing ${newToAllTime.length} new event(s): ${newToAllTime.join(', ')}`);
+
+	return importSeason(
+		0, 'All-Time', '', '',
+		allSlugs,
+		(msg) => log(`All-Time: ${msg}`),
+		{ forceRefetch: false, twoPass: false, weights, singlesOnly: singlesOnly.size > 0 ? singlesOnly : undefined }
+	);
+}
+
+/**
+ * Collect every event slug across all non-All-Time seasons and sync them
+ * into the All-Time season. Used for one-off repairs.
+ */
+export async function syncAllSeasonsToAllTime(
+	onProgress?: (msg: string) => void
+): Promise<LeagueSeason | null> {
+	const log = onProgress ?? console.log;
+	const seasons = await getSeasonIndex();
+	const allSlugs: string[] = [];
+
+	for (const { id } of seasons) {
+		if (id === 0) continue;
+		const season = await getLeagueSeason(id);
+		if (season) {
+			for (const evt of season.events) {
+				if (!allSlugs.includes(evt.slug)) {
+					allSlugs.push(evt.slug);
+				}
+			}
+		}
+	}
+
+	if (allSlugs.length === 0) {
+		log('No events found in any season');
+		return null;
+	}
+
+	log(`Found ${allSlugs.length} total events across all seasons`);
+	return syncEventsToAllTime(allSlugs, undefined, log);
 }

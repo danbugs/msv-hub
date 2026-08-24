@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { importSeason } from '$lib/server/league-import';
+import { importSeason, syncEventsToAllTime } from '$lib/server/league-import';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -29,6 +29,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		(msg) => logs.push(msg),
 		{ forceRefetch: forceRefetch ?? false, twoPass: true, weights }
 	);
+
+	// Auto-sync imported events to the All-Time season
+	if (seasonId !== 0) {
+		try {
+			await syncEventsToAllTime(tournamentSlugs, weights, (msg) => logs.push(msg));
+		} catch (e) {
+			logs.push(`All-Time sync warning: ${e instanceof Error ? e.message : 'unknown error'}`);
+		}
+	}
 
 	return Response.json({
 		ok: true,

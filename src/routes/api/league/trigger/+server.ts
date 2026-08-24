@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { importSeason } from '$lib/server/league-import';
+import { importSeason, syncEventsToAllTime } from '$lib/server/league-import';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const auth = request.headers.get('authorization');
@@ -35,6 +35,13 @@ export const POST: RequestHandler = async ({ request }) => {
 		(msg) => logs.push(msg),
 		{ forceRefetch, twoPass: true }
 	);
+
+	// Auto-sync to All-Time
+	try {
+		await syncEventsToAllTime(slugs, undefined, (msg) => logs.push(msg));
+	} catch (e) {
+		logs.push(`All-Time sync warning: ${e instanceof Error ? e.message : 'unknown error'}`);
+	}
 
 	return Response.json({
 		ok: true,
