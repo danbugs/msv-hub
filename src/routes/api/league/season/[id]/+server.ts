@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { getLeagueSeason, getRankings, getLeagueConfig, getMinEventsForSeason } from '$lib/server/league-store';
+import { getLeagueSeason, getRankings, getLeagueConfig, getMinEventsForSeason, getRatingConfigForSeason } from '$lib/server/league-store';
 
 export const GET: RequestHandler = async ({ params, url }) => {
 	const id = parseInt(params.id, 10);
@@ -10,9 +10,11 @@ export const GET: RequestHandler = async ({ params, url }) => {
 
 	const minEventsParam = url.searchParams.get('minEvents');
 	const leagueConfig = await getLeagueConfig();
+	const ratingConfig = getRatingConfigForSeason(leagueConfig, id);
 	const config = {
 		minEvents: minEventsParam ? parseInt(minEventsParam, 10) : getMinEventsForSeason(leagueConfig, id),
-		attendanceBonus: leagueConfig.attendanceBonus
+		attendanceBonus: ratingConfig.attendanceBonus ?? (id === 0 ? 5 : leagueConfig.attendanceBonus),
+		conservativeFactor: ratingConfig.conservativeFactor ?? 0
 	};
 	const rankings = getRankings(season, config);
 

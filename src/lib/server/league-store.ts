@@ -1,7 +1,7 @@
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
 import type { LeagueSeason, LeaguePlayer, LeaguePlayerStats, LeagueMatch, SeasonAward } from '$lib/types/league';
-import { createRating, rate1v1, rate1v1Weighted, ratingToPoints, DEFAULT_SIGMA, SIGMA_FLOOR, applySigmaBoost } from '$lib/server/trueskill';
+import { createRating, rate1v1, rate1v1Weighted, ratingToPoints, DEFAULT_SIGMA, SIGMA_FLOOR, POINTS_SCALE, applySigmaBoost } from '$lib/server/trueskill';
 import type { Rating } from '$lib/server/trueskill';
 
 const LEAGUE_SEASON_PREFIX = 'league:season:';
@@ -12,6 +12,10 @@ const LEAGUE_BIO_PREFIX = 'league:bio:';
 
 export interface SeasonRatingConfig {
 	sigmaBoostPerEvent?: number;
+	/** Multiplier for sigma penalty in display points: displayPts = mu*200 - k*sigma*200. Higher = more penalty for uncertain (few-event) players. Standard TrueSkill uses 3; 0 = off (default). */
+	conservativeFactor?: number;
+	/** Override attendance bonus for this season (points per event attended). */
+	attendanceBonus?: number;
 }
 
 export interface LeagueConfig {
@@ -282,9 +286,10 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 
 export function getRankings(
 	season: LeagueSeason,
-	config?: { minEvents?: number; attendanceBonus?: number }
+	config?: { minEvents?: number; attendanceBonus?: number; conservativeFactor?: number }
 ): { playerId: string; gamerTag: string; points: number; rank: number; eventsAttended: number }[] {
 	const bonus = config?.attendanceBonus ?? 0;
+	const factor = config?.conservativeFactor ?? 0;
 	const minEvents = Math.min(config?.minEvents ?? 0, season.events.length);
 
 	const eventCounts = new Map<string, number>();
@@ -297,7 +302,8 @@ export function getRankings(
 	const players = Object.values(season.players)
 		.map((p) => {
 			const events = eventCounts.get(p.id) ?? 0;
-			return { ...p, eventsAttended: events, adjustedPoints: p.points + events * bonus };
+			const sigmaPenalty = factor > 0 ? Math.round(factor * p.sigma * POINTS_SCALE) : 0;
+			return { ...p, eventsAttended: events, adjustedPoints: p.points - sigmaPenalty + events * bonus };
 		})
 		.filter((p) => p.eventsAttended >= minEvents)
 		.sort((a, b) => b.adjustedPoints - a.adjustedPoints || a.sigma - b.sigma);

@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { getLeagueSeason, getRankings, getLeagueConfig, getSeasonIndex, getMinEventsForSeason } from '$lib/server/league-store';
+import { getLeagueSeason, getRankings, getLeagueConfig, getSeasonIndex, getMinEventsForSeason, getRatingConfigForSeason } from '$lib/server/league-store';
 import { getPlayerTier, getTournamentTiers } from '$lib/types/league';
 
 export const load: PageServerLoad = async ({ url }) => {
@@ -10,9 +10,10 @@ export const load: PageServerLoad = async ({ url }) => {
 	const seasons = await getSeasonIndex();
 
 	if (!season) return { season: null, rankings: [], seasonId, seasonParam, events: [], awards: [], seasons };
+	const ratingConfig = getRatingConfigForSeason(config, seasonId);
 	const rankConfig = seasonId === 0
-		? { ...config, attendanceBonus: 5 }
-		: { ...config, minEvents: getMinEventsForSeason(config, seasonId) };
+		? { ...config, attendanceBonus: 5, conservativeFactor: ratingConfig.conservativeFactor ?? 0 }
+		: { ...config, minEvents: getMinEventsForSeason(config, seasonId), attendanceBonus: ratingConfig.attendanceBonus ?? config.attendanceBonus, conservativeFactor: ratingConfig.conservativeFactor ?? 0 };
 	const rankings = getRankings(season, rankConfig);
 
 	const playerMatchCounts = new Map<string, { wins: number; losses: number; events: Set<string> }>();
