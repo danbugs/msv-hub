@@ -289,6 +289,7 @@ export interface ImportOptions {
 	weights?: Record<string, number>;
 	singlesOnly?: Set<string>;
 	sigmaBoostPerEvent?: number;
+	sigmaFloor?: number;
 }
 
 export async function importSeason(
@@ -465,8 +466,8 @@ export async function importSeason(
 				const p1Before = ratingToPoints(r1);
 				const p2Before = ratingToPoints(r2);
 				const rateFn = weight !== 1.0
-					? (w: Rating, l: Rating) => rate1v1Weighted(w, l, weight)
-					: rate1v1;
+					? (w: Rating, l: Rating) => rate1v1Weighted(w, l, weight, opts.sigmaFloor)
+					: (w: Rating, l: Rating) => rate1v1(w, l, opts.sigmaFloor);
 				const result = match.winnerId === match.player1Id ? rateFn(r1, r2) : rateFn(r2, r1);
 				if (match.winnerId === match.player1Id) {
 					ratings.set(match.player1Id, result.winner);

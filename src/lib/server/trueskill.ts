@@ -67,7 +67,7 @@ function wFunc(t: number, v: number): number {
 	return v * (v + t);
 }
 
-export function rate1v1(winner: Rating, loser: Rating): { winner: Rating; loser: Rating } {
+export function rate1v1(winner: Rating, loser: Rating, sigmaFloor = SIGMA_FLOOR): { winner: Rating; loser: Rating } {
 	const wSigma2 = winner.sigma * winner.sigma + TAU * TAU;
 	const lSigma2 = loser.sigma * loser.sigma + TAU * TAU;
 	const c = Math.sqrt(2 * BETA * BETA + wSigma2 + lSigma2);
@@ -81,13 +81,13 @@ export function rate1v1(winner: Rating, loser: Rating): { winner: Rating; loser:
 	const lSigma = Math.sqrt(lSigma2 * (1 - (lSigma2 / (c * c)) * w));
 
 	return {
-		winner: { mu: wMu, sigma: Math.max(wSigma, SIGMA_FLOOR) },
-		loser: { mu: lMu, sigma: Math.max(lSigma, SIGMA_FLOOR) }
+		winner: { mu: wMu, sigma: Math.max(wSigma, sigmaFloor) },
+		loser: { mu: lMu, sigma: Math.max(lSigma, sigmaFloor) }
 	};
 }
 
-export function rate1v1Weighted(winner: Rating, loser: Rating, weight: number): { winner: Rating; loser: Rating } {
-	const result = rate1v1(winner, loser);
+export function rate1v1Weighted(winner: Rating, loser: Rating, weight: number, sigmaFloor = SIGMA_FLOOR): { winner: Rating; loser: Rating } {
+	const result = rate1v1(winner, loser, sigmaFloor);
 	if (weight === 1.0) return result;
 	const wMuDelta = (result.winner.mu - winner.mu) * weight;
 	const lMuDelta = (result.loser.mu - loser.mu) * weight;

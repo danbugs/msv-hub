@@ -31,7 +31,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		endDate,
 		tournamentSlugs,
 		(msg) => logs.push(msg),
-		{ forceRefetch: forceRefetch ?? false, twoPass: true, weights, sigmaBoostPerEvent: ratingConfig.sigmaBoostPerEvent }
+		{ forceRefetch: forceRefetch ?? false, twoPass: true, weights, sigmaBoostPerEvent: ratingConfig.sigmaBoostPerEvent, sigmaFloor: ratingConfig.sigmaFloor }
 	);
 
 	// Auto-sync imported events to the All-Time season

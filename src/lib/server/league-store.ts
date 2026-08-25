@@ -16,6 +16,8 @@ export interface SeasonRatingConfig {
 	conservativeFactor?: number;
 	/** Override attendance bonus for this season (points per event attended). */
 	attendanceBonus?: number;
+	/** Override sigma floor for this season. Higher = ratings stay more responsive late in the season. Default: DEFAULT_SIGMA/6 ≈ 1.389. */
+	sigmaFloor?: number;
 }
 
 export interface LeagueConfig {
@@ -150,6 +152,7 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 	const mergeMap = await getMergeMap();
 	const twoPass = seasonId !== 0;
 	const sigmaBoost = ratingConfig?.sigmaBoostPerEvent;
+	const sigmaFloor = ratingConfig?.sigmaFloor;
 
 	function resolve(id: string): string { return mergeMap[id] ?? id; }
 
@@ -216,7 +219,7 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 				const w = ratings.get(m.winnerId) ?? createRating();
 				const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
 				const l = ratings.get(loserId) ?? createRating();
-				const result = weight !== 1.0 ? rate1v1Weighted(w, l, weight) : rate1v1(w, l);
+				const result = weight !== 1.0 ? rate1v1Weighted(w, l, weight, sigmaFloor) : rate1v1(w, l, sigmaFloor);
 				const wPrev = ratingToPoints(w);
 				const lPrev = ratingToPoints(l);
 				ratings.set(m.winnerId, result.winner);
