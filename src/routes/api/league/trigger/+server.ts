@@ -1,6 +1,7 @@
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { importSeason, syncEventsToAllTime } from '$lib/server/league-import';
+import { getLeagueConfig, getRatingConfigForSeason } from '$lib/server/league-store';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const auth = request.headers.get('authorization');
@@ -25,6 +26,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 	}
 
+	const leagueConfig = await getLeagueConfig();
+	const ratingConfig = getRatingConfigForSeason(leagueConfig, seasonId);
+
 	const logs: string[] = [];
 	const season = await importSeason(
 		seasonId,
@@ -33,7 +37,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		'2026-05-12',
 		slugs,
 		(msg) => logs.push(msg),
-		{ forceRefetch, twoPass: true }
+		{ forceRefetch, twoPass: true, sigmaBoostPerEvent: ratingConfig.sigmaBoostPerEvent }
 	);
 
 	// Auto-sync to All-Time

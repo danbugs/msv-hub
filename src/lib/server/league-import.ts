@@ -1,5 +1,5 @@
 import { gql, TOURNAMENT_QUERY } from '$lib/server/startgg';
-import { createRating, rate1v1, rate1v1Weighted, ratingToPoints, DEFAULT_SIGMA } from '$lib/server/trueskill';
+import { createRating, rate1v1, rate1v1Weighted, ratingToPoints, DEFAULT_SIGMA, applySigmaBoost } from '$lib/server/trueskill';
 import { getLeagueSeason, getSeasonIndex, saveLeagueSeason, getMergeMap, clearBioCache } from '$lib/server/league-store';
 import type { MergeMap } from '$lib/server/league-store';
 import type { LeagueSeason, LeagueEvent, LeaguePlayer, LeagueMatch, LeaguePlacement, CharacterSelection } from '$lib/types/league';
@@ -288,6 +288,7 @@ export interface ImportOptions {
 	twoPass?: boolean;
 	weights?: Record<string, number>;
 	singlesOnly?: Set<string>;
+	sigmaBoostPerEvent?: number;
 }
 
 export async function importSeason(
@@ -440,6 +441,13 @@ export async function importSeason(
 		for (const evt of events) {
 			const evtMatches = allMatches.filter((m) => m.eventSlug === evt.slug);
 			const weight = evt.weight ?? 1.0;
+
+			// Apply per-event sigma boost to model skill drift between events
+			if (opts.sigmaBoostPerEvent && ratings.size > 0) {
+				for (const [id, r] of ratings) {
+					ratings.set(id, applySigmaBoost(r, opts.sigmaBoostPerEvent));
+				}
+			}
 
 			const eventPlayerIds = new Set<string>();
 			for (const match of evtMatches) {

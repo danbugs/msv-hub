@@ -97,6 +97,11 @@ export function rate1v1Weighted(winner: Rating, loser: Rating, weight: number): 
 	};
 }
 
+/** Boost sigma between events to model skill drift. Capped at pass-2 starting sigma. */
+export function applySigmaBoost(r: Rating, boost: number, maxSigma = DEFAULT_SIGMA / 2): Rating {
+	return { mu: r.mu, sigma: Math.min(r.sigma + boost, maxSigma) };
+}
+
 export function matchQuality(a: Rating, b: Rating): number {
 	const totalSigma2 = a.sigma * a.sigma + b.sigma * b.sigma + 2 * BETA * BETA;
 	const muDiff = a.mu - b.mu;

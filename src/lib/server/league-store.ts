@@ -1,7 +1,7 @@
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
 import type { LeagueSeason, LeaguePlayer, LeaguePlayerStats, LeagueMatch, SeasonAward } from '$lib/types/league';
-import { createRating, rate1v1, rate1v1Weighted, ratingToPoints, DEFAULT_SIGMA, SIGMA_FLOOR } from '$lib/server/trueskill';
+import { createRating, rate1v1, rate1v1Weighted, ratingToPoints, DEFAULT_SIGMA, SIGMA_FLOOR, applySigmaBoost } from '$lib/server/trueskill';
 import type { Rating } from '$lib/server/trueskill';
 
 const LEAGUE_SEASON_PREFIX = 'league:season:';
@@ -10,14 +10,23 @@ const LEAGUE_CONFIG_KEY = 'league:config';
 const LEAGUE_SEASONS_INDEX_KEY = 'league:seasons';
 const LEAGUE_BIO_PREFIX = 'league:bio:';
 
+export interface SeasonRatingConfig {
+	sigmaBoostPerEvent?: number;
+}
+
 export interface LeagueConfig {
 	minEvents: number;
 	attendanceBonus: number;
 	defaultSeason: number;
 	seasonMinEvents: Record<string, number>;
+	seasonRatingConfig?: Record<string, SeasonRatingConfig>;
 }
 
 const DEFAULT_CONFIG: LeagueConfig = { minEvents: 2, attendanceBonus: 50, defaultSeason: 11, seasonMinEvents: {} };
+
+export function getRatingConfigForSeason(config: LeagueConfig, seasonId: number): SeasonRatingConfig {
+	return config.seasonRatingConfig?.[String(seasonId)] ?? {};
+}
 
 export function getMinEventsForSeason(config: LeagueConfig, seasonId: number): number {
 	return config.seasonMinEvents?.[String(seasonId)] ?? config.minEvents;
@@ -131,11 +140,12 @@ export async function removeMerge(secondaryId: string): Promise<void> {
 	await saveMergeMap(merges);
 }
 
-export async function recomputeSeasonFromStored(seasonId: number, log: (msg: string) => void): Promise<LeagueSeason | null> {
+export async function recomputeSeasonFromStored(seasonId: number, log: (msg: string) => void, ratingConfig?: SeasonRatingConfig): Promise<LeagueSeason | null> {
 	const season = await getLeagueSeason(seasonId);
 	if (!season) return null;
 	const mergeMap = await getMergeMap();
 	const twoPass = seasonId !== 0;
+	const sigmaBoost = ratingConfig?.sigmaBoostPerEvent;
 
 	function resolve(id: string): string { return mergeMap[id] ?? id; }
 
@@ -189,6 +199,13 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 		for (const evt of season!.events) {
 			const eventMatches = matchesByEvent.get(evt.slug) ?? [];
 			const weight = evt.weight ?? 1.0;
+
+			// Apply per-event sigma boost to model skill drift between events
+			if (sigmaBoost && ratings.size > 0) {
+				for (const [id, r] of ratings) {
+					ratings.set(id, applySigmaBoost(r, sigmaBoost));
+				}
+			}
 
 			for (const m of eventMatches) {
 				if (m.isDQ) { m.p1Delta = 0; m.p2Delta = 0; continue; }

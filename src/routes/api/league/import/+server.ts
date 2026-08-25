@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
 import { importSeason, syncEventsToAllTime } from '$lib/server/league-import';
+import { getLeagueConfig, getRatingConfigForSeason } from '$lib/server/league-store';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -19,6 +20,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'Missing required fields' }, { status: 400 });
 	}
 
+	const config = await getLeagueConfig();
+	const ratingConfig = getRatingConfigForSeason(config, seasonId);
+
 	const logs: string[] = [];
 	const season = await importSeason(
 		seasonId,
@@ -27,7 +31,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		endDate,
 		tournamentSlugs,
 		(msg) => logs.push(msg),
-		{ forceRefetch: forceRefetch ?? false, twoPass: true, weights }
+		{ forceRefetch: forceRefetch ?? false, twoPass: true, weights, sigmaBoostPerEvent: ratingConfig.sigmaBoostPerEvent }
 	);
 
 	// Auto-sync imported events to the All-Time season

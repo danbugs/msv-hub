@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { recomputeSeasonFromStored } from '$lib/server/league-store';
+import { recomputeSeasonFromStored, getLeagueConfig, getRatingConfigForSeason } from '$lib/server/league-store';
 
 export const config = { maxDuration: 60 };
 
@@ -9,8 +9,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const body = await request.json().catch(() => ({})) as Record<string, unknown>;
 	const seasonId = body.seasonId as number ?? 0;
 
+	const leagueConfig = await getLeagueConfig();
+	const ratingConfig = getRatingConfigForSeason(leagueConfig, seasonId);
+
 	const logs: string[] = [];
-	const season = await recomputeSeasonFromStored(seasonId, (msg) => logs.push(msg));
+	const season = await recomputeSeasonFromStored(seasonId, (msg) => logs.push(msg), ratingConfig);
 	if (!season) return Response.json({ error: 'Season not found' }, { status: 404 });
 
 	return Response.json({
