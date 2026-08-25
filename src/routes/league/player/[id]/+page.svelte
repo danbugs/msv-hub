@@ -7,6 +7,84 @@
 	let bio = $state<string | null>(null);
 	let bioLoading = $state(false);
 
+	// H2H search
+	let h2hQuery = $state('');
+	let h2hSelectedOpp = $state<{ id: string; tag: string } | null>(null);
+	let h2hDropdownOpen = $state(false);
+
+	const allOpponents = $derived.by(() => {
+		if (!data.stats) return [];
+		const opps = new Map<string, { id: string; tag: string; wins: number; losses: number }>();
+		for (const m of data.stats.recentMatches) {
+			if (m.isDQ) continue;
+			const isP1 = m.player1Id === data.stats.player.id;
+			const oppId = isP1 ? m.player2Id : m.player1Id;
+			const oppTag = isP1 ? m.player2Tag : m.player1Tag;
+			const won = m.winnerId === data.stats.player.id;
+			const existing = opps.get(oppId) ?? { id: oppId, tag: oppTag, wins: 0, losses: 0 };
+			existing.tag = oppTag;
+			if (won) existing.wins++;
+			else existing.losses++;
+			opps.set(oppId, existing);
+		}
+		return [...opps.values()].sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses));
+	});
+
+	const h2hSuggestions = $derived.by(() => {
+		if (!h2hQuery.trim() || h2hSelectedOpp) return [];
+		const q = h2hQuery.toLowerCase();
+		return allOpponents.filter((o) => o.tag.toLowerCase().includes(q)).slice(0, 8);
+	});
+
+	const h2hResult = $derived.by(() => {
+		if (!h2hSelectedOpp || !data.stats) return null;
+		const oppId = h2hSelectedOpp.id;
+		const pid = data.stats.player.id;
+		const matches = data.stats.recentMatches.filter(
+			(m) => !m.isDQ && (m.player1Id === oppId || m.player2Id === oppId)
+		);
+		if (!matches.length) return null;
+
+		let wins = 0, losses = 0, scoreFor = 0, scoreAgainst = 0;
+		for (const m of matches) {
+			const isP1 = m.player1Id === pid;
+			if (m.winnerId === pid) wins++;
+			else losses++;
+			scoreFor += isP1 ? m.player1Score : m.player2Score;
+			scoreAgainst += isP1 ? m.player2Score : m.player1Score;
+		}
+
+		const eventMap = new Map<string, typeof matches>();
+		for (const m of matches) {
+			const arr = eventMap.get(m.eventSlug) ?? [];
+			arr.push(m);
+			eventMap.set(m.eventSlug, arr);
+		}
+		const byEvent = data.stats.matchesByEvent
+			.filter((evt) => eventMap.has(evt.slug))
+			.map((evt) => ({
+				name: evt.name,
+				slug: evt.slug,
+				date: evt.date,
+				eventNumber: evt.eventNumber,
+				matches: eventMap.get(evt.slug)!
+			}));
+
+		return { wins, losses, scoreFor, scoreAgainst, scoreDiff: scoreFor - scoreAgainst, byEvent, total: matches.length };
+	});
+
+	function selectOpponent(opp: { id: string; tag: string }) {
+		h2hSelectedOpp = opp;
+		h2hQuery = opp.tag;
+		h2hDropdownOpen = false;
+	}
+
+	function clearH2H() {
+		h2hSelectedOpp = null;
+		h2hQuery = '';
+		h2hDropdownOpen = false;
+	}
+
 	function drawChart() {
 		if (!chartCanvas || !data.stats) return;
 		const history = data.stats.player.rankHistory;
@@ -350,6 +428,121 @@
 					{/if}
 					{#if !s.matchups.nemesis && !s.matchups.dominated && !s.matchups.rival && !s.matchups.gatekeeper && !s.matchups.biggestUpset}
 						<div class="text-sm text-muted-foreground">Not enough data yet</div>
+					{/if}
+				</div>
+			</div>
+
+			<!-- Head-to-Head Search -->
+			<div class="rounded-xl border border-border bg-card p-5">
+				<h2 class="text-sm font-bold text-foreground uppercase tracking-wider mb-3">Head-to-Head</h2>
+				<div class="relative">
+					<div class="flex gap-2">
+						<div class="relative flex-1">
+							<input
+								type="text"
+								placeholder="Search opponent…"
+								class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+								bind:value={h2hQuery}
+								onfocus={() => { h2hDropdownOpen = true; }}
+								oninput={() => { h2hSelectedOpp = null; h2hDropdownOpen = true; }}
+							/>
+							{#if h2hDropdownOpen && h2hSuggestions.length > 0}
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
+								<div class="absolute z-10 mt-1 w-full rounded-lg border border-border bg-card shadow-lg overflow-hidden"
+									onmousedown={(e) => e.preventDefault()}>
+									{#each h2hSuggestions as opp}
+										<button
+											class="w-full px-3 py-2 text-left text-sm hover:bg-secondary transition-colors flex justify-between items-center"
+											onclick={() => selectOpponent(opp)}>
+											<span class="text-foreground font-medium">{opp.tag}</span>
+											<span class="text-xs text-muted-foreground">{opp.wins}-{opp.losses}</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
+						{#if h2hSelectedOpp}
+							<button onclick={clearH2H}
+								class="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:border-foreground transition-colors shrink-0">
+								✕
+							</button>
+						{/if}
+					</div>
+
+					{#if h2hResult}
+						<div class="mt-4 space-y-4">
+							<!-- H2H Summary -->
+							<div class="flex items-center justify-between">
+								<div class="flex items-center gap-2">
+									<span class="text-foreground font-medium text-sm">vs</span>
+									<a href="/league/player/{h2hSelectedOpp?.id}?season={data.seasonParam}"
+										class="text-primary hover:text-primary/80 font-medium text-sm">{h2hSelectedOpp?.tag}</a>
+								</div>
+								<div class="text-right">
+									<div class="text-lg font-bold tabular-nums">
+										<span class="text-success">{h2hResult.wins}</span>
+										<span class="text-muted-foreground mx-1">-</span>
+										<span class="text-destructive">{h2hResult.losses}</span>
+									</div>
+								</div>
+							</div>
+
+							<!-- Game Score -->
+							<div class="grid grid-cols-3 gap-2 text-center text-sm">
+								<div>
+									<div class="text-xs text-muted-foreground">Games +</div>
+									<div class="font-medium text-foreground">{h2hResult.scoreFor}</div>
+								</div>
+								<div>
+									<div class="text-xs text-muted-foreground">Games -</div>
+									<div class="font-medium text-foreground">{h2hResult.scoreAgainst}</div>
+								</div>
+								<div>
+									<div class="text-xs text-muted-foreground">+/-</div>
+									<div class="font-medium {h2hResult.scoreDiff >= 0 ? 'text-success' : 'text-destructive'}">
+										{h2hResult.scoreDiff > 0 ? '+' : ''}{h2hResult.scoreDiff}
+									</div>
+								</div>
+							</div>
+
+							<!-- H2H Match History -->
+							<div class="border-t border-border pt-3 space-y-3">
+								{#each h2hResult.byEvent as evt}
+									<div>
+										<div class="flex items-center justify-between mb-1">
+											<a href="https://www.start.gg/tournament/{evt.slug}" target="_blank" rel="noopener"
+												class="text-xs font-semibold text-foreground hover:text-primary transition-colors">
+												{evt.name} ↗
+											</a>
+											<span class="text-[10px] text-muted-foreground">{evt.date}</span>
+										</div>
+										<div class="space-y-1">
+											{#each evt.matches as match}
+												{@const isP1 = match.player1Id === s.player.id}
+												{@const won = match.winnerId === s.player.id}
+												{@const myScore = isP1 ? match.player1Score : match.player2Score}
+												{@const oppScore = isP1 ? match.player2Score : match.player1Score}
+												{@const pl = phaseLabel(match.phase)}
+												<div class="flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-sm">
+													<span class="w-2 h-2 rounded-full shrink-0 {won ? 'bg-green-500' : 'bg-red-500'}"></span>
+													<span class="{won ? 'text-success' : 'text-destructive'} font-medium w-10 shrink-0">{won ? 'Win' : 'Lose'}</span>
+													<div class="flex items-center gap-1.5 shrink-0 ml-auto">
+														<span class="text-xs tabular-nums text-muted-foreground">{myScore > 0 || oppScore > 0 ? `${myScore}-${oppScore}` : ''}</span>
+														<span class="text-xs px-1.5 py-0.5 rounded w-16 text-center {pl.classes}">
+															{pl.text}
+														</span>
+													</div>
+												</div>
+											{/each}
+										</div>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{:else if h2hSelectedOpp}
+						<div class="mt-4 text-sm text-muted-foreground text-center py-3">
+							No matches found against {h2hSelectedOpp.tag}
+						</div>
 					{/if}
 				</div>
 			</div>
