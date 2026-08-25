@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { getLeagueSeason, getLeagueConfig, getPlayerStats, getRankings } from '$lib/server/league-store';
+import { getLeagueSeason, getLeagueConfig, getPlayerStats, getRankings, getMinEventsForSeason, getRatingConfigForSeason } from '$lib/server/league-store';
 import { getPlayerTier } from '$lib/types/league';
 
 export const load: PageServerLoad = async ({ params, url }) => {
@@ -10,18 +10,23 @@ export const load: PageServerLoad = async ({ params, url }) => {
 	if (!season) return { stats: null, seasonId, seasonParam, seasonName: null };
 
 	const config = await getLeagueConfig();
-	const rankConfig = seasonId === 0 ? { ...config, attendanceBonus: 5 } : config;
+	const ratingConfig = getRatingConfigForSeason(config, seasonId);
+	const rankConfig = seasonId === 0
+		? { ...config, attendanceBonus: 5, conservativeFactor: ratingConfig.conservativeFactor ?? 0 }
+		: { ...config, minEvents: getMinEventsForSeason(config, seasonId), attendanceBonus: ratingConfig.attendanceBonus ?? config.attendanceBonus, conservativeFactor: ratingConfig.conservativeFactor ?? 0 };
 	const stats = getPlayerStats(season, params.id, rankConfig);
 
 	const rankings = getRankings(season, rankConfig);
 	const rankEntry = rankings.find((r) => r.playerId === params.id);
 	const adjustedPoints = rankEntry?.points ?? stats?.player.points ?? 0;
 	const tier = stats ? getPlayerTier(adjustedPoints) : null;
+	const conservativeFactor = rankConfig.conservativeFactor ?? 0;
 
 	return {
 		stats,
 		adjustedPoints,
 		attendanceBonus: rankConfig.attendanceBonus,
+		conservativeFactor,
 		seasonId,
 		seasonParam,
 		seasonName: season.name,
