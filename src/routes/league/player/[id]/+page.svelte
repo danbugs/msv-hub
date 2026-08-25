@@ -102,9 +102,7 @@
 		const H = rect.height;
 		ctx.clearRect(0, 0, W, H);
 
-		const bonus = data.attendanceBonus ?? 0;
-		const cFactor = data.conservativeFactor ?? 0;
-		const values = history.map((h, i) => h.points - Math.round(cFactor * h.sigma * 200) + (i + 1) * bonus);
+		const values = history.map((h) => h.points);
 		const minVal = Math.min(...values);
 		const maxVal = Math.max(...values);
 		const range = maxVal - minVal || 1;
