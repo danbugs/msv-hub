@@ -18,6 +18,8 @@ export interface SeasonRatingConfig {
 	attendanceBonus?: number;
 	/** Override sigma floor for this season. Higher = ratings stay more responsive late in the season. Default: DEFAULT_SIGMA/6 ≈ 1.389. */
 	sigmaFloor?: number;
+	/** Number of TrueSkill passes. More passes = better convergence of early-event estimates. Default: 2. */
+	passes?: number;
 }
 
 export interface LeagueConfig {
@@ -150,7 +152,7 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 	const season = await getLeagueSeason(seasonId);
 	if (!season) return null;
 	const mergeMap = await getMergeMap();
-	const twoPass = seasonId !== 0;
+	const totalPasses = ratingConfig?.passes ?? (seasonId !== 0 ? 2 : 1);
 	const sigmaBoost = ratingConfig?.sigmaBoostPerEvent;
 	const sigmaFloor = ratingConfig?.sigmaFloor;
 
@@ -258,17 +260,15 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 		return { ratings, players };
 	}
 
-	let finalPlayers: Map<string, LeaguePlayer>;
-	if (twoPass) {
-		log('Pass 1: computing initial ratings...');
-		const pass1 = computeRatings();
-		log(`Pass 1 complete: ${pass1.ratings.size} players`);
-		log('Pass 2: refining with seeded ratings...');
-		const pass2 = computeRatings(pass1.ratings, DEFAULT_SIGMA / 2);
-		finalPlayers = pass2.players;
-	} else {
-		const result = computeRatings();
+	let prevRatings: Map<string, Rating> | undefined;
+	let finalPlayers: Map<string, LeaguePlayer> = new Map();
+
+	for (let pass = 1; pass <= totalPasses; pass++) {
+		if (totalPasses > 1) log(`Pass ${pass}/${totalPasses}${pass === 1 ? ': computing initial ratings...' : ': refining...'}`);
+		const result = computeRatings(prevRatings, prevRatings ? DEFAULT_SIGMA / 2 : undefined);
+		prevRatings = result.ratings;
 		finalPlayers = result.players;
+		if (pass < totalPasses) log(`Pass ${pass} complete: ${result.ratings.size} players rated`);
 	}
 
 	season.players = Object.fromEntries(finalPlayers);

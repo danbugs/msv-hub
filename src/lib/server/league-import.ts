@@ -286,6 +286,8 @@ function applyMerges(
 export interface ImportOptions {
 	forceRefetch?: boolean;
 	twoPass?: boolean;
+	/** Number of TrueSkill passes (overrides twoPass). More passes = better convergence. */
+	passes?: number;
 	weights?: Record<string, number>;
 	singlesOnly?: Set<string>;
 	sigmaBoostPerEvent?: number;
@@ -509,15 +511,17 @@ export async function importSeason(
 		return { players, ratings };
 	}
 
-	let pass1Ratings: Map<string, Rating> | undefined;
-	if (opts.twoPass) {
-		log('Pass 1: computing initial ratings...');
-		const pass1 = computeRatings();
-		pass1Ratings = pass1.ratings;
-		log(`Pass 1 complete: ${pass1.ratings.size} players rated`);
-		log('Pass 2: refining with seeded ratings...');
+	const totalPasses = opts.passes ?? (opts.twoPass ? 2 : 1);
+	let prevRatings: Map<string, Rating> | undefined;
+	let players: Map<string, LeaguePlayer> = new Map();
+
+	for (let pass = 1; pass <= totalPasses; pass++) {
+		if (totalPasses > 1) log(`Pass ${pass}/${totalPasses}${pass === 1 ? ': computing initial ratings...' : ': refining...'}`);
+		const result = computeRatings(prevRatings, prevRatings ? DEFAULT_SIGMA / 2 : undefined);
+		prevRatings = result.ratings;
+		players = result.players;
+		if (pass < totalPasses) log(`Pass ${pass} complete: ${result.ratings.size} players rated`);
 	}
-	const { players } = computeRatings(pass1Ratings, pass1Ratings ? DEFAULT_SIGMA / 2 : undefined);
 
 	const season: LeagueSeason = {
 		id: seasonId, name: seasonName, startDate, endDate,
