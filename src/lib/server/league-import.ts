@@ -515,6 +515,15 @@ export async function importSeason(
 	let prevRatings: Map<string, Rating> | undefined;
 	let players: Map<string, LeaguePlayer> = new Map();
 
+	// Process macro events last so one-time regional attendees don't distort
+	// early-season ratings. Preserve original order for the saved season.
+	const chronologicalEvents = [...events];
+	events.sort((a, b) => {
+		const aMacro = a.slug.includes('macro') ? 1 : 0;
+		const bMacro = b.slug.includes('macro') ? 1 : 0;
+		return aMacro - bMacro;
+	});
+
 	for (let pass = 1; pass <= totalPasses; pass++) {
 		if (totalPasses > 1) log(`Pass ${pass}/${totalPasses}${pass === 1 ? ': computing initial ratings...' : ': refining...'}`);
 		const result = computeRatings(prevRatings, prevRatings ? DEFAULT_SIGMA / 2 : undefined);
@@ -522,6 +531,10 @@ export async function importSeason(
 		players = result.players;
 		if (pass < totalPasses) log(`Pass ${pass} complete: ${result.ratings.size} players rated`);
 	}
+
+	// Restore chronological order for persistence
+	events.length = 0;
+	events.push(...chronologicalEvents);
 
 	const season: LeagueSeason = {
 		id: seasonId, name: seasonName, startDate, endDate,

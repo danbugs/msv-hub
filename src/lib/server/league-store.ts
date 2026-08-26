@@ -263,6 +263,15 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 	let prevRatings: Map<string, Rating> | undefined;
 	let finalPlayers: Map<string, LeaguePlayer> = new Map();
 
+	// Process macro events last so one-time regional attendees don't distort
+	// early-season ratings. Preserve original order for the saved season.
+	const chronologicalEvents = [...season.events];
+	season.events.sort((a, b) => {
+		const aMacro = a.slug.includes('macro') ? 1 : 0;
+		const bMacro = b.slug.includes('macro') ? 1 : 0;
+		return aMacro - bMacro;
+	});
+
 	for (let pass = 1; pass <= totalPasses; pass++) {
 		if (totalPasses > 1) log(`Pass ${pass}/${totalPasses}${pass === 1 ? ': computing initial ratings...' : ': refining...'}`);
 		const result = computeRatings(prevRatings, prevRatings ? DEFAULT_SIGMA / 2 : undefined);
@@ -270,6 +279,9 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 		finalPlayers = result.players;
 		if (pass < totalPasses) log(`Pass ${pass} complete: ${result.ratings.size} players rated`);
 	}
+
+	// Restore chronological order for persistence
+	season.events = chronologicalEvents;
 
 	season.players = Object.fromEntries(finalPlayers);
 
