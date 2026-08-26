@@ -14,6 +14,8 @@
 		announcementTemplate: string;
 		paused: boolean;
 		waitlistCreated: boolean;
+		nearCapAlerted: boolean;
+		fastestRegPosted: boolean;
 		updatedAt: number;
 	}
 
@@ -26,6 +28,8 @@
 		announcementTemplate: '',
 		paused: false,
 		waitlistCreated: false,
+		nearCapAlerted: false,
+		fastestRegPosted: false,
 		updatedAt: 0
 	});
 
@@ -249,6 +253,75 @@
 	}
 
 	// ---------------------------------------------------------------------------
+	// Manual actions (real channels, flip flags)
+	// ---------------------------------------------------------------------------
+
+	let manualWaitlistRunning = $state(false);
+	let manualWaitlistResult = $state<{ ok: boolean; msg: string } | null>(null);
+
+	async function triggerManualWaitlist() {
+		manualWaitlistRunning = true;
+		manualWaitlistResult = null;
+		const res = await fetch('/api/discord/manual-action', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ action: 'waitlist' })
+		});
+		const data = await res.json().catch(() => ({}));
+		if (res.ok) {
+			manualWaitlistResult = { ok: true, msg: data.message ?? 'Waitlist created!' };
+			config.waitlistCreated = true;
+			config.nearCapAlerted = true;
+		} else {
+			manualWaitlistResult = { ok: false, msg: data.error ?? 'Failed' };
+		}
+		manualWaitlistRunning = false;
+	}
+
+	let manualFastestRegRunning = $state(false);
+	let manualFastestRegResult = $state<{ ok: boolean; msg: string } | null>(null);
+
+	async function triggerManualFastestReg() {
+		manualFastestRegRunning = true;
+		manualFastestRegResult = null;
+		const res = await fetch('/api/discord/manual-action', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ action: 'fastest-reg' })
+		});
+		const data = await res.json().catch(() => ({}));
+		if (res.ok) {
+			manualFastestRegResult = { ok: true, msg: data.message ?? 'Fastest reg posted!' };
+			config.fastestRegPosted = true;
+		} else {
+			manualFastestRegResult = { ok: false, msg: data.error ?? 'Failed' };
+		}
+		manualFastestRegRunning = false;
+	}
+
+	let resetFastestRegRunning = $state(false);
+	let resetFastestRegResult = $state<{ ok: boolean; msg: string } | null>(null);
+
+	async function resetFastestRegFlag() {
+		resetFastestRegRunning = true;
+		resetFastestRegResult = null;
+		const res = await fetch('/api/discord/config', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ fastestRegPosted: false })
+		});
+		if (res.ok) {
+			config = await res.json();
+			resetFastestRegResult = { ok: true, msg: 'Fastest reg flag reset.' };
+			setTimeout(() => (resetFastestRegResult = null), 4000);
+		} else {
+			const data = await res.json().catch(() => ({}));
+			resetFastestRegResult = { ok: false, msg: (data as { error?: string }).error ?? 'Failed to reset.' };
+		}
+		resetFastestRegRunning = false;
+	}
+
+	// ---------------------------------------------------------------------------
 	// Pre-tournament setup
 	// ---------------------------------------------------------------------------
 
@@ -417,7 +490,8 @@
 					<div class="mt-1.5 flex flex-wrap gap-3 text-xs text-muted-foreground">
 						<span>Cap: <span class="text-foreground">{config.attendeeCap}</span></span>
 						<span>Announcement: <span class="text-foreground">{nextAnnouncement}</span></span>
-						<span>Waitlist: <span class="text-foreground">{config.waitlistCreated ? 'Created' : 'Monitoring (Wed)'}</span></span>
+						<span>Waitlist: <span class="text-foreground">{config.waitlistCreated ? 'Created' : 'Monitoring'}</span></span>
+							<span>Fastest Reg: <span class="text-foreground">{config.fastestRegPosted ? 'Posted' : 'Waiting'}</span></span>
 					</div>
 				{:else}
 					<p class="mt-1 text-sm text-muted-foreground">No event configured — set one below.</p>
@@ -735,15 +809,75 @@
 						{/if}
 					</div>
 				</div>
-				{#if config.eventSlug && config.waitlistCreated}
-					<button onclick={resetWaitlistFlag} disabled={resetWaitlistRunning}
-						class="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-40 transition-colors">
-						{resetWaitlistRunning ? 'Resetting…' : 'Reset Flag'}
-					</button>
-				{/if}
+				<div class="flex flex-col items-end gap-1.5">
+					{#if config.eventSlug && !config.waitlistCreated}
+						<button onclick={triggerManualWaitlist} disabled={manualWaitlistRunning}
+							class="rounded-lg border border-amber-700 bg-amber-900/20 px-3 py-1.5 text-xs font-medium text-warning hover:border-amber-600 disabled:opacity-50 transition-colors">
+							{manualWaitlistRunning ? 'Creating…' : 'Create Now'}
+						</button>
+					{/if}
+					{#if config.eventSlug && config.waitlistCreated}
+						<button onclick={resetWaitlistFlag} disabled={resetWaitlistRunning}
+							class="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-40 transition-colors">
+							{resetWaitlistRunning ? 'Resetting…' : 'Reset Flag'}
+						</button>
+					{/if}
+				</div>
 			</div>
+			{#if manualWaitlistResult}
+				<p class="mt-2 text-xs {manualWaitlistResult.ok ? 'text-success' : 'text-destructive'}">{manualWaitlistResult.msg}</p>
+			{/if}
 			{#if resetWaitlistResult}
 				<p class="mt-2 text-xs {resetWaitlistResult.ok ? 'text-success' : 'text-destructive'}">{resetWaitlistResult.msg}</p>
+			{/if}
+		</div>
+
+		<!-- Fastest Registrant -->
+		<div class="mt-3 rounded-lg border border-border bg-card/50 p-4">
+			<div class="flex items-center justify-between">
+				<div class="min-w-0">
+					<p class="text-sm font-medium text-foreground">Fastest Registrant</p>
+					<p class="mt-1 text-xs text-muted-foreground">Auto-posts when 4+ public registrants detected. Posts to forum + updates leaderboard.</p>
+					<div class="mt-1.5">
+						{#if !config.eventSlug}
+							<span class="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+								<span class="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground"></span>No event set
+							</span>
+						{:else if config.paused}
+							<span class="inline-flex items-center gap-1.5 text-xs text-warning">
+								<span class="inline-block h-1.5 w-1.5 rounded-full bg-warning"></span>Paused
+							</span>
+						{:else if config.fastestRegPosted}
+							<span class="inline-flex items-center gap-1.5 text-xs text-info">
+								<span class="inline-block h-1.5 w-1.5 rounded-full bg-info"></span>Posted
+							</span>
+						{:else}
+							<span class="inline-flex items-center gap-1.5 text-xs text-success">
+								<span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-success"></span>Waiting
+							</span>
+						{/if}
+					</div>
+				</div>
+				<div class="flex flex-col items-end gap-1.5">
+					{#if config.eventSlug && !config.fastestRegPosted}
+						<button onclick={triggerManualFastestReg} disabled={manualFastestRegRunning}
+							class="rounded-lg border border-amber-700 bg-amber-900/20 px-3 py-1.5 text-xs font-medium text-warning hover:border-amber-600 disabled:opacity-50 transition-colors">
+							{manualFastestRegRunning ? 'Posting…' : 'Post Now'}
+						</button>
+					{/if}
+					{#if config.eventSlug && config.fastestRegPosted}
+						<button onclick={resetFastestRegFlag} disabled={resetFastestRegRunning}
+							class="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-40 transition-colors">
+							{resetFastestRegRunning ? 'Resetting…' : 'Reset Flag'}
+						</button>
+					{/if}
+				</div>
+			</div>
+			{#if manualFastestRegResult}
+				<p class="mt-2 text-xs {manualFastestRegResult.ok ? 'text-success' : 'text-destructive'}">{manualFastestRegResult.msg}</p>
+			{/if}
+			{#if resetFastestRegResult}
+				<p class="mt-2 text-xs {resetFastestRegResult.ok ? 'text-success' : 'text-destructive'}">{resetFastestRegResult.msg}</p>
 			{/if}
 		</div>
 	</div>

@@ -22,7 +22,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		registrationMinute,
 		announcementTemplate,
 		paused,
-		waitlistCreated
+		waitlistCreated,
+		nearCapAlerted,
+		fastestRegPosted
 	} = body as {
 		eventSlug?: string;
 		attendeeCap?: 32 | 64;
@@ -32,6 +34,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		announcementTemplate?: string;
 		paused?: boolean;
 		waitlistCreated?: boolean;
+		nearCapAlerted?: boolean;
+		fastestRegPosted?: boolean;
 	};
 
 	// Validate attendeeCap if provided
@@ -69,6 +73,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		...(announcementTemplate !== undefined && { announcementTemplate }),
 		...(paused !== undefined && { paused }),
 		...(waitlistCreated !== undefined && { waitlistCreated }),
+		...(nearCapAlerted !== undefined && { nearCapAlerted }),
+		...(fastestRegPosted !== undefined && { fastestRegPosted }),
 		...(slugChanged && { waitlistCreated: false, nearCapAlerted: false, fastestRegPosted: false })
 	});
 
