@@ -37,7 +37,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		'2026-05-12',
 		slugs,
 		(msg) => logs.push(msg),
-		{ forceRefetch, passes: ratingConfig.passes ?? 3, sigmaBoostPerEvent: ratingConfig.sigmaBoostPerEvent, sigmaFloor: ratingConfig.sigmaFloor }
+		{ forceRefetch, passes: ratingConfig.passes ?? 2, sigmaBoostPerEvent: ratingConfig.sigmaBoostPerEvent, sigmaFloor: ratingConfig.sigmaFloor }
 	);
 
 	// Auto-sync to All-Time

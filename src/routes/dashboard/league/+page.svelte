@@ -90,7 +90,7 @@
 			minEvents = seasonMinEvents[String(sid)] ?? cfg.minEvents ?? 2;
 			attendanceBonus = sid === 0 ? 5 : (cfg.attendanceBonus ?? 50);
 			defaultSeason = cfg.defaultSeason ?? 11;
-			passes = seasonRatingConfig[String(sid)]?.passes ?? 3;
+			passes = seasonRatingConfig[String(sid)]?.passes ?? 2;
 		}
 		if (!awardsMinEvents && season) {
 			awardsMinEvents = String(Math.max(2, Math.floor(season.events.length * 0.4)));
