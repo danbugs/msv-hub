@@ -135,6 +135,12 @@ export const load: PageServerLoad = async ({ url }) => {
 		rankings: enrichedRankings,
 		events: eventTiers.reverse(),
 		stats: { mainWins, topStreaks },
+		rankingConfig: {
+			conservativeFactor: rankConfig.conservativeFactor ?? 0,
+			attendanceBonus: rankConfig.attendanceBonus ?? 0,
+			minEvents: rankConfig.minEvents ?? 0,
+			passes: ratingConfig.passes ?? 2
+		},
 		seasonId,
 		seasonParam,
 		seasons

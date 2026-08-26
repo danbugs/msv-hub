@@ -4,6 +4,7 @@
 	let searchQuery = $state('');
 	let showAllEvents = $state(false);
 	let showGallery = $state(false);
+	let showHowItWorks = $state(false);
 	let lightboxSeason = $state<number | null>(null);
 
 	const prGraphicSeasons = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -199,6 +200,62 @@
 							class="mt-2 text-xs text-primary hover:text-primary/80 transition-colors">
 							{showAllEvents ? 'Show less' : `Show all ${data.events.length} events`}
 						</button>
+					{/if}
+				</div>
+			{/if}
+
+			<!-- How Rankings Work -->
+			{#if data.rankingConfig}
+				{@const rc = data.rankingConfig}
+				<div class="mt-6">
+					<button onclick={() => showHowItWorks = !showHowItWorks}
+						class="flex items-center gap-2 text-sm font-bold text-foreground uppercase tracking-wider mb-3 hover:text-primary transition-colors">
+						<span class="text-xs transition-transform" class:rotate-90={showHowItWorks}>&#9654;</span>
+						How Rankings Work
+					</button>
+					{#if showHowItWorks}
+						<div class="rounded-xl border border-border bg-card p-5 space-y-4 text-sm text-muted-foreground">
+							<p class="text-foreground font-medium">Your ranking points come from three things:</p>
+
+							<div class="grid gap-3 sm:grid-cols-3">
+								<div class="rounded-lg border border-border bg-secondary/50 p-3">
+									<div class="text-xs font-bold text-primary uppercase tracking-wider mb-1">🎮 Skill Rating</div>
+									<p>Based on <strong class="text-foreground">who</strong> you beat and lose to, not just if you win. Beat a top player? Big gain. Lose to someone ranked below you? Big drop.</p>
+									<p class="mt-1.5 text-xs">Uses the <a href="https://en.wikipedia.org/wiki/TrueSkill" target="_blank" rel="noopener" class="text-primary hover:underline">TrueSkill</a> rating system. Everyone starts at 5,000.</p>
+								</div>
+								<div class="rounded-lg border border-border bg-secondary/50 p-3">
+									<div class="text-xs font-bold text-primary uppercase tracking-wider mb-1">📅 Attendance Bonus</div>
+									<p><strong class="text-foreground">+{rc.attendanceBonus}</strong> points per event attended. Showing up consistently is rewarded.</p>
+								</div>
+								{#if rc.conservativeFactor > 0}
+									<div class="rounded-lg border border-border bg-secondary/50 p-3">
+										<div class="text-xs font-bold text-primary uppercase tracking-wider mb-1">🎯 Confidence Penalty</div>
+										<p>New or infrequent players get a small point reduction until the system is confident in their rating. Disappears with more matches.</p>
+									</div>
+								{/if}
+							</div>
+
+							<div class="rounded-lg bg-secondary/30 border border-border p-3">
+								<div class="text-xs font-bold text-foreground mb-1">The Formula</div>
+								<div class="font-mono text-xs text-foreground bg-background/50 rounded px-3 py-2">
+									Ranking Points = Skill Rating
+									{#if rc.attendanceBonus > 0}
+										<span class="text-success"> + (events × {rc.attendanceBonus})</span>
+									{/if}
+									{#if rc.conservativeFactor > 0}
+										<span class="text-destructive"> − confidence penalty</span>
+									{/if}
+								</div>
+								{#if rc.minEvents > 0}
+									<p class="mt-2 text-xs">Must attend <strong class="text-foreground">{rc.minEvents}+ events</strong> to qualify for rankings.</p>
+								{/if}
+							</div>
+
+							<div class="text-xs space-y-1">
+								<p>📊 Player profile graphs show both your raw Skill Rating (blue) and your Ranking Points (amber dashed).</p>
+								<p>🏅 Tiers (Gold, Silver, etc.) are based on your ranking points — not raw skill alone.</p>
+							</div>
+						</div>
 					{/if}
 				</div>
 			{/if}
