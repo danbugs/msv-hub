@@ -246,9 +246,6 @@
 										<span class="text-destructive"> − confidence penalty</span>
 									{/if}
 								</div>
-								{#if rc.minEvents > 0}
-									<p class="mt-2 text-xs">Must attend <strong class="text-foreground">{rc.minEvents}+ events</strong> to qualify for rankings.</p>
-								{/if}
 							</div>
 
 							<div class="text-xs space-y-1">
