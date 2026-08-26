@@ -152,7 +152,7 @@ export async function recomputeSeasonFromStored(seasonId: number, log: (msg: str
 	const season = await getLeagueSeason(seasonId);
 	if (!season) return null;
 	const mergeMap = await getMergeMap();
-	const totalPasses = ratingConfig?.passes ?? (seasonId !== 0 ? 2 : 1);
+	const totalPasses = ratingConfig?.passes ?? (seasonId !== 0 ? 3 : 1);
 	const sigmaBoost = ratingConfig?.sigmaBoostPerEvent;
 	const sigmaFloor = ratingConfig?.sigmaFloor;
 

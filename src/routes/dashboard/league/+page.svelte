@@ -42,6 +42,8 @@
 	let newSeasonPlanOnly = $state(false);
 	let adminMinEvents = $state(7);
 	let adminPreview = $state<{ playerId: string; gamerTag: string; points: number; rank: number }[]>([]);
+	let passes = $state(3);
+	let seasonRatingConfig = $state<Record<string, Record<string, number>>>({});
 
 	function getSeasonId() { return currentSeasonId; }
 
@@ -84,9 +86,11 @@
 		if (configRes.ok) {
 			const cfg = await configRes.json();
 			seasonMinEvents = cfg.seasonMinEvents ?? {};
+			seasonRatingConfig = cfg.seasonRatingConfig ?? {};
 			minEvents = seasonMinEvents[String(sid)] ?? cfg.minEvents ?? 2;
 			attendanceBonus = sid === 0 ? 5 : (cfg.attendanceBonus ?? 50);
 			defaultSeason = cfg.defaultSeason ?? 11;
+			passes = seasonRatingConfig[String(sid)]?.passes ?? 3;
 		}
 		if (!awardsMinEvents && season) {
 			awardsMinEvents = String(Math.max(2, Math.floor(season.events.length * 0.4)));
@@ -357,12 +361,17 @@
 
 	async function saveConfig() {
 		const updated = { ...seasonMinEvents, [String(getSeasonId())]: minEvents };
+		const updatedRatingConfig = {
+			...seasonRatingConfig,
+			[String(getSeasonId())]: { ...(seasonRatingConfig[String(getSeasonId())] ?? {}), passes }
+		};
 		await fetch('/api/league/config', {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ minEvents: 2, seasonMinEvents: updated, attendanceBonus, defaultSeason })
+			body: JSON.stringify({ minEvents: 2, seasonMinEvents: updated, attendanceBonus, defaultSeason, seasonRatingConfig: updatedRatingConfig })
 		});
 		seasonMinEvents = updated;
+		seasonRatingConfig = updatedRatingConfig;
 		await loadSeason();
 	}
 
@@ -531,13 +540,18 @@
 					<input bind:value={defaultSeason} type="number" min="1"
 						class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
 				</div>
+				<div>
+					<label class="text-xs text-muted-foreground">TrueSkill passes (Season {getSeasonId()})</label>
+					<input bind:value={passes} type="number" min="1" max="10"
+						class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none" />
+				</div>
 				<button onclick={saveConfig}
 					class="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
 					Save
 				</button>
 			</div>
 			<p class="mt-2 text-xs text-muted-foreground">
-				Min events is set per season — switching seasons loads that season's value. Attendance bonus adds points per event attended to reward showing up.
+				Min events and TrueSkill passes are set per season — switching seasons loads that season's value. Attendance bonus adds points per event attended. More passes = smoother skill graphs (3 recommended). Save then Recompute to apply.
 			</p>
 		</div>
 
