@@ -102,9 +102,17 @@
 		const H = rect.height;
 		ctx.clearRect(0, 0, W, H);
 
-		const values = history.map((h) => h.points);
-		const minVal = Math.min(...values);
-		const maxVal = Math.max(...values);
+		const cFactor = data.conservativeFactor ?? 0;
+		const bonus = data.attendanceBonus ?? 0;
+		const rawValues = history.map((h) => h.points);
+		const adjValues = history.map((h, i) =>
+			h.points - Math.round(cFactor * h.sigma * 200) + (i + 1) * bonus
+		);
+		const hasAdj = cFactor !== 0 || bonus !== 0;
+
+		const allVals = hasAdj ? [...rawValues, ...adjValues] : rawValues;
+		const minVal = Math.min(...allVals);
+		const maxVal = Math.max(...allVals);
 		const range = maxVal - minVal || 1;
 		const pad = { top: 24, bottom: 24, left: 40, right: 16 };
 
@@ -112,10 +120,12 @@
 		const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
 		const textColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)';
 		const lineColor = isDark ? '#93c5fd' : '#3b82f6';
+		const adjColor = isDark ? '#fbbf24' : '#d97706';
 
 		const chartW = W - pad.left - pad.right;
 		const chartH = H - pad.top - pad.bottom;
 
+		// Draw grid lines
 		ctx.strokeStyle = gridColor;
 		ctx.lineWidth = 0.5;
 		for (let i = 0; i <= 4; i++) {
@@ -130,25 +140,64 @@
 			ctx.fillText(String(Math.round(maxVal - (i / 4) * range)), pad.left - 6, y + 3);
 		}
 
+		// Draw tier threshold lines
+		for (const tier of PLAYER_TIERS) {
+			if (tier.minPoints <= 0) continue;
+			if (tier.minPoints < minVal || tier.minPoints > maxVal) continue;
+			const y = pad.top + (1 - (tier.minPoints - minVal) / range) * chartH;
+			ctx.strokeStyle = tier.color + '40';
+			ctx.lineWidth = 1;
+			ctx.setLineDash([4, 4]);
+			ctx.beginPath();
+			ctx.moveTo(pad.left, y);
+			ctx.lineTo(W - pad.right, y);
+			ctx.stroke();
+			ctx.setLineDash([]);
+			ctx.fillStyle = tier.color + '80';
+			ctx.font = '9px system-ui';
+			ctx.textAlign = 'left';
+			ctx.fillText(tier.name, pad.left + 4, y - 3);
+		}
+
+		// Draw adjusted points line (ranking points) — dashed
+		if (hasAdj) {
+			ctx.strokeStyle = adjColor;
+			ctx.lineWidth = 1.5;
+			ctx.setLineDash([5, 3]);
+			ctx.lineJoin = 'round';
+			ctx.beginPath();
+			for (let i = 0; i < adjValues.length; i++) {
+				const x = pad.left + (i / (adjValues.length - 1)) * chartW;
+				const y = pad.top + (1 - (adjValues[i] - minVal) / range) * chartH;
+				if (i === 0) ctx.moveTo(x, y);
+				else ctx.lineTo(x, y);
+			}
+			ctx.stroke();
+			ctx.setLineDash([]);
+		}
+
+		// Draw raw TrueSkill line — solid
 		ctx.strokeStyle = lineColor;
 		ctx.lineWidth = 2;
 		ctx.lineJoin = 'round';
 		ctx.beginPath();
-		for (let i = 0; i < values.length; i++) {
-			const x = pad.left + (i / (values.length - 1)) * chartW;
-			const y = pad.top + (1 - (values[i] - minVal) / range) * chartH;
+		for (let i = 0; i < rawValues.length; i++) {
+			const x = pad.left + (i / (rawValues.length - 1)) * chartW;
+			const y = pad.top + (1 - (rawValues[i] - minVal) / range) * chartH;
 			if (i === 0) ctx.moveTo(x, y);
 			else ctx.lineTo(x, y);
 		}
 		ctx.stroke();
 
-		for (let i = 0; i < values.length; i++) {
-			const x = pad.left + (i / (values.length - 1)) * chartW;
-			const y = pad.top + (1 - (values[i] - minVal) / range) * chartH;
+		// Draw dots with tier-change markers (based on adjusted points for tier)
+		const tierValues = hasAdj ? adjValues : rawValues;
+		for (let i = 0; i < rawValues.length; i++) {
+			const x = pad.left + (i / (rawValues.length - 1)) * chartW;
+			const y = pad.top + (1 - (rawValues[i] - minVal) / range) * chartH;
 
 			if (i > 0) {
-				const prevTier = PLAYER_TIERS.find((t) => values[i - 1] >= t.minPoints);
-				const currTier = PLAYER_TIERS.find((t) => values[i] >= t.minPoints);
+				const prevTier = PLAYER_TIERS.find((t) => tierValues[i - 1] >= t.minPoints);
+				const currTier = PLAYER_TIERS.find((t) => tierValues[i] >= t.minPoints);
 				if (prevTier && currTier && prevTier.name !== currTier.name) {
 					ctx.fillStyle = currTier.color;
 					ctx.beginPath();
@@ -167,17 +216,38 @@
 			ctx.fill();
 		}
 
+		// Draw x-axis labels
 		ctx.fillStyle = textColor;
 		ctx.font = '9px system-ui';
 		ctx.textAlign = 'center';
 		const step = Math.max(1, Math.floor(history.length / 6));
 		for (let i = 0; i < history.length; i += step) {
-			const x = pad.left + (i / (values.length - 1)) * chartW;
+			const x = pad.left + (i / (rawValues.length - 1)) * chartW;
 			ctx.fillText(`#${history[i].eventNumber}`, x, H - 4);
 		}
 		if (history.length > 1) {
 			const lastX = pad.left + chartW;
 			ctx.fillText(`#${history[history.length - 1].eventNumber}`, lastX, H - 4);
+		}
+
+		// Draw legend
+		if (hasAdj) {
+			const lx = W - pad.right - 120;
+			const ly = pad.top + 2;
+			ctx.lineWidth = 2;
+			ctx.strokeStyle = lineColor;
+			ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 16, ly); ctx.stroke();
+			ctx.fillStyle = textColor;
+			ctx.font = '9px system-ui';
+			ctx.textAlign = 'left';
+			ctx.fillText('TrueSkill', lx + 20, ly + 3);
+
+			ctx.strokeStyle = adjColor;
+			ctx.lineWidth = 1.5;
+			ctx.setLineDash([5, 3]);
+			ctx.beginPath(); ctx.moveTo(lx, ly + 14); ctx.lineTo(lx + 16, ly + 14); ctx.stroke();
+			ctx.setLineDash([]);
+			ctx.fillText('Ranking pts', lx + 20, ly + 17);
 		}
 	}
 
