@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { isAuthorizedEmail, verifyOTP, createSessionToken, SESSION_TTL_SECONDS } from '$lib/server/auth';
+import { isAuthorizedEmail, verifyOTP, createSessionToken, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from '$lib/server/auth';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	const { email, code } = await request.json();
@@ -20,13 +20,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	}
 
 	const token = await createSessionToken(normalized);
-	cookies.set('session', token, {
-		path: '/',
-		httpOnly: true,
-		sameSite: 'lax',
-		secure: true,
-		maxAge: SESSION_TTL_SECONDS
-	});
+	cookies.set(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
 
 	return json({ ok: true });
 };

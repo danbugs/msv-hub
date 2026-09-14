@@ -4,8 +4,17 @@ import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
 
 export const OTP_TTL_MS = 10 * 60 * 1000;
-export const SESSION_TTL_DAYS = 7;
-const SESSION_TTL_SECONDS = SESSION_TTL_DAYS * 24 * 60 * 60;
+// Session tokens carry no `exp` claim, so the cookie lifetime is the only limit.
+// Browsers cap Max-Age at 400 days (RFC 6265bis), so this is the longest a
+// cookie can live; hooks.server.ts re-sets it on every request so the window slides.
+export const SESSION_COOKIE = 'session';
+export const SESSION_COOKIE_OPTIONS = {
+	path: '/',
+	httpOnly: true,
+	sameSite: 'lax',
+	secure: true,
+	maxAge: 400 * 24 * 60 * 60
+} as const;
 
 let cachedSecret: Uint8Array | null = null;
 function getSecret(): Uint8Array {
@@ -62,11 +71,8 @@ export async function createSessionToken(email: string): Promise<string> {
 	return new SignJWT({ email })
 		.setProtectedHeader({ alg: 'HS256' })
 		.setIssuedAt()
-		.setExpirationTime(`${SESSION_TTL_DAYS}d`)
 		.sign(getSecret());
 }
-
-export { SESSION_TTL_SECONDS };
 
 export async function verifySessionToken(token: string): Promise<{ email: string } | null> {
 	try {

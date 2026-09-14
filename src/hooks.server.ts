@@ -1,5 +1,5 @@
 import type { Handle } from '@sveltejs/kit';
-import { verifySessionToken } from '$lib/server/auth';
+import { verifySessionToken, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from '$lib/server/auth';
 
 const CORS_GET_PREFIXES = ['/api/league/seasons', '/api/league/season/'];
 
@@ -20,11 +20,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 		});
 	}
 
-	const token = event.cookies.get('session');
+	const token = event.cookies.get(SESSION_COOKIE);
 	if (token) {
 		const session = await verifySessionToken(token);
 		if (session) {
 			event.locals.user = session;
+			// Re-issue the cookie so its Max-Age slides forward on every visit;
+			// the token itself has no expiry, so only browser cookie lifetime matters.
+			event.cookies.set(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
 		}
 	}
 
