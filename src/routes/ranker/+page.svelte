@@ -308,7 +308,12 @@
 			img.crossOrigin = 'anonymous';
 			img.onload = () => resolve(img);
 			img.onerror = () => resolve(null);
-			img.src = url;
+			// StartGG only sends CORS headers when asked and doesn't Vary on Origin, so a copy
+			// cached from a plain <img> (e.g. the league page) fails the CORS check on Safari.
+			// A distinct URL forces a fresh CORS-enabled fetch.
+			const u = new URL(url);
+			u.searchParams.set('cors', '1');
+			img.src = u.href;
 		});
 	}
 
@@ -474,7 +479,7 @@
 		</div>
 		<div class="relative min-h-0 flex-1">
 			{#if p.iconUrl}
-				<img src={p.iconUrl} alt={p.character ?? ''} crossorigin="anonymous" draggable="false" loading="lazy"
+				<img src={p.iconUrl} alt={p.character ?? ''} draggable="false" loading="lazy"
 					class="absolute inset-0 h-full w-full object-contain" />
 			{:else}
 				<div class="absolute inset-0 flex items-center justify-center text-lg font-extrabold text-muted-foreground">
