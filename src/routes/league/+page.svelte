@@ -46,6 +46,7 @@
 						</div>
 						<div class="text-xs text-muted-foreground mt-0.5">TrueSkill Rating</div>
 					{/if}
+					<a href="/ranker" class="inline-block mt-1.5 text-xs font-medium text-primary hover:underline">Make a tier list →</a>
 				</div>
 			</div>
 			{#if data.seasons?.length}
