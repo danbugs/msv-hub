@@ -7,7 +7,7 @@
 	let showHowItWorks = $state(false);
 	let lightboxSeason = $state<number | null>(null);
 
-	const prGraphicSeasons = Array.from({ length: 10 }, (_, i) => i + 1);
+	const prGraphicSeasons = Array.from({ length: 11 }, (_, i) => i + 1);
 
 	function filteredRankings() {
 		if (!searchQuery.trim()) return data.rankings;
