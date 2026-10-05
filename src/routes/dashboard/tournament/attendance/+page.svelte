@@ -12,7 +12,7 @@
 	let setupDeployedCount = $derived(attendance.filter((a) => a.setupDeployed).length);
 	let lateCount = $derived(attendance.filter((a) => a.late).length);
 	let accountedCount = $derived(attendance.filter((a) => a.present || a.late).length);
-	let setupsNeeded = $derived(Math.max(0, 16 - setupCount - 1)); // -1 for venue setup
+	let setupsNeeded = $derived(Math.max(0, 16 - setupCount - 2)); // -2 for venue setups
 
 	onMount(async () => {
 		loading = true;
@@ -99,8 +99,8 @@
 			<div class="text-xs text-muted-foreground">Late ({accountedCount} accounted)</div>
 		</div>
 		<div class="rounded-lg border border-border bg-card p-3 text-center">
-			<div class="text-2xl font-bold {setupCount >= 16 ? 'text-success' : 'text-warning'}">{setupCount + 1}</div>
-			<div class="text-xs text-muted-foreground">Setups pledged (+1 venue)</div>
+			<div class="text-2xl font-bold {setupCount + 2 >= 16 ? 'text-success' : 'text-warning'}">{setupCount + 2}</div>
+			<div class="text-xs text-muted-foreground">Setups pledged (+2 venue)</div>
 		</div>
 		<div class="rounded-lg border border-border bg-card p-3 text-center">
 			<div class="text-2xl font-bold text-primary">{setupDeployedCount}</div>
