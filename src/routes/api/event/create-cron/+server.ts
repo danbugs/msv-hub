@@ -360,5 +360,7 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 	return Response.json({ ok: !anyFailed, steps: log });
 }
 
-export const GET: RequestHandler = async ({ request, locals }) => handleCreateEvent(request, locals.user);
+// GET is cron-only: SameSite=Lax cookies ride along on cross-site link clicks,
+// so a session must never be enough to trigger event creation via GET.
+export const GET: RequestHandler = async ({ request }) => handleCreateEvent(request);
 export const POST: RequestHandler = async ({ request, locals }) => handleCreateEvent(request, locals.user);
