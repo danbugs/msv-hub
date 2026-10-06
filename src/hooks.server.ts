@@ -1,5 +1,5 @@
 import type { Handle } from '@sveltejs/kit';
-import { verifySessionToken, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from '$lib/server/auth';
+import { verifySessionToken, isAuthorizedEmail, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from '$lib/server/auth';
 
 const CORS_GET_PREFIXES = ['/api/league/seasons', '/api/league/season/'];
 
@@ -23,7 +23,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const token = event.cookies.get(SESSION_COOKIE);
 	if (token) {
 		const session = await verifySessionToken(token);
-		if (session) {
+		// Tokens never expire, so the allowlist check is what revokes a removed TO.
+		if (session && isAuthorizedEmail(session.email)) {
 			event.locals.user = session;
 			// Re-issue the cookie so its Max-Age slides forward on every visit;
 			// the token itself has no expiry, so only browser cookie lifetime matters.
