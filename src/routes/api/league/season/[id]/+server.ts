@@ -18,6 +18,15 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	};
 	const rankings = getRankings(season, config);
 
+	// Rankings drop players under the attendance minimum; admin tools (merge) need everyone
+	const eventCounts = new Map<string, number>();
+	for (const e of season.events) {
+		for (const p of e.placements) eventCounts.set(p.playerId, (eventCounts.get(p.playerId) ?? 0) + 1);
+	}
+	const players = Object.values(season.players)
+		.map((p) => ({ id: p.id, gamerTag: p.gamerTag, aliases: p.aliases ?? [], events: eventCounts.get(p.id) ?? 0 }))
+		.sort((a, b) => b.events - a.events);
+
 	return Response.json({
 		id: season.id,
 		name: season.name,
@@ -32,6 +41,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			weight: e.weight
 		})),
 		rankings,
+		players,
 		totalMatches: season.matches.length,
 		plannedSlugs: season.plannedSlugs ?? []
 	});

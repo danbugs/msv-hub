@@ -8,6 +8,7 @@
 		endDate: string;
 		events: { slug: string; name: string; date: string; eventNumber: number; entrantCount: number; weight?: number }[];
 		rankings: { playerId: string; gamerTag: string; points: number; rank: number }[];
+		players: { id: string; gamerTag: string; aliases: string[]; events: number }[];
 		totalMatches: number;
 		plannedSlugs: string[];
 	}
@@ -284,13 +285,14 @@
 		showCreateSeason = true;
 	}
 
-	function searchPlayers(query: string): { id: string; tag: string }[] {
+	// Searches every player in the season, not just ranked ones: duplicate accounts are often one-event entrants
+	function searchPlayers(query: string): { id: string; tag: string; events: number }[] {
 		if (!season || !query.trim()) return [];
 		const q = query.toLowerCase();
-		return season.rankings
-			.filter((r: { gamerTag: string }) => r.gamerTag.toLowerCase().includes(q))
-			.slice(0, 5)
-			.map((r: { playerId: string; gamerTag: string }) => ({ id: r.playerId, tag: r.gamerTag }));
+		return (season.players ?? [])
+			.filter((p) => p.gamerTag.toLowerCase().includes(q) || p.aliases.some((a) => a.toLowerCase().includes(q)))
+			.slice(0, 8)
+			.map((p) => ({ id: p.id, tag: p.gamerTag, events: p.events }));
 	}
 
 	async function submitMerge() {
@@ -670,9 +672,9 @@
 					{#if mergeSearch1 && !mergePlayer1}
 						<div class="absolute z-10 mt-1 w-full rounded-lg border border-border bg-card shadow-lg">
 							{#each searchPlayers(mergeSearch1) as p}
-								<button onclick={() => { mergePlayer1 = p; mergeSearch1 = p.tag; }}
+								<button onclick={() => { mergePlayer1 = { id: p.id, tag: p.tag }; mergeSearch1 = p.tag; }}
 									class="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent/50">
-									{p.tag} <span class="text-xs text-muted-foreground">({p.id})</span>
+									{p.tag} <span class="text-xs text-muted-foreground">({p.id} · {p.events} event{p.events === 1 ? '' : 's'})</span>
 								</button>
 							{/each}
 						</div>
@@ -686,9 +688,9 @@
 					{#if mergeSearch2 && !mergePlayer2}
 						<div class="absolute z-10 mt-1 w-full rounded-lg border border-border bg-card shadow-lg">
 							{#each searchPlayers(mergeSearch2) as p}
-								<button onclick={() => { mergePlayer2 = p; mergeSearch2 = p.tag; }}
+								<button onclick={() => { mergePlayer2 = { id: p.id, tag: p.tag }; mergeSearch2 = p.tag; }}
 									class="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent/50">
-									{p.tag} <span class="text-xs text-muted-foreground">({p.id})</span>
+									{p.tag} <span class="text-xs text-muted-foreground">({p.id} · {p.events} event{p.events === 1 ? '' : 's'})</span>
 								</button>
 							{/each}
 						</div>
