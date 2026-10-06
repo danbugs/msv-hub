@@ -7,12 +7,48 @@
 	onMount(async () => {
 		const res = await fetch('/api/tournament');
 		tournament = res.ok ? await res.json() : null;
+		loadSnapshots();
 	});
 
 	async function deleteTournament() {
-		if (!confirm('Delete the active tournament? This cannot be undone.')) return;
+		if (!confirm('Delete the active tournament? You can restore it from Undo history for 7 days.')) return;
 		await fetch('/api/tournament', { method: 'DELETE' });
 		tournament = null;
+		loadSnapshots();
+	}
+
+	interface SnapshotMeta { ts: number; reason: string; by?: string; phase: string; currentRound: number }
+	let snapshots = $state<{ slug: string | null; deleted: boolean; snapshots: SnapshotMeta[] }>({ slug: null, deleted: false, snapshots: [] });
+	let restoring = $state<number | null>(null);
+	let restoreError = $state('');
+
+	async function loadSnapshots() {
+		const res = await fetch('/api/tournament/snapshots');
+		if (res.ok) snapshots = await res.json();
+	}
+
+	async function restoreSnapshot(s: SnapshotMeta) {
+		const when = new Date(s.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+		if (!confirm(
+			`Restore MSV Hub to how it was at ${when} (${s.reason.toLowerCase()})?\n\n` +
+			'This only rolls back MSV Hub. StartGG is NOT changed — if results were already pushed there, ' +
+			'you may need to fix them on StartGG or re-sync. The current state is saved first, so you can undo this.'
+		)) return;
+		restoring = s.ts;
+		restoreError = '';
+		const res = await fetch('/api/tournament/snapshots', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ slug: snapshots.slug, ts: s.ts })
+		});
+		if (res.ok) {
+			const t = await fetch('/api/tournament');
+			tournament = t.ok ? await t.json() : tournament;
+			await loadSnapshots();
+		} else {
+			restoreError = (await res.json().catch(() => ({}))).error ?? 'Restore failed';
+		}
+		restoring = null;
 	}
 
 	let expandedStep = $state<string | null>(null);
@@ -30,6 +66,7 @@
 			resetResult = 'StartGG reset complete';
 			const refreshed = await fetch('/api/tournament');
 			tournament = refreshed.ok ? await refreshed.json() : tournament;
+			loadSnapshots();
 		} else {
 			resetResult = data.error ?? 'Reset failed';
 		}
@@ -244,6 +281,34 @@
 						No active tournament —
 						<a href="/dashboard/pre-tournament/seed" class="text-primary hover:text-primary/80">seed an event to start one</a>
 					</div>
+				{/if}
+				{#if snapshots.snapshots.length}
+					<details class="mt-2 rounded-lg border border-border bg-card px-4 py-2" open={snapshots.deleted}>
+						<summary class="cursor-pointer select-none text-sm text-muted-foreground hover:text-foreground">
+							Undo history ({snapshots.snapshots.length}){snapshots.deleted ? ' — deleted tournament can be restored' : ''}
+						</summary>
+						<p class="mt-2 text-xs text-muted-foreground">
+							Saved automatically before round starts, result fixes, StartGG syncs/resets and deletes. Restoring only changes MSV Hub, not StartGG.
+						</p>
+						<ul class="mt-2 divide-y divide-border">
+							{#each snapshots.snapshots as s (s.ts)}
+								<li class="flex items-center gap-3 py-1.5 text-sm">
+									<span class="w-16 shrink-0 text-xs text-muted-foreground tabular-nums">
+										{new Date(s.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+									</span>
+									<span class="flex-1 min-w-0 truncate text-foreground">
+										{s.reason}
+										{#if s.by}<span class="text-xs text-muted-foreground"> · {s.by.split('@')[0]}</span>{/if}
+									</span>
+									<button onclick={() => restoreSnapshot(s)} disabled={restoring !== null}
+										class="shrink-0 rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-50">
+										{restoring === s.ts ? 'Restoring…' : 'Restore'}
+									</button>
+								</li>
+							{/each}
+						</ul>
+						{#if restoreError}<p class="mt-1 text-xs text-destructive">{restoreError}</p>{/if}
+					</details>
 				{/if}
 				</div>
 			</div>
