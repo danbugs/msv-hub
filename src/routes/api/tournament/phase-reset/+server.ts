@@ -1,5 +1,5 @@
 import type { RequestHandler } from '@sveltejs/kit';
-import { getActiveTournament, saveTournament } from '$lib/server/store';
+import { getActiveTournament, saveTournament, snapshotTournament } from '$lib/server/store';
 import { pushPairingsToPhaseGroup } from '$lib/server/startgg';
 import { triggerConversionAndCache } from '$lib/server/startgg-reporter';
 import { restartPhase } from '$lib/server/startgg-admin';
@@ -13,6 +13,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
+	await snapshotTournament(tournament, 'Before phase reset', locals.user.email);
 
 	const pending = tournament.startggSync?.pendingPhaseReset;
 	if (!pending) return Response.json({ error: 'No pending phase reset' }, { status: 400 });

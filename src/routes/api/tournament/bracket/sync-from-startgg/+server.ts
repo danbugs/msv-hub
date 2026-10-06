@@ -1,5 +1,5 @@
 import type { RequestHandler } from '@sveltejs/kit';
-import { getActiveTournament, saveTournament } from '$lib/server/store';
+import { getActiveTournament, saveTournament, snapshotTournament } from '$lib/server/store';
 import { fetchAllSets, fetchAllEntrants, gql, PHASE_GROUP_SEEDS_QUERY } from '$lib/server/startgg';
 import { generateBracket, reportBracketMatch, assignBracketStations, placeInNextMatch, autoAdvanceByes } from '$lib/server/swiss';
 import type { BracketMatch, FinalStanding } from '$lib/types/tournament';
@@ -17,6 +17,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
+	await snapshotTournament(tournament, 'Before bracket sync from StartGG', locals.user.email);
 
 	const isGauntlet = tournament.mode === 'gauntlet';
 	const allPlayersToMain = tournament.mode === 'gauntlet' || tournament.mode === 'experimental1';

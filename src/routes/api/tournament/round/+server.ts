@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { getActiveTournament, saveTournament } from '$lib/server/store';
+import { getActiveTournament, saveTournament, snapshotTournament } from '$lib/server/store';
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
 import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups, validateStartGGToken, StartGGAuthError } from '$lib/server/startgg';
@@ -23,6 +23,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
 	if (tournament.phase !== 'swiss') return Response.json({ error: 'Tournament is not in Swiss phase' }, { status: 400 });
+	await snapshotTournament(tournament, `Before starting Swiss round ${tournament.currentRound + 1}`, locals.user.email);
 
 	try {
 		await validateStartGGToken();
@@ -455,6 +456,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	// A "fix" is any change to an already-reported match (different winner OR different score).
 	// This triggers pairing regeneration for the next active round.
 	const wasMisreport = match.winnerId !== undefined;
+	if (wasMisreport) await snapshotTournament(tournament, `Before fixing Swiss R${targetRound.number} result`, locals.user.email);
 	const winnerChanged = match.winnerId !== undefined && match.winnerId !== winnerId;
 	// Snapshot original state so we can revert if StartGG report fails (for new reports)
 	const origWinnerId = match.winnerId;

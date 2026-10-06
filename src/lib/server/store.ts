@@ -283,6 +283,59 @@ export async function getActiveTournament(): Promise<TournamentState | null> {
 	return getTournament(slug);
 }
 
+// ---------------------------------------------------------------------------
+// Snapshots — a copy of the tournament taken before risky actions (round start,
+// result fixes, StartGG syncs/resets, delete) so a TO can roll back MSV Hub state.
+// ---------------------------------------------------------------------------
+
+const SNAPSHOT_PREFIX = 'tournament:snaps:';
+const SNAPSHOT_KEEP = 15;
+const SNAPSHOT_TTL = 60 * 60 * 24 * 7;
+
+export interface SnapshotMeta {
+	ts: number;
+	reason: string;
+	by?: string;
+	phase: TournamentState['phase'];
+	currentRound: number;
+}
+
+/**
+ * Best-effort: a snapshot failure must never block the action it protects.
+ * Serializes before the first await so later mutations of `state` can't leak in.
+ */
+export async function snapshotTournament(state: TournamentState, reason: string, by?: string): Promise<void> {
+	const entry = JSON.stringify({
+		meta: { ts: Date.now(), reason, by, phase: state.phase, currentRound: state.currentRound } satisfies SnapshotMeta,
+		state
+	});
+	try {
+		const redis = getRedis();
+		const key = `${SNAPSHOT_PREFIX}${state.slug}`;
+		await redis.lpush(key, entry);
+		await redis.ltrim(key, 0, SNAPSHOT_KEEP - 1);
+		await redis.expire(key, SNAPSHOT_TTL);
+	} catch (e) {
+		console.error('[snapshot] failed:', e);
+	}
+}
+
+type SnapshotEntry = { meta: SnapshotMeta; state: TournamentState };
+
+async function readSnapshots(slug: string): Promise<SnapshotEntry[]> {
+	const redis = getRedis();
+	const raw = await redis.lrange<SnapshotEntry | string>(`${SNAPSHOT_PREFIX}${slug}`, 0, -1);
+	return raw.map((r) => (typeof r === 'string' ? JSON.parse(r) : r));
+}
+
+export async function listSnapshots(slug: string): Promise<SnapshotMeta[]> {
+	return (await readSnapshots(slug)).map((s) => s.meta);
+}
+
+export async function getSnapshot(slug: string, ts: number): Promise<TournamentState | null> {
+	return (await readSnapshots(slug)).find((s) => s.meta.ts === ts)?.state ?? null;
+}
+
 /**
  * Strips TO-only fields before state is sent to public pages: attendance holds
  * Discord IDs and registration times, and startggSync holds internal error logs.
@@ -316,6 +369,14 @@ export async function deleteTournament(slug: string): Promise<void> {
 	await redis.del(`${KEY_PREFIX}${slug}`);
 	const active = await redis.get<string>(ACTIVE_KEY);
 	if (active === slug) await redis.del(ACTIVE_KEY);
+	// Lets the dashboard offer a restore after an accidental delete.
+	await redis.set(LAST_DELETED_KEY, slug, { ex: SNAPSHOT_TTL });
+}
+
+const LAST_DELETED_KEY = 'tournament:last-deleted';
+
+export async function getLastDeletedSlug(): Promise<string | null> {
+	return getRedis().get<string>(LAST_DELETED_KEY);
 }
 
 // ---------------------------------------------------------------------------

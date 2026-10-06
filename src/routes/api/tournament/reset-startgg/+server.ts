@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { getActiveTournament, saveTournament } from '$lib/server/store';
+import { getActiveTournament, saveTournament, snapshotTournament } from '$lib/server/store';
 import { gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, pushBracketSeeding, pushFinalStandingsSeeding, fetchPhaseGroups, fetchAllEntrants } from '$lib/server/startgg';
 import { restartPhase, addEntrantsToPhase, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
 import { generateBracket, assignBracketStations } from '$lib/server/swiss';
@@ -52,6 +52,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
+	await snapshotTournament(tournament, 'Before StartGG reset', locals.user.email);
 
 	const logs: string[] = [];
 	const log = (msg: string) => { logs.push(msg); console.log(`[reset-startgg] ${msg}`); };

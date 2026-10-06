@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { saveTournament, getActiveTournament, deleteTournament } from '$lib/server/store';
+import { saveTournament, getActiveTournament, deleteTournament, snapshotTournament } from '$lib/server/store';
 import { calculateRecommendedRounds, generateBracket, assignBracketStations } from '$lib/server/swiss';
 import type { TournamentState, Entrant, FinalStanding, TournamentSettings } from '$lib/types/tournament';
 
@@ -104,6 +104,7 @@ export const DELETE: RequestHandler = async ({ locals }) => {
 
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
+	await snapshotTournament(tournament, 'Before delete', locals.user.email);
 
 	await deleteTournament(tournament.slug);
 	return Response.json({ ok: true });

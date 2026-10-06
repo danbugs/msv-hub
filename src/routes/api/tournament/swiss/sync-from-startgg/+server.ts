@@ -6,7 +6,7 @@
  */
 
 import type { RequestHandler } from './$types';
-import { getActiveTournament, saveTournament } from '$lib/server/store';
+import { getActiveTournament, saveTournament, snapshotTournament } from '$lib/server/store';
 import { gql } from '$lib/server/startgg';
 
 type GqlRecord = Record<string, unknown>;
@@ -31,6 +31,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
+	await snapshotTournament(tournament, 'Before Swiss sync from StartGG', locals.user.email);
 	if (tournament.phase !== 'swiss') return Response.json({ error: 'Tournament is not in Swiss phase' }, { status: 400 });
 	if (!tournament.startggPhase1Groups?.length) return Response.json({ error: 'No Swiss phase groups linked' }, { status: 400 });
 

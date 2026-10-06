@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { getActiveTournament, saveTournament } from '$lib/server/store';
+import { getActiveTournament, saveTournament, snapshotTournament } from '$lib/server/store';
 import { reportBracketMatch, isGauntletRedemptionReady, generateGauntletRedemption, assignBracketStations } from '$lib/server/swiss';
 import { reportBracketMatch as reportBracketMatchToStartGG } from '$lib/server/startgg-reporter';
 import { gql, EVENT_PHASES_QUERY, pushBracketSeeding, fetchPhaseGroups, StartGGAuthError } from '$lib/server/startgg';
@@ -51,6 +51,8 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 	}
+
+	if (targetMatch?.winnerId) await snapshotTournament(tournament, `Before fixing ${bracketName} bracket result`, locals.user.email);
 
 	try {
 		const otherName = bracketName === 'main' ? 'redemption' : 'main';
