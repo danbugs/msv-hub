@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
-import { getActiveTournament, saveTournament, getDiscordConfig } from '$lib/server/store';
+import { getActiveTournament, saveTournament, getDiscordConfig, getAttendance, setAttendanceFlags } from '$lib/server/store';
+import type { AttendanceFlags } from '$lib/server/store';
 import { exportAttendees } from '$lib/server/startgg-admin';
 import { gql } from '$lib/server/startgg';
 import type { AttendeeStatus } from '$lib/types/tournament';
@@ -11,12 +12,13 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const tournament = await getActiveTournament();
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
 
+	const attendance = await getAttendance(tournament);
 	return Response.json({
-		attendance: tournament.attendance ?? [],
-		setupCount: (tournament.attendance ?? []).filter((a) => a.pledgedSetup).length,
-		presentCount: (tournament.attendance ?? []).filter((a) => a.present).length,
-		setupDeployedCount: (tournament.attendance ?? []).filter((a) => a.setupDeployed).length,
-		lateCount: (tournament.attendance ?? []).filter((a) => a.late).length,
+		attendance,
+		setupCount: attendance.filter((a) => a.pledgedSetup).length,
+		presentCount: attendance.filter((a) => a.present).length,
+		setupDeployedCount: attendance.filter((a) => a.setupDeployed).length,
+		lateCount: attendance.filter((a) => a.late).length,
 		totalPlayers: tournament.entrants.length
 	});
 };
@@ -70,8 +72,8 @@ export const POST: RequestHandler = async ({ locals }) => {
 		return Response.json({ error: `Export returned 0 attendees for tournament ${tournamentId}. Check admin permissions.` }, { status: 400 });
 	}
 
-	// Merge with existing attendance state (preserve present/setupDeployed flags)
-	const existing = new Map((tournament.attendance ?? []).map((a) => [a.gamerTag.toLowerCase(), a]));
+	// Merge with existing attendance state so TO-set flags survive a refresh
+	const existing = new Map((await getAttendance(tournament)).map((a) => [a.gamerTag.toLowerCase(), a]));
 
 	const newAttendance: AttendeeStatus[] = attendees.map((a) => {
 		const prev = existing.get(a.gamerTag.toLowerCase());
@@ -80,6 +82,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 			pledgedSetup: a.bringingSetup.toLowerCase() === 'yes',
 			present: prev?.present ?? false,
 			setupDeployed: prev?.setupDeployed ?? false,
+			late: prev?.late ?? false,
 			registeredAt: a.registeredAt,
 			discordId: a.discordId || prev?.discordId || ''
 		};
@@ -112,16 +115,16 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	if (!gamerTag) return Response.json({ error: 'gamerTag required' }, { status: 400 });
 
-	const attendance = tournament.attendance ?? [];
-	const idx = attendance.findIndex((a) => a.gamerTag.toLowerCase() === gamerTag.toLowerCase());
-	if (idx < 0) return Response.json({ error: 'Attendee not found' }, { status: 404 });
+	const attendee = (tournament.attendance ?? []).find((a) => a.gamerTag.toLowerCase() === gamerTag.toLowerCase());
+	if (!attendee) return Response.json({ error: 'Attendee not found' }, { status: 404 });
 
-	if (present !== undefined) attendance[idx].present = present;
-	if (setupDeployed !== undefined) attendance[idx].setupDeployed = setupDeployed;
-	if (late !== undefined) attendance[idx].late = late;
+	// Written to the per-player flag hash, not the tournament blob — see getAttendance.
+	const patch: AttendanceFlags = {};
+	if (present !== undefined) patch.present = present;
+	if (setupDeployed !== undefined) patch.setupDeployed = setupDeployed;
+	if (late !== undefined) patch.late = late;
+	const base = { present: attendee.present, late: attendee.late, setupDeployed: attendee.setupDeployed };
+	const flags = await setAttendanceFlags(tournament.slug, attendee.gamerTag, base, patch);
 
-	tournament.attendance = attendance;
-	await saveTournament(tournament);
-
-	return Response.json({ ok: true, attendee: attendance[idx] });
+	return Response.json({ ok: true, attendee: { ...attendee, ...flags } });
 };

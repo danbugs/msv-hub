@@ -310,12 +310,58 @@ export async function deleteTournament(slug: string): Promise<void> {
 	if (data) {
 		const tournament: TournamentState = typeof data === 'string' ? JSON.parse(data) : data as unknown as TournamentState;
 		if (tournament.startggEventId && tournament.attendance?.length) {
-			await stashAttendance(tournament.startggEventId, tournament.attendance);
+			await stashAttendance(tournament.startggEventId, await getAttendance(tournament));
 		}
 	}
 	await redis.del(`${KEY_PREFIX}${slug}`);
 	const active = await redis.get<string>(ACTIVE_KEY);
 	if (active === slug) await redis.del(ACTIVE_KEY);
+}
+
+// ---------------------------------------------------------------------------
+// Attendance flags — kept in their own hash, one field per player, instead of
+// inside the tournament blob. Swiss/bracket reports read-modify-write the whole
+// tournament across slow StartGG calls, which silently reverted any toggle a TO
+// made in the meantime.
+// ---------------------------------------------------------------------------
+
+export type AttendanceFlags = Pick<AttendeeStatus, 'present' | 'late' | 'setupDeployed'>;
+
+const ATTENDANCE_FLAGS_PREFIX = 'attendance:flags:';
+const ATTENDANCE_FLAGS_TTL = 60 * 60 * 24 * 30;
+
+export async function getAttendanceFlags(slug: string): Promise<Map<string, AttendanceFlags>> {
+	const redis = getRedis();
+	const raw = await redis.hgetall<Record<string, AttendanceFlags | string>>(`${ATTENDANCE_FLAGS_PREFIX}${slug}`);
+	const out = new Map<string, AttendanceFlags>();
+	for (const [tag, v] of Object.entries(raw ?? {})) {
+		out.set(tag, typeof v === 'string' ? JSON.parse(v) : v);
+	}
+	return out;
+}
+
+/** Merges `patch` into one player's flags and returns the result. */
+export async function setAttendanceFlags(slug: string, gamerTag: string, base: AttendanceFlags, patch: AttendanceFlags): Promise<AttendanceFlags> {
+	const redis = getRedis();
+	const key = `${ATTENDANCE_FLAGS_PREFIX}${slug}`;
+	const field = gamerTag.toLowerCase();
+	const stored = await redis.hget<AttendanceFlags | string>(key, field);
+	const current = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : base;
+	const next: AttendanceFlags = { ...current, ...patch };
+	await redis.hset(key, { [field]: JSON.stringify(next) });
+	await redis.expire(key, ATTENDANCE_FLAGS_TTL);
+	return next;
+}
+
+/** Overlays the per-player flag hash onto the roster stored in the tournament. */
+export async function getAttendance(state: TournamentState): Promise<AttendeeStatus[]> {
+	const list = state.attendance ?? [];
+	if (!list.length) return list;
+	const flags = await getAttendanceFlags(state.slug);
+	return list.map((a) => {
+		const f = flags.get(a.gamerTag.toLowerCase());
+		return f ? { ...a, ...f } : a;
+	});
 }
 
 const ATTENDANCE_STASH_PREFIX = 'attendance:stash:';
