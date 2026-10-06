@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { PLAYER_TIERS } from '$lib/types/league';
 
 	let { data } = $props();
@@ -260,8 +259,24 @@
 			.finally(() => { bioLoading = false; });
 	}
 
-	onMount(() => {
+	// Client-side nav between profiles (e.g. nemesis links) reuses this component,
+	// so per-player state must reset and the chart must redraw when data changes.
+	$effect(() => {
+		void data.stats?.player.id;
+		void data.seasonId;
+		bio = null;
+		h2hQuery = '';
+		h2hSelectedOpp = null;
+	});
+
+	$effect(() => {
+		if (!chartCanvas) return;
+		void data.stats;
 		drawChart();
+		const canvas = chartCanvas;
+		const ro = new ResizeObserver(() => drawChart());
+		ro.observe(canvas);
+		return () => ro.disconnect();
 	});
 
 	function phaseLabel(phase: string): { text: string; classes: string } {

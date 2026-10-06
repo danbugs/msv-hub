@@ -3,13 +3,13 @@ import { getLeagueSeason, getLeagueConfig, getPlayerStats, getRankings, getMinEv
 import { getPlayerTier } from '$lib/types/league';
 
 export const load: PageServerLoad = async ({ params, url }) => {
-	const seasonParam = url.searchParams.get('season') ?? '10';
+	const config = await getLeagueConfig();
+	const seasonParam = url.searchParams.get('season') ?? String(config.defaultSeason);
 	const seasonId = seasonParam === 'all-time' ? 0 : parseInt(seasonParam, 10);
 	const season = await getLeagueSeason(seasonId);
 
 	if (!season) return { stats: null, seasonId, seasonParam, seasonName: null };
 
-	const config = await getLeagueConfig();
 	const ratingConfig = getRatingConfigForSeason(config, seasonId);
 	const rankConfig = seasonId === 0
 		? { ...config, attendanceBonus: 5, conservativeFactor: ratingConfig.conservativeFactor ?? 0 }

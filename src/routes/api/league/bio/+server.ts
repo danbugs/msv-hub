@@ -14,7 +14,7 @@ function bioKey(seasonId: number, playerId: string): string {
 }
 
 export const GET: RequestHandler = async ({ url }) => {
-	const seasonId = parseInt(url.searchParams.get('season') ?? '10', 10);
+	const seasonId = parseInt(url.searchParams.get('season') ?? String((await getLeagueConfig()).defaultSeason), 10);
 	const playerId = url.searchParams.get('playerId');
 	if (!playerId) return Response.json({ error: 'Missing playerId' }, { status: 400 });
 
@@ -67,7 +67,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 export const DELETE: RequestHandler = async ({ url, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-	const seasonId = parseInt(url.searchParams.get('season') ?? '10', 10);
+	const seasonId = parseInt(url.searchParams.get('season') ?? String((await getLeagueConfig()).defaultSeason), 10);
 	const redis = getRedis();
 	const prefix = `league:bio:${seasonId}:`;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
