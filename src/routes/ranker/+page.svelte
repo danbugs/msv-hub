@@ -314,6 +314,12 @@
 			: [...selected, ...tier.items.filter((x) => !selectedSet.has(x))];
 	}
 
+	// Closed hand only while something is actually being carried
+	$effect(() => {
+		document.body.classList.toggle('dragging', !!drag);
+		return () => document.body.classList.remove('dragging');
+	});
+
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape' && (selected.length || selectMode)) clearSelection();
 	}
@@ -556,7 +562,7 @@
 			onpointerdown={(e) => onDragPointerDown(e, 'card', id)}
 			onclick={(e) => onCardClick(e, id)}
 			oncontextmenu={(e) => e.preventDefault()}
-			class="card relative h-[84px] w-[60px] shrink-0 cursor-grab rounded-md transition-[opacity,transform] sm:h-[100px] sm:w-[74px]
+			class="card relative h-[84px] w-[60px] shrink-0 cursor-pointer rounded-md transition-[opacity,transform] sm:h-[100px] sm:w-[74px]
 				{dragIds.has(id) ? 'opacity-30' : ''}
 				{selectedSet.has(id) ? 'ring-2 ring-primary ring-offset-2 ring-offset-background -translate-y-0.5' : ''}"
 			aria-pressed={selectMode ? selectedSet.has(id) : undefined}>
@@ -639,7 +645,7 @@
 						{/if}
 						<div data-row={tier.id} class="flex overflow-hidden rounded-lg bg-[#141414] transition-opacity {drag?.kind === 'row' && drag.id === tier.id ? 'opacity-30' : ''}">
 							<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-							<div class="flex w-16 shrink-0 flex-col items-center justify-center gap-1 p-1 sm:w-24 {editRows ? '' : 'grab cursor-grab'}"
+							<div class="flex w-16 shrink-0 flex-col items-center justify-center gap-1 p-1 sm:w-24 {editRows ? '' : `grab ${selectMode ? 'cursor-pointer' : ''}`}"
 								style="background:{tier.color}"
 								title={editRows ? undefined : selectMode ? 'Tap to select everyone in this row' : 'Drag to reorder row'}
 								onpointerdown={editRows ? undefined : (e) => onDragPointerDown(e, 'row', tier.id)}
@@ -817,5 +823,10 @@
 		user-select: none;
 		-webkit-user-select: none;
 		-webkit-touch-callout: none;
+	}
+
+	:global(body.dragging),
+	:global(body.dragging *) {
+		cursor: grabbing !important;
 	}
 </style>
