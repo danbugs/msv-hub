@@ -65,7 +65,8 @@ export const GET: RequestHandler = async ({ url }) => {
 	return Response.json({ bio });
 };
 
-export const DELETE: RequestHandler = async ({ url }) => {
+export const DELETE: RequestHandler = async ({ url, locals }) => {
+	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 	const seasonId = parseInt(url.searchParams.get('season') ?? '10', 10);
 	const redis = getRedis();
 	const prefix = `league:bio:${seasonId}:`;

@@ -6,7 +6,8 @@ export const GET: RequestHandler = async () => {
 	return Response.json(seasons);
 };
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
+	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 	const { seasonId, seasonName, startDate, endDate, plannedSlugs } = await request.json();
 	if (!seasonId || !seasonName) {
 		return Response.json({ error: 'Missing seasonId or seasonName' }, { status: 400 });
