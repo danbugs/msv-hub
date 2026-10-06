@@ -7,7 +7,7 @@ import { buildNoShowPing, PING_CHANNELS } from '$lib/attendance-ping';
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-	const { channel } = (await request.json().catch(() => ({}))) as { channel?: string };
+	const { channel, test } = (await request.json().catch(() => ({}))) as { channel?: string; test?: boolean };
 	const target = PING_CHANNELS.find((c) => c.value === channel);
 	if (!target) return Response.json({ error: 'Unknown channel' }, { status: 400 });
 
@@ -19,9 +19,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!ping) return Response.json({ error: 'Everyone is marked present or late' }, { status: 400 });
 
 	try {
-		await sendMessagePingingUsers(target.id, ping.content, ping.mentionIds);
+		// Test mode renders the real message but notifies no one.
+		await sendMessagePingingUsers(target.id, test ? `[TEST — nobody was notified]\n${ping.content}` : ping.content, test ? [] : ping.mentionIds);
 	} catch (e) {
 		return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 });
 	}
-	return Response.json({ ok: true, mentioned: ping.mentionIds.length, unlinked: ping.unlinked });
+	return Response.json({ ok: true, test: !!test, mentioned: ping.mentionIds.length, unlinked: ping.unlinked });
 };

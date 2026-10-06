@@ -13,6 +13,7 @@
 	let pinging = $state(false);
 	let pingResult = $state('');
 	let pingChannel = $state<PingChannel>('general');
+	let pingTest = $state(false);
 
 	let setupCount = $derived(attendance.filter((a) => a.pledgedSetup).length);
 	let presentCount = $derived(attendance.filter((a) => a.present).length);
@@ -58,7 +59,7 @@
 		if (!pingPreview) return;
 		const { mentionIds, unlinked } = pingPreview;
 		const label = PING_CHANNELS.find((c) => c.value === pingChannel)?.label;
-		const msg = `Balrog will post in ${label}:\n\n"${pingPreview.content.replace(/<@\d+>/g, '@…')}"\n\n` +
+		const msg = (pingTest ? 'TEST MODE — nobody will be notified.\n\n' : '') + `Balrog will post in ${label}:\n\n"${pingPreview.content.replace(/<@\d+>/g, '@…')}"\n\n` +
 			`${mentionIds.length} pinged on Discord` + (unlinked.length ? `, ${unlinked.length} listed by tag (no Discord on start.gg)` : '') + '. Send?';
 		if (!confirm(msg)) return;
 		pinging = true;
@@ -67,10 +68,11 @@
 		const res = await fetch('/api/tournament/attendance/ping', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ channel: pingChannel })
+			body: JSON.stringify({ channel: pingChannel, test: pingTest })
 		});
 		const data = await res.json().catch(() => ({}));
-		if (res.ok) pingResult = `Pinged ${data.mentioned} on Discord${data.unlinked?.length ? `, listed ${data.unlinked.length} by tag` : ''}.`;
+		if (res.ok && data.test) pingResult = `Test message posted — would have pinged ${data.mentioned} on Discord${data.unlinked?.length ? `, listed ${data.unlinked.length} by tag` : ''}.`;
+		else if (res.ok) pingResult = `Pinged ${data.mentioned} on Discord${data.unlinked?.length ? `, listed ${data.unlinked.length} by tag` : ''}.`;
 		else error = data.error ?? 'Ping failed';
 		pinging = false;
 	}
@@ -177,10 +179,13 @@
 			class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-sm text-foreground">
 			{#each PING_CHANNELS as c}<option value={c.value}>{c.label}</option>{/each}
 		</select>
+		<label class="flex items-center gap-1.5 text-sm text-muted-foreground">
+			<input type="checkbox" bind:checked={pingTest} /> Test, don't notify anyone
+		</label>
 		<button onclick={pingNoShows} disabled={pinging || !pingPreview}
 			title="Balrog pings everyone not marked Present or Late"
 			class="rounded-lg border border-primary/40 px-4 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50">
-			{pinging ? 'Pinging…' : `Ping no-shows (${pingPreview ? pingPreview.mentionIds.length + pingPreview.unlinked.length : 0})`}
+			{pinging ? 'Pinging…' : `${pingTest ? 'Test ping' : 'Ping'} no-shows (${pingPreview ? pingPreview.mentionIds.length + pingPreview.unlinked.length : 0})`}
 		</button>
 	</div>
 	{#if pingResult}
