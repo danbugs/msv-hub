@@ -1,11 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { AttendeeStatus } from '$lib/types/tournament';
+	import { buildNoShowPing, PING_CHANNELS, type PingChannel } from '$lib/attendance-ping';
 
 	let attendance = $state<AttendeeStatus[]>([]);
 	let loading = $state(true);
 	let refreshing = $state(false);
 	let error = $state('');
+	let togglesInFlight = $state(0);
+	// Bumped on every local toggle so a poll that started earlier is discarded.
+	let localEdits = 0;
+	let pinging = $state(false);
+	let pingResult = $state('');
+	let pingChannel = $state<PingChannel>('general');
 
 	let setupCount = $derived(attendance.filter((a) => a.pledgedSetup).length);
 	let presentCount = $derived(attendance.filter((a) => a.present).length);
@@ -14,7 +21,7 @@
 	let accountedCount = $derived(attendance.filter((a) => a.present || a.late).length);
 	let setupsNeeded = $derived(Math.max(0, 16 - setupCount - 2)); // -2 for venue setups
 
-	onMount(async () => {
+	async function initialLoad() {
 		loading = true;
 		const res = await fetch('/api/tournament/attendance');
 		if (res.ok) {
@@ -26,7 +33,47 @@
 			await refreshFromStartGG();
 		}
 		loading = false;
+	}
+
+	onMount(() => {
+		initialLoad();
+		// Pick up other TOs' toggles; skip while our own writes are pending so
+		// an in-flight optimistic update isn't briefly reverted.
+		const poll = setInterval(async () => {
+			if (document.hidden || togglesInFlight > 0 || refreshing) return;
+			const startedAt = localEdits;
+			try {
+				const r = await fetch('/api/tournament/attendance');
+				if (!r.ok) return;
+				const next = (await r.json()).attendance;
+				if (startedAt === localEdits && togglesInFlight === 0 && !refreshing) attendance = next;
+			} catch { /* venue wifi — retry next tick */ }
+		}, 10_000);
+		return () => clearInterval(poll);
 	});
+
+	let pingPreview = $derived(buildNoShowPing(attendance));
+
+	async function pingNoShows() {
+		if (!pingPreview) return;
+		const { mentionIds, unlinked } = pingPreview;
+		const label = PING_CHANNELS.find((c) => c.value === pingChannel)?.label;
+		const msg = `Balrog will post in ${label}:\n\n"${pingPreview.content.replace(/<@\d+>/g, '@…')}"\n\n` +
+			`${mentionIds.length} pinged on Discord` + (unlinked.length ? `, ${unlinked.length} listed by tag (no Discord on start.gg)` : '') + '. Send?';
+		if (!confirm(msg)) return;
+		pinging = true;
+		pingResult = '';
+		error = '';
+		const res = await fetch('/api/tournament/attendance/ping', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ channel: pingChannel })
+		});
+		const data = await res.json().catch(() => ({}));
+		if (res.ok) pingResult = `Pinged ${data.mentioned} on Discord${data.unlinked?.length ? `, listed ${data.unlinked.length} by tag` : ''}.`;
+		else error = data.error ?? 'Ping failed';
+		pinging = false;
+	}
 
 	async function refreshFromStartGG() {
 		refreshing = true;
@@ -45,6 +92,9 @@
 		const attendee = attendance.find((a) => a.gamerTag === gamerTag);
 		if (!attendee) return;
 		const newValue = !attendee[flag];
+		const before = { ...attendee };
+		togglesInFlight++;
+		localEdits++;
 
 		// Optimistic update. Marking late/present are mutually exclusive.
 		attendance = attendance.map((a) => {
@@ -59,16 +109,18 @@
 		if (newValue && flag === 'present') body.late = false;
 		if (newValue && flag === 'late') body.present = false;
 
-		const res = await fetch('/api/tournament/attendance', {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(body)
-		});
-		if (!res.ok) {
-			// Revert
-			attendance = attendance.map((a) =>
-				a.gamerTag === gamerTag ? { ...a, [flag]: !newValue } : a
-			);
+		try {
+			const res = await fetch('/api/tournament/attendance', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			if (!res.ok) throw new Error();
+		} catch {
+			// Revert all flags touched, including the cleared present/late counterpart
+			attendance = attendance.map((a) => (a.gamerTag === gamerTag ? before : a));
+		} finally {
+			togglesInFlight--;
 		}
 	}
 </script>
@@ -115,12 +167,25 @@
 	{/if}
 
 	<!-- Actions -->
-	<div class="mt-4 flex items-center gap-3">
+	<div class="mt-4 flex flex-wrap items-center gap-3">
 		<button onclick={refreshFromStartGG} disabled={refreshing}
 			class="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
 			{refreshing ? 'Refreshing...' : 'Refresh from StartGG'}
 		</button>
+		<span class="flex-1"></span>
+		<select bind:value={pingChannel} aria-label="Channel to ping in"
+			class="rounded-lg border border-input bg-secondary px-2 py-1.5 text-sm text-foreground">
+			{#each PING_CHANNELS as c}<option value={c.value}>{c.label}</option>{/each}
+		</select>
+		<button onclick={pingNoShows} disabled={pinging || !pingPreview}
+			title="Balrog pings everyone not marked Present or Late"
+			class="rounded-lg border border-primary/40 px-4 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50">
+			{pinging ? 'Pinging…' : `Ping no-shows (${pingPreview ? pingPreview.mentionIds.length + pingPreview.unlinked.length : 0})`}
+		</button>
 	</div>
+	{#if pingResult}
+		<p class="mt-2 text-sm text-success">{pingResult}</p>
+	{/if}
 
 	<!-- Attendee list -->
 	{#if loading}

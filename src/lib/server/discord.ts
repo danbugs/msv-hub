@@ -116,6 +116,21 @@ export async function sendMessage(channelId: string, content: string): Promise<v
 	}
 }
 
+/**
+ * Send a message that may only ping the given users. Message text can include
+ * player-chosen gamer tags, so never let Discord parse @everyone/roles from it.
+ */
+export async function sendMessagePingingUsers(channelId: string, content: string, userIds: string[]): Promise<void> {
+	const res = await discordFetch(`/channels/${channelId}/messages`, {
+		method: 'POST',
+		body: JSON.stringify({ content, allowed_mentions: { parse: [], users: userIds.slice(0, 100) } })
+	});
+	if (!res.ok) {
+		const body = await res.text();
+		throw new Error(`Failed to send message to ${channelId}: ${res.status} ${body}`);
+	}
+}
+
 /** Send a message and return its ID (for later editing). */
 export async function sendMessageWithId(channelId: string, content: string): Promise<string> {
 	const res = await discordFetch(`/channels/${channelId}/messages`, {
