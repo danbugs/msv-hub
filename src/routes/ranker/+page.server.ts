@@ -47,9 +47,10 @@ export const load: PageServerLoad = async () => {
 	const [season, allTime] = await Promise.all([getLeagueSeason(seasonId), getLeagueSeason(0)]);
 	if (!allTime) return { season: null, players: [] as RankerPlayer[] };
 
-	// Pool is the All-Time ranking with the same rules as the league page's All-Time tab
+	// Pool is the All-Time ranking, but with no attendance minimum so one-time entrants can be ranked too
 	const rankings = getRankings(allTime, {
 		...config,
+		minEvents: 0,
 		attendanceBonus: 5,
 		conservativeFactor: getRatingConfigForSeason(config, 0).conservativeFactor ?? 0
 	});

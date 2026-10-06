@@ -28,6 +28,9 @@
 	let title = $state(DEFAULT_TITLE);
 	let search = $state('');
 	let sortBy = $state<'rank' | 'name'>('rank');
+	// '' = any, NO_CHAR = players without character data, otherwise a character name
+	let charFilter = $state('');
+	const NO_CHAR = '__none__';
 	let editRows = $state(false);
 	let poolOpen = $state(true);
 	let selected = $state<string | null>(null);
@@ -38,10 +41,23 @@
 	const placed = $derived(new Set(tiers.flatMap((t) => t.items)));
 	const pool = $derived.by(() => {
 		const q = search.trim().toLowerCase();
-		const list = data.players.filter((p: RankerPlayer) => !placed.has(p.id) && (!q || p.tag.toLowerCase().includes(q)));
+		const list = data.players.filter((p: RankerPlayer) =>
+			!placed.has(p.id) &&
+			(!q || p.tag.toLowerCase().includes(q)) &&
+			(!charFilter || (charFilter === NO_CHAR ? !p.character : p.character === charFilter))
+		);
 		return sortBy === 'name' ? [...list].sort((a, b) => a.tag.localeCompare(b.tag, undefined, { sensitivity: 'base' })) : list;
 	});
 	const remaining = $derived(data.players.length - placed.size);
+	const characterOptions = $derived.by(() => {
+		const counts = new Map<string, number>();
+		let none = 0;
+		for (const p of data.players as RankerPlayer[]) {
+			if (p.character) counts.set(p.character, (counts.get(p.character) ?? 0) + 1);
+			else none++;
+		}
+		return { chars: [...counts].sort((a, b) => a[0].localeCompare(b[0])), none };
+	});
 
 	const STORAGE_KEY = 'msv-ranker';
 
@@ -649,9 +665,17 @@
 						<option value="name">A–Z</option>
 					</select>
 				</div>
-				<div class="shrink-0 px-3 pt-2">
+				<div class="flex shrink-0 gap-2 px-3 pt-2">
 					<input bind:value={search} onclick={(e) => e.stopPropagation()} placeholder="Search players…" type="search"
-						class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary" />
+						class="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary" />
+					<select bind:value={charFilter} onclick={(e) => e.stopPropagation()} aria-label="Filter by character"
+						class="w-32 shrink-0 rounded-md border border-border bg-background px-1.5 py-1.5 text-sm {charFilter ? 'border-primary' : ''}">
+						<option value="">All characters</option>
+						<option value={NO_CHAR}>No character ({characterOptions.none})</option>
+						{#each characterOptions.chars as [name, n] (name)}
+							<option value={name}>{name} ({n})</option>
+						{/each}
+					</select>
 				</div>
 				<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
 					{#if pool.length}
@@ -662,7 +686,7 @@
 						</div>
 					{:else}
 						<p class="py-6 text-center text-sm text-muted-foreground">
-							{search ? 'No matches.' : 'Everyone has been placed!'}
+							{search || charFilter ? 'No matches.' : 'Everyone has been placed!'}
 						</p>
 					{/if}
 				</div>
