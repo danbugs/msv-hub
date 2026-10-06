@@ -294,6 +294,16 @@ export function toPublicTournament(state: TournamentState | null): TournamentSta
 	return rest;
 }
 
+/**
+ * The active tournament if it's actually running: not completed and touched in
+ * the last 12h, so last week's abandoned state doesn't read as "live".
+ */
+export async function getLiveTournamentSummary(): Promise<{ slug: string; name: string; phase: TournamentState['phase'] } | null> {
+	const t = await getActiveTournament();
+	if (!t || t.phase === 'completed' || Date.now() - t.updatedAt > 12 * 60 * 60 * 1000) return null;
+	return { slug: t.slug, name: t.name, phase: t.phase };
+}
+
 export async function deleteTournament(slug: string): Promise<void> {
 	const redis = getRedis();
 	const data = await redis.get<string>(`${KEY_PREFIX}${slug}`);

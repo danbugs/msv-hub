@@ -28,6 +28,19 @@
 </svelte:head>
 
 <div class="min-h-screen bg-background text-foreground">
+	{#if data.live}
+		<a href="/live/{data.live.slug}" class="block bg-primary text-primary-foreground hover:bg-primary/90">
+			<div class="mx-auto max-w-3xl px-4 py-2 flex items-center gap-2 text-sm">
+				<span class="relative flex h-2 w-2" aria-hidden="true">
+					<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary-foreground opacity-75"></span>
+					<span class="relative inline-flex h-2 w-2 rounded-full bg-primary-foreground"></span>
+				</span>
+				<span class="font-semibold">Live now</span>
+				<span class="truncate opacity-90">{data.live.phase === 'swiss' ? 'Swiss rounds' : 'Brackets'} in progress</span>
+				<span class="ml-auto shrink-0">Follow along →</span>
+			</div>
+		</a>
+	{/if}
 	<div class="border-b border-border bg-card/90 backdrop-blur-md">
 		<div class="mx-auto max-w-3xl px-4 py-5">
 			<div class="flex items-center justify-between">
