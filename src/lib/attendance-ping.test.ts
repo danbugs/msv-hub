@@ -13,6 +13,7 @@ describe('buildNoShowPing', () => {
 		]);
 		expect(r).toEqual({
 			content: '<@333333333333333333> ~ are you still coming?\nAlso NoDiscord ~ are you still coming?',
+			display: '@Gone ~ are you still coming?\nAlso NoDiscord ~ are you still coming?',
 			mentionIds: ['333333333333333333'],
 			unlinked: ['NoDiscord']
 		});

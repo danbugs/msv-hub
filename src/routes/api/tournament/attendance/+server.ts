@@ -4,6 +4,7 @@ import type { AttendanceFlags } from '$lib/server/store';
 import { exportAttendees } from '$lib/server/startgg-admin';
 import { gql } from '$lib/server/startgg';
 import type { AttendeeStatus } from '$lib/types/tournament';
+import { withDiscordIds } from '$lib/server/attendance-discord';
 
 /** GET — fetch attendance data (from cache or StartGG) */
 export const GET: RequestHandler = async ({ locals }) => {
@@ -88,12 +89,12 @@ export const POST: RequestHandler = async ({ locals }) => {
 		};
 	});
 
-	tournament.attendance = newAttendance;
+	tournament.attendance = await withDiscordIds(tournament, newAttendance);
 	await saveTournament(tournament);
 
 	return Response.json({
 		ok: true,
-		attendance: newAttendance,
+		attendance: tournament.attendance,
 		setupCount: newAttendance.filter((a) => a.pledgedSetup).length,
 		totalPlayers: newAttendance.length
 	});

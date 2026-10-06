@@ -904,3 +904,41 @@ export async function getUserByDiscriminator(
 		prefix: data.user.player.prefix ?? ''
 	};
 }
+
+/** "MSFT | Dantotto" → "dantotto": attendance tags carry sponsor prefixes, API participant tags don't. */
+export function normalizeTag(tag: string): string {
+	return tag.split('|').pop()!.trim().toLowerCase();
+}
+
+const EVENT_DISCORD_IDS_QUERY = `query($id: ID!, $page: Int!) {
+  event(id: $id) {
+    entrants(query: { page: $page, perPage: 32 }) {
+      pageInfo { totalPages }
+      nodes { participants { gamerTag user { authorizations(types: [DISCORD]) { externalId } } } }
+    }
+  }
+}`;
+
+/**
+ * Discord user IDs for an event's entrants, keyed by normalizeTag(gamerTag).
+ * The attendee CSV export leaves its Discord column blank for most players even
+ * when they've linked Discord, but the GraphQL user authorizations have it.
+ */
+export async function fetchEventDiscordIds(eventId: number): Promise<Map<string, string>> {
+	const out = new Map<string, string>();
+	for (let page = 1, total = 1; page <= total; page++) {
+		const data = await gql<{
+			event: { entrants: { pageInfo: { totalPages: number }; nodes: { participants: { gamerTag: string; user: { authorizations: { externalId: string }[] | null } | null }[] }[] } } | null;
+		}>(EVENT_DISCORD_IDS_QUERY, { id: eventId, page });
+		const entrants = data?.event?.entrants;
+		if (!entrants) break;
+		total = entrants.pageInfo.totalPages;
+		for (const n of entrants.nodes) {
+			for (const p of n.participants) {
+				const id = p.user?.authorizations?.[0]?.externalId;
+				if (id) out.set(normalizeTag(p.gamerTag), id);
+			}
+		}
+	}
+	return out;
+}

@@ -57,14 +57,22 @@
 
 	async function pingNoShows() {
 		if (!pingPreview) return;
-		const { mentionIds, unlinked } = pingPreview;
-		const label = PING_CHANNELS.find((c) => c.value === pingChannel)?.label;
-		const msg = (pingTest ? 'TEST MODE — nobody will be notified.\n\n' : '') + `Balrog will post in ${label}:\n\n"${pingPreview.content.replace(/<@\d+>/g, '@…')}"\n\n` +
-			`${mentionIds.length} pinged on Discord` + (unlinked.length ? `, ${unlinked.length} listed by tag (no Discord on start.gg)` : '') + '. Send?';
-		if (!confirm(msg)) return;
 		pinging = true;
 		pingResult = '';
 		error = '';
+		// Ask the server for the exact message: it fills Discord IDs from StartGG
+		// that the local attendance list may not have yet.
+		const pre = await fetch('/api/tournament/attendance/ping', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ channel: pingChannel, test: pingTest, preview: true })
+		});
+		const p = await pre.json().catch(() => ({}));
+		if (!pre.ok) { error = p.error ?? 'Ping preview failed'; pinging = false; return; }
+		const label = PING_CHANNELS.find((c) => c.value === pingChannel)?.label;
+		const msg = (pingTest ? 'TEST MODE — nobody will be notified.\n\n' : '') + `Balrog will post in ${label}:\n\n"${p.content}"\n\n` +
+			`${p.mentioned} pinged on Discord` + (p.unlinked?.length ? `, ${p.unlinked.length} listed by tag (no Discord on start.gg)` : '') + '. Send?';
+		if (!confirm(msg)) { pinging = false; return; }
 		const res = await fetch('/api/tournament/attendance/ping', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },

@@ -17,20 +17,31 @@ const SNOWFLAKE = /^\d{15,21}$/;
  */
 export function buildNoShowPing(attendance: AttendeeStatus[]): {
 	content: string;
+	/** Same message with mentions shown as @tag, for the TO's confirm dialog. */
+	display: string;
 	mentionIds: string[];
 	unlinked: string[];
 } | null {
 	const missing = attendance.filter((a) => !a.present && !a.late);
 	if (!missing.length) return null;
-	const mentionIds = missing.map((a) => a.discordId?.trim() ?? '').filter((id) => SNOWFLAKE.test(id));
+	const linked = missing.filter((a) => SNOWFLAKE.test(a.discordId?.trim() ?? ''));
+	const mentionIds = linked.map((a) => a.discordId!.trim());
 	const unlinked = missing.filter((a) => !SNOWFLAKE.test(a.discordId?.trim() ?? '')).map((a) => a.gamerTag);
 
-	const lines: string[] = [];
-	if (mentionIds.length) lines.push(`${mentionIds.map((id) => `<@${id}>`).join(', ')} ~ are you still coming?`);
-	if (unlinked.length) {
-		lines.push(mentionIds.length
-			? `Also ${unlinked.join(', ')} ~ are you still coming?`
-			: `${unlinked.join(', ')} ~ are you still coming?`);
-	}
-	return { content: lines.join('\n'), mentionIds, unlinked };
+	const render = (mentions: string[]) => {
+		const lines: string[] = [];
+		if (mentions.length) lines.push(`${mentions.join(', ')} ~ are you still coming?`);
+		if (unlinked.length) {
+			lines.push(mentions.length
+				? `Also ${unlinked.join(', ')} ~ are you still coming?`
+				: `${unlinked.join(', ')} ~ are you still coming?`);
+		}
+		return lines.join('\n');
+	};
+	return {
+		content: render(mentionIds.map((id) => `<@${id}>`)),
+		display: render(linked.map((a) => `@${a.gamerTag}`)),
+		mentionIds,
+		unlinked
+	};
 }

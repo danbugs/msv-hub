@@ -2,12 +2,13 @@ import type { RequestHandler } from './$types';
 import { getActiveTournament, getAttendance } from '$lib/server/store';
 import { sendMessagePingingUsers } from '$lib/server/discord';
 import { buildNoShowPing, PING_CHANNELS } from '$lib/attendance-ping';
+import { withDiscordIds } from '$lib/server/attendance-discord';
 
 /** POST — Balrog pings everyone not marked present/late: "are you still coming?" */
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-	const { channel, test } = (await request.json().catch(() => ({}))) as { channel?: string; test?: boolean };
+	const { channel, test, preview } = (await request.json().catch(() => ({}))) as { channel?: string; test?: boolean; preview?: boolean };
 	const target = PING_CHANNELS.find((c) => c.value === channel);
 	if (!target) return Response.json({ error: 'Unknown channel' }, { status: 400 });
 
@@ -15,8 +16,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!tournament) return Response.json({ error: 'No active tournament' }, { status: 404 });
 
 	// Built from the server's view, not the client's, so a stale tab can't ping people who just arrived.
-	const ping = buildNoShowPing(await getAttendance(tournament));
+	const ping = buildNoShowPing(await withDiscordIds(tournament, await getAttendance(tournament)));
 	if (!ping) return Response.json({ error: 'Everyone is marked present or late' }, { status: 400 });
+	// Preview lets the confirm dialog show exactly who will be @'d before anything is sent.
+	if (preview) return Response.json({ ok: true, preview: true, content: ping.display, mentioned: ping.mentionIds.length, unlinked: ping.unlinked });
 
 	try {
 		// Test mode renders the real message but notifies no one.
