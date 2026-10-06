@@ -2,6 +2,9 @@
 	import { invalidateAll } from '$app/navigation';
 	import type { TournamentState, Entrant, BracketMatch, BracketState } from '$lib/types/tournament';
 	import BracketView from '$lib/components/BracketView.svelte';
+	import { myMatchStatus } from '$lib/live/my-match';
+	import { page } from '$app/state';
+	import { onMount } from 'svelte';
 
 	let { data } = $props();
 	let tournament = $derived<TournamentState | null>(data.tournament);
@@ -30,6 +33,65 @@
 	function clearSearch() {
 		searchQuery = '';
 		selectedEntrantId = null;
+	}
+
+	// ── "Your match" card ─────────────────────────────────────────────────
+	// Remembered per tournament in localStorage; ?me=<tag> lets a link preselect it.
+
+	let meId = $state<string | null>(null);
+	let notifyOn = $state(false);
+	let now = $state(Date.now());
+	const meKey = $derived(`msv-live-me:${data.slug}`);
+
+	onMount(() => {
+		const fromUrl = page.url.searchParams.get('me')?.toLowerCase();
+		const byTag = fromUrl && tournament?.entrants.find((e) => e.gamerTag.toLowerCase() === fromUrl);
+		let stored: string | null = null;
+		try { stored = localStorage.getItem(meKey); } catch { /* storage blocked */ }
+		meId = byTag ? byTag.id : stored && getEntrant(stored) ? stored : null;
+		notifyOn = typeof Notification !== 'undefined' && Notification.permission === 'granted' && !!meId;
+		const tick = setInterval(() => (now = Date.now()), 30_000);
+		return () => clearInterval(tick);
+	});
+
+	function setMe(id: string | null) {
+		meId = id;
+		try {
+			if (id) localStorage.setItem(meKey, id); else localStorage.removeItem(meKey);
+		} catch { /* storage blocked */ }
+	}
+
+	let myStatus = $derived(tournament && meId ? myMatchStatus(tournament, meId) : null);
+
+	async function enableNotify() {
+		if (typeof Notification === 'undefined') return;
+		notifyOn = (await Notification.requestPermission()) === 'granted';
+	}
+
+	// Alert when a new Swiss pairing appears or a bracket match gets called.
+	// Only fires while the tab is alive — good enough for players watching at the venue.
+	// The first status seen for a player is the baseline, so a reload doesn't re-alert.
+	let alertBaseline: { meId: string; key: string | null } | null = null;
+	$effect(() => {
+		const s = myStatus;
+		if (!s || !meId) return;
+		const key =
+			s.kind === 'swiss-playing' ? `swiss-${s.round}` :
+			s.kind === 'bracket-ready' && s.calledAt ? `bracket-${s.match.id}-${s.calledAt}` : null;
+		if (alertBaseline?.meId !== meId) { alertBaseline = { meId, key }; return; }
+		if (!key || key === alertBaseline.key) return;
+		alertBaseline.key = key;
+		if (!notifyOn || !s || (s.kind !== 'swiss-playing' && s.kind !== 'bracket-ready')) return;
+		const where = s.isStream ? 'STREAM' : s.station ? `Station ${s.station}` : 'your station';
+		try {
+			new Notification(`You're up — ${where}`, { body: `vs ${getEntrant(s.opponentId)?.gamerTag ?? 'TBD'}`, tag: 'msv-match' });
+		} catch { /* some mobile browsers only allow notifications from a service worker */ }
+		navigator.vibrate?.([200, 100, 200]);
+	});
+
+	function minutesAgo(ts: number): string {
+		const m = Math.max(0, Math.floor((now - ts) / 60_000));
+		return m === 0 ? 'just now' : `${m}m ago`;
 	}
 
 	// ── Player history (why command) ──────────────────────────────────────
@@ -179,7 +241,7 @@
 					<input
 						bind:value={searchQuery}
 						oninput={() => { if (!searchQuery.trim()) selectedEntrantId = null; }}
-						placeholder="Search player for match history…"
+						placeholder="Find yourself to pin your next match…"
 						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 					{#if searchQuery && !selectedEntrantId}
 						<div class="absolute top-full mt-1 left-0 w-full rounded-lg border border-border bg-card shadow-xl z-40">
@@ -205,6 +267,70 @@
 
 	<div class="mx-auto max-w-3xl px-4 py-6 space-y-8">
 
+		{#if tournament && meId && myStatus}
+			{@const me = getEntrant(meId)}
+			{@const s = myStatus}
+			{@const urgent = s.kind === 'swiss-playing' || (s.kind === 'bracket-ready' && !!s.calledAt)}
+			<section class="rounded-xl border p-4 {urgent ? 'border-primary bg-primary/10' : 'border-border bg-card'}" aria-live="polite">
+				<div class="flex items-center gap-2 text-xs text-muted-foreground">
+					<span>Your match · <span class="font-medium text-foreground">{me?.gamerTag}</span></span>
+					<span class="flex-1"></span>
+					{#if !notifyOn && typeof Notification !== 'undefined'}
+						<button onclick={enableNotify} class="text-primary hover:text-primary/80">🔔 alert me</button>
+					{/if}
+					<button onclick={() => setMe(null)} class="hover:text-foreground">not me</button>
+				</div>
+				<div class="mt-2">
+					{#if s.kind === 'swiss-playing' || s.kind === 'bracket-ready'}
+						{@const opp = getEntrant(s.opponentId)}
+						<div class="flex items-baseline gap-3 flex-wrap">
+							<span class="text-2xl font-bold {s.isStream ? 'text-primary' : 'text-foreground'}">
+								{s.isStream ? 'STREAM' : s.station ? `Station ${s.station}` : 'Station TBD'}
+							</span>
+							<span class="text-base text-foreground">vs <span class="font-semibold">{opp?.gamerTag ?? 'TBD'}</span></span>
+						</div>
+						<div class="mt-1 text-xs text-muted-foreground">
+							{#if s.kind === 'swiss-playing'}
+								Swiss Round {s.round} — go play!
+							{:else}
+								{s.bracket === 'main' ? 'Main' : 'Redemption'} · {matchLabel(s.match, tournament.brackets![s.bracket]!)}
+								· {s.calledAt ? `called ${minutesAgo(s.calledAt)} — head to your station` : 'not called yet, stay close'}
+							{/if}
+						</div>
+					{:else if s.kind === 'swiss-reported'}
+						<div class="text-base text-foreground">
+							Round {s.round}: <span class="{s.won ? 'text-success' : 'text-destructive'} font-semibold">{s.won ? 'Win' : 'Loss'}</span>
+						</div>
+						<div class="mt-1 text-xs text-muted-foreground">
+							{s.lastRound ? 'Swiss is over — waiting for brackets.' : `Waiting for Round ${s.round + 1} pairings.`}
+						</div>
+					{:else if s.kind === 'swiss-bye'}
+						<div class="text-base text-foreground">BYE in Round {s.round}</div>
+						<div class="mt-1 text-xs text-muted-foreground">Free win — hang tight for the next round.</div>
+					{:else if s.kind === 'bracket-waiting'}
+						{@const [a, b] = s.feederIds}
+						<div class="text-base text-foreground">
+							Next: {matchLabel(s.match, tournament.brackets![s.bracket]!)}
+						</div>
+						<div class="mt-1 text-xs text-muted-foreground">
+							{#if a && b}
+								Waiting on the winner of {getEntrant(a)?.gamerTag} vs {getEntrant(b)?.gamerTag}.
+							{:else}
+								Waiting on your opponent.
+							{/if}
+						</div>
+					{:else if s.kind === 'done'}
+						<div class="text-base text-foreground">
+							{s.rank ? `Finished #${s.rank}${s.bracket === 'redemption' ? ' in Redemption' : ''}` : 'No more matches'}
+						</div>
+						<div class="mt-1 text-xs text-muted-foreground">GGs! Thanks for coming out.</div>
+					{:else}
+						<div class="text-sm text-muted-foreground">Waiting for the tournament to start.</div>
+					{/if}
+				</div>
+			</section>
+		{/if}
+
 		{#if !tournament}
 			<div class="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
 				No active tournament for this slug.
@@ -222,6 +348,10 @@
 				<div class="flex items-center gap-3 flex-wrap">
 					<h2 class="text-xl font-bold text-foreground truncate min-w-0">{entrant?.gamerTag}</h2>
 					<span class="rounded-full bg-secondary px-3 py-0.5 text-xs text-foreground">Seed #{entrant?.initialSeed}</span>
+					{#if meId !== selectedEntrantId}
+						<button onclick={() => { setMe(selectedEntrantId); clearSearch(); }}
+							class="rounded-full border border-primary/40 px-3 py-0.5 text-xs text-primary hover:bg-primary/10">⭐ This is me</button>
+					{/if}
 					<span class="rounded-full bg-secondary px-3 py-0.5 text-xs text-success">{swissW}W – {swissL}L Swiss</span>
 					{#if standing}
 						<span class="rounded-full px-3 py-0.5 text-xs {standing.bracket === 'main' ? 'bg-primary/10 text-primary' : 'bg-destructive-muted text-destructive'}">
