@@ -33,7 +33,10 @@
 	const NO_CHAR = '__none__';
 	let editRows = $state(false);
 	let poolOpen = $state(true);
-	let selected = $state<string | null>(null);
+	// Ordered so a bulk move keeps the order players were picked (or the pool's order for "select all")
+	let selected = $state<string[]>([]);
+	let selectMode = $state(false);
+	const selectedSet = $derived(new Set(selected));
 	let exporting = $state(false);
 	let loaded = $state(false);
 
@@ -98,15 +101,30 @@
 		return tiers.find((t) => t.items.includes(id));
 	}
 
-	function move(id: string, target: string, index?: number) {
+	// `index` is a position in the target row once the moving players have been taken out of it
+	function moveMany(ids: string[], target: string, index?: number) {
+		const moving = new Set(ids);
 		for (const t of tiers) {
-			const i = t.items.indexOf(id);
-			if (i !== -1) t.items.splice(i, 1);
+			if (t.items.some((x) => moving.has(x))) t.items = t.items.filter((x) => !moving.has(x));
 		}
 		if (target === POOL) return;
 		const t = tiers.find((t) => t.id === target);
 		if (!t) return;
-		t.items.splice(index ?? t.items.length, 0, id);
+		t.items.splice(index ?? t.items.length, 0, ...ids);
+	}
+
+	function clearSelection() {
+		selected = [];
+		selectMode = false;
+	}
+
+	function toggleSelected(id: string) {
+		selected = selectedSet.has(id) ? selected.filter((x) => x !== id) : [...selected, id];
+	}
+
+	function selectAllInPool() {
+		const extra = pool.map((p: RankerPlayer) => p.id).filter((id: string) => !selectedSet.has(id));
+		selected = [...selected, ...extra];
 	}
 
 	// ── Drag & drop ─────────────────────────────────────────────
@@ -118,7 +136,9 @@
 	const TOUCH_SLOP = 8;
 
 	type DragKind = 'card' | 'row';
-	let drag = $state<{ kind: DragKind; id: string; x: number; y: number } | null>(null);
+	// `ids` is the group being carried: just `id`, or the whole selection when dragging a selected card
+	let drag = $state<{ kind: DragKind; id: string; ids: string[]; x: number; y: number } | null>(null);
+	const dragIds = $derived(new Set(drag?.kind === 'card' ? drag.ids : []));
 	let dropTarget = $state<{ zone: string; index: number } | null>(null);
 	let rowTarget = $state<number | null>(null);
 	const otherRows = $derived(drag?.kind === 'row' ? tiers.filter((t) => t.id !== drag!.id) : tiers);
@@ -145,8 +165,9 @@
 	function startDrag(kind: DragKind, id: string, x: number, y: number) {
 		if (pending?.timer) clearTimeout(pending.timer);
 		pending = null;
-		selected = null;
-		drag = { kind, id, x, y };
+		const group = kind === 'card' && selectedSet.has(id) && selected.length > 1;
+		drag = { kind, id, ids: group ? [...selected] : [id], x, y };
+		if (kind === 'card') clearSelection();
 		navigator.vibrate?.(10);
 		updateDropTarget(x, y);
 		scrollRaf = requestAnimationFrame(autoScroll);
@@ -172,7 +193,7 @@
 
 	function onPointerUp() {
 		if (drag) {
-			if (drag.kind === 'card' && dropTarget) move(drag.id, dropTarget.zone, dropTarget.index);
+			if (drag.kind === 'card' && dropTarget) moveMany(drag.ids, dropTarget.zone, dropTarget.index);
 			if (drag.kind === 'row' && rowTarget !== null) moveRowTo(drag.id, rowTarget);
 			suppressClick = true;
 			setTimeout(() => (suppressClick = false), 0);
@@ -213,8 +234,8 @@
 			dropTarget = { zone, index: 0 };
 			return;
 		}
-		// Index among the row's cards excluding the one being dragged, in reading order
-		const cards = [...zoneEl.querySelectorAll<HTMLElement>('[data-card]')].filter((c) => c.dataset.card !== drag!.id);
+		// Index among the row's cards excluding the ones being dragged, in reading order
+		const cards = [...zoneEl.querySelectorAll<HTMLElement>('[data-card]')].filter((c) => !dragIds.has(c.dataset.card!));
 		let index = cards.length;
 		for (let i = 0; i < cards.length; i++) {
 			const r = cards[i].getBoundingClientRect();
@@ -253,29 +274,48 @@
 		};
 	});
 
-	// ── Tap to place (keyboard / accessibility fallback for dragging) ─────
+	// ── Tap to place (also the keyboard path, and how bulk moves work) ─────
+	// Select mode, or Ctrl/Cmd/Shift-click, toggles players in and out of the selection.
+	// Otherwise a tap selects one player, and tapping a row (or a placed player) moves the selection there.
 
 	function onCardClick(e: MouseEvent, id: string) {
 		e.stopPropagation();
 		if (suppressClick) return;
-		if (!selected || selected === id) {
-			selected = selected === id ? null : id;
+		if (selectMode || e.ctrlKey || e.metaKey || e.shiftKey) {
+			toggleSelected(id);
+			return;
+		}
+		if (!selected.length || selectedSet.has(id)) {
+			selected = selectedSet.has(id) && selected.length === 1 ? [] : [id];
 			return;
 		}
 		const t = tierOf(id);
 		if (t) {
-			const moving = selected;
-			move(moving, t.id, t.items.indexOf(id));
-			selected = null;
+			const before = t.items.filter((x) => !selectedSet.has(x)).indexOf(id);
+			moveMany(selected, t.id, before);
+			clearSelection();
 		} else {
-			selected = id;
+			selected = [id];
 		}
 	}
 
 	function onZoneClick(zone: string) {
-		if (!selected || suppressClick) return;
-		move(selected, zone);
-		selected = null;
+		if (!selected.length || suppressClick) return;
+		moveMany(selected, zone);
+		clearSelection();
+	}
+
+	// In select mode a row's label grabs (or releases) everyone in that row
+	function onLabelClick(tier: Tier) {
+		if (!selectMode || suppressClick || !tier.items.length) return;
+		const all = tier.items.every((x) => selectedSet.has(x));
+		selected = all
+			? selected.filter((x) => !tier.items.includes(x))
+			: [...selected, ...tier.items.filter((x) => !selectedSet.has(x))];
+	}
+
+	function onKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape' && (selected.length || selectMode)) clearSelection();
 	}
 
 	// ── Rows ─────────────────────────────────────────────────
@@ -483,6 +523,8 @@
 	}
 </script>
 
+<svelte:window onkeydown={onKeydown} />
+
 <svelte:head>
 	<title>Tier List Maker — MSV League</title>
 	<meta name="description" content="Rank Microspacing Vancouver players and export your tier list." />
@@ -515,9 +557,16 @@
 			onclick={(e) => onCardClick(e, id)}
 			oncontextmenu={(e) => e.preventDefault()}
 			class="card relative h-[84px] w-[60px] shrink-0 cursor-grab rounded-md transition-[opacity,transform] sm:h-[100px] sm:w-[74px]
-				{drag?.id === id ? 'opacity-30' : ''}
-				{selected === id ? 'ring-2 ring-primary ring-offset-2 ring-offset-background -translate-y-0.5' : ''}">
+				{dragIds.has(id) ? 'opacity-30' : ''}
+				{selectedSet.has(id) ? 'ring-2 ring-primary ring-offset-2 ring-offset-background -translate-y-0.5' : ''}"
+			aria-pressed={selectMode ? selectedSet.has(id) : undefined}>
 			{@render card(p)}
+			{#if selectMode || selectedSet.has(id)}
+				<span class="absolute bottom-0.5 left-0.5 flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-bold leading-none
+					{selectedSet.has(id) ? 'border-primary bg-primary text-primary-foreground' : 'border-white/70 bg-black/50'}" aria-hidden="true">
+					{selectedSet.has(id) ? '✓' : ''}
+				</span>
+			{/if}
 			{#if !inTier}
 				<span class="absolute bottom-0.5 right-0.5 rounded bg-black/60 px-1 text-[9px] font-semibold text-white">#{p.rank}</span>
 			{/if}
@@ -566,27 +615,35 @@
 				<input bind:value={title} maxlength="60" aria-label="Tier list title" placeholder={DEFAULT_TITLE}
 					class="mb-3 w-full bg-transparent text-center text-2xl font-semibold tracking-wide text-foreground outline-none focus:underline decoration-primary/50 underline-offset-4" />
 
-				{#if selected}
-					{@const sp = byId.get(selected)}
-					<div class="mb-3 flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm">
-						<span class="min-w-0 truncate">Tap a row to place <strong>{sp?.tag}</strong>{tierOf(selected) ? ', or the pool to remove' : ''}</span>
-						<button onclick={() => (selected = null)} class="shrink-0 text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+				{#if selected.length || selectMode}
+					<div class="sticky top-2 z-20 mb-3 flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-card/95 px-3 py-2 text-sm shadow-sm backdrop-blur">
+						<span class="min-w-0 truncate">
+							{#if !selected.length}
+								Tap players to select them, or a row's label to grab the whole row
+							{:else if selected.length === 1}
+								Tap a row to place <strong>{byId.get(selected[0])?.tag}</strong>{tierOf(selected[0]) ? ', or the pool to remove' : ''}
+							{:else}
+								Tap a row to move <strong>{selected.length} players</strong>
+							{/if}
+						</span>
+						<button onclick={clearSelection} class="shrink-0 text-xs text-muted-foreground hover:text-foreground">Cancel</button>
 					</div>
 				{/if}
 
 				<div class="flex flex-col gap-2">
 					{#each tiers as tier, ti (tier.id)}
-						{@const others = tier.items.filter((x) => x !== drag?.id)}
+						{@const others = tier.items.filter((x) => !dragIds.has(x))}
 						{@const target = dropTarget?.zone === tier.id ? dropTarget.index : -1}
 						{#if rowTarget !== null && tier.id !== drag?.id && otherRows.indexOf(tier) === rowTarget}
 							<div class="h-1 rounded-full bg-primary"></div>
 						{/if}
 						<div data-row={tier.id} class="flex overflow-hidden rounded-lg bg-[#141414] transition-opacity {drag?.kind === 'row' && drag.id === tier.id ? 'opacity-30' : ''}">
-							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 							<div class="flex w-16 shrink-0 flex-col items-center justify-center gap-1 p-1 sm:w-24 {editRows ? '' : 'grab cursor-grab'}"
 								style="background:{tier.color}"
-								title={editRows ? undefined : 'Drag to reorder row'}
+								title={editRows ? undefined : selectMode ? 'Tap to select everyone in this row' : 'Drag to reorder row'}
 								onpointerdown={editRows ? undefined : (e) => onDragPointerDown(e, 'row', tier.id)}
+								onclick={() => onLabelClick(tier)}
 								oncontextmenu={(e) => { if (!editRows) e.preventDefault(); }}>
 								{#if editRows}
 									<input bind:value={tier.label} maxlength="12" aria-label="Row label"
@@ -617,9 +674,9 @@
 							<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 							<div data-zone={tier.id} onclick={() => onZoneClick(tier.id)}
 								class="flex min-h-[96px] flex-1 flex-wrap content-start gap-1.5 p-1.5 transition-colors sm:min-h-[112px]
-									{target !== -1 ? 'bg-white/5' : ''} {selected ? 'cursor-pointer hover:bg-white/5' : ''}">
+									{target !== -1 ? 'bg-white/5' : ''} {selected.length ? 'cursor-pointer hover:bg-white/5' : ''}">
 								{#each tier.items as id (id)}
-									{#if target !== -1 && id !== drag?.id && others.indexOf(id) === target}
+									{#if target !== -1 && !dragIds.has(id) && others.indexOf(id) === target}
 										{@render indicator()}
 									{/if}
 									{@render slot(id, true)}
@@ -641,7 +698,7 @@
 				</button>
 
 				<p class="mt-4 hidden text-center text-xs text-muted-foreground lg:block">
-					Drag players onto a row, or click a player then click a row. Your list saves in this browser.
+					Drag players onto a row, or click a player then click a row. Use Select (or Ctrl/Shift-click) to move several at once. Your list saves in this browser.
 				</p>
 			</section>
 
@@ -658,6 +715,11 @@
 						<span class="text-xs text-muted-foreground transition-transform lg:hidden" class:rotate-90={poolOpen}>&#9654;</span>
 						<span class="text-sm font-bold uppercase tracking-wider">Players</span>
 						<span class="text-xs text-muted-foreground">{remaining} left</span>
+					</button>
+					<button onclick={(e) => { e.stopPropagation(); if (selectMode) clearSelection(); else { selectMode = true; poolOpen = true; } }}
+						aria-pressed={selectMode}
+						class="rounded-md px-2 py-1 text-xs font-medium {selectMode ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground hover:bg-accent'}">
+						{selectMode ? 'Done' : 'Select'}
 					</button>
 					<select bind:value={sortBy} onclick={(e) => e.stopPropagation()} aria-label="Sort players"
 						class="rounded-md border border-border bg-background px-1.5 py-1 text-xs">
@@ -677,6 +739,27 @@
 						{/each}
 					</select>
 				</div>
+				{#if selectMode || selected.length}
+					<div class="flex shrink-0 items-center gap-2 px-3 pt-2 text-xs">
+						<span class="font-semibold text-primary">{selected.length} selected</span>
+						<span class="flex-1"></span>
+						{#if selected.some((id) => placed.has(id))}
+							<!-- Tapping empty pool space also works, but in a full pool you'd mostly hit cards -->
+							<button onclick={(e) => { e.stopPropagation(); onZoneClick(POOL); }}
+								class="rounded-md bg-secondary px-2 py-1 font-medium text-foreground hover:bg-accent">
+								Back to pool
+							</button>
+						{/if}
+						<button onclick={(e) => { e.stopPropagation(); selectAllInPool(); }} disabled={!pool.length}
+							class="rounded-md bg-secondary px-2 py-1 font-medium text-foreground hover:bg-accent disabled:opacity-40">
+							Select all{search || charFilter ? ' shown' : ''} ({pool.length})
+						</button>
+						<button onclick={(e) => { e.stopPropagation(); selected = []; }} disabled={!selected.length}
+							class="rounded-md px-2 py-1 font-medium text-muted-foreground hover:text-foreground disabled:opacity-40">
+							Clear
+						</button>
+					</div>
+				{/if}
 				<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
 					{#if pool.length}
 						<div class="flex flex-wrap justify-center gap-1.5">
@@ -691,7 +774,7 @@
 					{/if}
 				</div>
 				<p class="shrink-0 border-t border-border px-3 py-1.5 text-center text-[11px] text-muted-foreground lg:hidden">
-					Hold &amp; drag, or tap a player then tap a row
+					Hold &amp; drag, or tap a player then tap a row · "Select" to move many
 				</p>
 			</aside>
 		</div>
@@ -712,7 +795,17 @@
 	{#if p}
 		<div class="pointer-events-none fixed left-0 top-0 z-50 h-[84px] w-[60px] sm:h-[100px] sm:w-[74px]"
 			style="transform: translate({drag.x}px, {drag.y}px) translate(-50%, -60%) scale(1.1)">
-			{@render card(p, true)}
+			{#if drag.ids.length > 1}
+				<!-- Offset backing cards read as a stack -->
+				<div class="absolute inset-0 translate-x-2 translate-y-2 rounded-md bg-secondary/80 ring-1 ring-primary/50"></div>
+				<div class="absolute inset-0 translate-x-1 translate-y-1 rounded-md bg-secondary/90 ring-1 ring-primary/70"></div>
+			{/if}
+			<div class="relative h-full w-full">{@render card(p, true)}</div>
+			{#if drag.ids.length > 1}
+				<span class="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-bold text-primary-foreground shadow">
+					{drag.ids.length}
+				</span>
+			{/if}
 		</div>
 	{/if}
 {/if}
