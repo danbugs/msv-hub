@@ -5,6 +5,7 @@ import type { TournamentState, Entrant, FinalStanding, TournamentSettings } from
 
 /** GET — fetch the active tournament */
 export const GET: RequestHandler = async ({ locals }) => {
+	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 	const tournament = await getActiveTournament();
 	return Response.json(tournament);
 };

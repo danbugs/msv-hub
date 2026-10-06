@@ -283,6 +283,17 @@ export async function getActiveTournament(): Promise<TournamentState | null> {
 	return getTournament(slug);
 }
 
+/**
+ * Strips TO-only fields before state is sent to public pages: attendance holds
+ * Discord IDs and registration times, and startggSync holds internal error logs.
+ */
+export function toPublicTournament(state: TournamentState | null): TournamentState | null {
+	if (!state) return null;
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	const { attendance, startggSync, ...rest } = state;
+	return rest;
+}
+
 export async function deleteTournament(slug: string): Promise<void> {
 	const redis = getRedis();
 	const data = await redis.get<string>(`${KEY_PREFIX}${slug}`);
