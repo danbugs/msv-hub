@@ -15,7 +15,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		return json({ error: 'Invalid code' }, { status: 401 });
 	}
 
-	if (!verifyOTP(normalized, code)) {
+	if (!(await verifyOTP(normalized, String(code)))) {
 		return json({ error: 'Invalid or expired code' }, { status: 401 });
 	}
 

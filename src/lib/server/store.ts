@@ -382,6 +382,44 @@ export async function saveEventConfig(config: Partial<EventConfig>): Promise<Eve
 }
 
 // ---------------------------------------------------------------------------
+// Login OTPs — kept in Redis so send-otp and verify-otp can land on different
+// serverless instances.
+// ---------------------------------------------------------------------------
+
+const OTP_PREFIX = 'auth:otp:';
+const OTP_ATTEMPTS_PREFIX = 'auth:otp-attempts:';
+
+export async function setOTP(email: string, code: string, ttlSec: number): Promise<void> {
+	const redis = getRedis();
+	// A fresh code resets the attempt budget.
+	await Promise.all([
+		redis.set(`${OTP_PREFIX}${email}`, code, { ex: ttlSec }),
+		redis.del(`${OTP_ATTEMPTS_PREFIX}${email}`)
+	]);
+}
+
+export async function getOTP(email: string): Promise<string | null> {
+	const redis = getRedis();
+	const code = await redis.get<string | number>(`${OTP_PREFIX}${email}`);
+	// Upstash auto-deserializes numeric strings, so normalize back to string.
+	return code == null ? null : String(code);
+}
+
+/** Increments the failed-attempt counter and returns the new count. */
+export async function incrOTPAttempts(email: string, ttlSec: number): Promise<number> {
+	const redis = getRedis();
+	const key = `${OTP_ATTEMPTS_PREFIX}${email}`;
+	const n = await redis.incr(key);
+	if (n === 1) await redis.expire(key, ttlSec);
+	return n;
+}
+
+export async function deleteOTP(email: string): Promise<void> {
+	const redis = getRedis();
+	await redis.del(`${OTP_PREFIX}${email}`, `${OTP_ATTEMPTS_PREFIX}${email}`);
+}
+
+// ---------------------------------------------------------------------------
 // Distributed lock (SET NX with TTL) — serializes concurrent reports during
 // the preview→real conversion window.
 // ---------------------------------------------------------------------------

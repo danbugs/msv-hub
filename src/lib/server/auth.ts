@@ -2,6 +2,7 @@ import { randomInt, timingSafeEqual } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
+import { setOTP, getOTP, incrOTPAttempts, deleteOTP } from './store';
 
 export const OTP_TTL_MS = 10 * 60 * 1000;
 // Session tokens carry no `exp` claim, so the cookie lifetime is the only limit.
@@ -31,9 +32,9 @@ function getSeedTOs(): string[] {
 	return raw.split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 }
 
-// In-memory OTP store — works for Vercel Node.js functions (instances are reused)
-// but won't survive cold starts. Acceptable for low-traffic TO-only auth.
-const otpStore = new Map<string, { code: string; expires: number }>();
+// Wrong guesses allowed per code before it's burned; 6 digits is only 1e6
+// combinations, so without a cap a code could be brute-forced inside its TTL.
+const MAX_OTP_ATTEMPTS = 5;
 
 export function isAuthorizedEmail(email: string): boolean {
 	return getAllTOEmails().includes(email);
@@ -49,21 +50,21 @@ export function generateOTP(): string {
 	return randomInt(100000, 999999).toString();
 }
 
-export function storeOTP(email: string, code: string): void {
-	otpStore.set(email, { code, expires: Date.now() + OTP_TTL_MS });
+export async function storeOTP(email: string, code: string): Promise<void> {
+	await setOTP(email, code, OTP_TTL_MS / 1000);
 }
 
-export function verifyOTP(email: string, code: string): boolean {
-	const entry = otpStore.get(email);
-	if (!entry) return false;
-	if (Date.now() > entry.expires) {
-		otpStore.delete(email);
+export async function verifyOTP(email: string, code: string): Promise<boolean> {
+	const stored = await getOTP(email);
+	if (!stored) return false;
+	const expected = Buffer.from(stored);
+	const actual = Buffer.from(code);
+	if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+		const attempts = await incrOTPAttempts(email, OTP_TTL_MS / 1000);
+		if (attempts >= MAX_OTP_ATTEMPTS) await deleteOTP(email);
 		return false;
 	}
-	const expected = Buffer.from(entry.code);
-	const actual = Buffer.from(code);
-	if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return false;
-	otpStore.delete(email);
+	await deleteOTP(email);
 	return true;
 }
 
