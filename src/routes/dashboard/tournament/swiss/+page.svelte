@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { TournamentState, SwissRound, Entrant, SwissMatch } from '$lib/types/tournament';
+	import { pollTournament } from '$lib/client/tournament-poll';
 
 	let tournament = $state<TournamentState | null>(null);
 	let loading = $state(false);
@@ -54,7 +55,16 @@
 		}
 	}
 
-	onMount(loadTournament);
+	onMount(() => {
+		loadTournament();
+		return pollTournament({
+			current: () => tournament,
+			apply: (t) => { tournament = t; if (!t) showSetup = true; },
+			isBusy: () =>
+				(showSetup && !tournament) || loading || !!pendingWinner || !!fixingMatchId || reportingMatches.size > 0 ||
+				syncingFromStartGG || pushingToBrackets || repushingRound !== null || phaseResetting
+		});
+	});
 
 	async function loadTournament() {
 		const res = await fetch('/api/tournament');

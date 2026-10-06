@@ -5,6 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { computeWaves, getWaveSummary } from '$lib/waves';
+	import { pollTournament } from '$lib/client/tournament-poll';
 
 	let tournament = $state<TournamentState | null>(null);
 	let showWaves = $state(false);
@@ -178,7 +179,16 @@
 	const H_GAP = 40;
 	const BASE_SLOT_H = 120;
 
-	onMount(loadTournament);
+	onMount(() => {
+		loadTournament();
+		return pollTournament({
+			current: () => tournament,
+			apply: (t) => { tournament = t; },
+			isBusy: () =>
+				!!reportingMatch || submittingReport || linkingEvents || discovering || splitConfirming ||
+				retryingPending || syncingFromStartGG || redemptionSyncing
+		});
+	});
 
 	async function loadTournament() {
 		const res = await fetch('/api/tournament');
