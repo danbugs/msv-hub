@@ -460,8 +460,6 @@
 		</div>
 	{/if}
 
-	<UsageCard />
-
 	{#if loading}
 		<div class="rounded-lg border border-border bg-card p-8 text-center animate-pulse">
 			<div class="h-4 w-48 mx-auto rounded bg-secondary"></div>
@@ -768,4 +766,8 @@
 			</div>
 		</div>
 	{/if}
+
+	<div class="mt-8">
+		<UsageCard />
+	</div>
 </main>

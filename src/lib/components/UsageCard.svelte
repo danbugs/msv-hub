@@ -8,11 +8,13 @@
 		{ key: 'ranker', label: 'Tier list maker', color: 'var(--color-success)' }
 	];
 	const CHART_DAYS = 14;
+	const TOP_PLAYERS = 10;
 
 	let usage = $state<UsageSummary | null>(null);
 	let failed = $state(false);
 	let range = $state<'7' | '30'>('7');
 	let open = $state(true);
+	let showAllPlayers = $state(false);
 
 	onMount(async () => {
 		try {
@@ -24,6 +26,9 @@
 		}
 	});
 
+	const playerViews = $derived(usage?.players?.[range] ?? []);
+	const shownPlayers = $derived(showAllPlayers ? playerViews : playerViews.slice(0, TOP_PLAYERS));
+	const topViews = $derived(Math.max(1, playerViews[0]?.views ?? 0));
 	const chartDays = $derived(usage?.days.slice(-CHART_DAYS) ?? []);
 	const chartMax = $derived(Math.max(1, ...chartDays.map((d) => PAGES.reduce((n, p) => n + d.pages[p.key].visitors, 0))));
 
@@ -96,7 +101,35 @@
 					{/each}
 				</div>
 			</div>
-			<p class="mt-2 text-[11px] text-muted-foreground">
+			<div class="mt-5">
+				<div class="mb-2 flex items-baseline justify-between gap-2">
+					<div class="text-xs font-semibold text-foreground">Most-viewed player pages</div>
+					<div class="text-xs text-muted-foreground">{playerViews.length} player{playerViews.length === 1 ? '' : 's'} viewed · last {range} days</div>
+				</div>
+				{#if playerViews.length}
+					<ol class="space-y-1">
+						{#each shownPlayers as pl, i (pl.id)}
+							<li class="relative flex items-center gap-2 overflow-hidden rounded px-2 py-1 text-sm">
+								<!-- Bar behind the row, scaled to the most-viewed player -->
+								<span class="absolute inset-y-0 left-0 rounded bg-warning/15" style="width:{(pl.views / topViews) * 100}%"></span>
+								<span class="relative w-6 shrink-0 text-right text-xs text-muted-foreground">{i + 1}</span>
+								<a href="/league/player/{pl.id}?season=all-time" target="_blank" rel="noopener"
+									class="relative min-w-0 flex-1 truncate font-medium text-foreground hover:text-primary hover:underline">{pl.tag}</a>
+								<span class="relative shrink-0 text-xs tabular-nums text-muted-foreground">{pl.views} view{pl.views === 1 ? '' : 's'}</span>
+							</li>
+						{/each}
+					</ol>
+					{#if playerViews.length > TOP_PLAYERS}
+						<button onclick={() => (showAllPlayers = !showAllPlayers)} class="mt-2 text-xs font-medium text-primary hover:underline">
+							{showAllPlayers ? 'Show top 10' : `Show all ${playerViews.length}`}
+						</button>
+					{/if}
+				{:else}
+					<p class="text-sm text-muted-foreground">No player pages viewed yet.</p>
+				{/if}
+			</div>
+
+			<p class="mt-3 text-[11px] text-muted-foreground">
 				Anonymous counts; visits while logged in as a TO aren't included. Days are Vancouver time.
 			</p>
 		{/if}
