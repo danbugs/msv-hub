@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { afterNavigate } from '$app/navigation';
+	import { page } from '$app/state';
 	import { PLAYER_TIERS } from '$lib/types/league';
 	import { track } from '$lib/analytics';
 
 	let { data } = $props();
 
 	// The component is reused when hopping between players, so count navigations rather than mounts
-	afterNavigate(() => track('league-player'));
+	// `nav.to.params` is empty on the initial load, so read the id from page state instead
+	afterNavigate(() => track('league-player', 'view', page.params.id));
 	let chartCanvas = $state<HTMLCanvasElement | null>(null);
 	let bio = $state<string | null>(null);
 	let bioLoading = $state(false);

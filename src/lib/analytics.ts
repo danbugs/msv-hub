@@ -16,9 +16,9 @@ function visitorId(): string {
 	}
 }
 
-export function track(page: Page, event: Event = 'view'): void {
+export function track(page: Page, event: Event = 'view', playerId?: string): void {
 	try {
-		const body = JSON.stringify({ page, event, vid: visitorId() });
+		const body = JSON.stringify({ page, event, vid: visitorId(), playerId });
 		// sendBeacon survives the tab closing right after an export
 		if (!navigator.sendBeacon?.('/api/analytics/hit', new Blob([body], { type: 'application/json' }))) {
 			fetch('/api/analytics/hit', { method: 'POST', body, keepalive: true, headers: { 'Content-Type': 'application/json' } }).catch(() => {});

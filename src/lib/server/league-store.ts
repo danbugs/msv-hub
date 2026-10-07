@@ -75,6 +75,14 @@ export async function getLeagueSeason(id: number): Promise<LeagueSeason | null> 
 	return season;
 }
 
+// Players only, without the (much larger) match list
+export async function getSeasonPlayerTags(id: number): Promise<Map<string, string>> {
+	const data = await getRedis().get<string>(`${LEAGUE_SEASON_PREFIX}${id}`);
+	if (!data) return new Map();
+	const season = (typeof data === 'string' ? JSON.parse(data) : data) as LeagueSeason;
+	return new Map(Object.values(season.players).map((p) => [p.id, p.gamerTag]));
+}
+
 const UPSTASH_MAX_SIZE = 5 * 1024 * 1024;
 
 export async function saveLeagueSeason(season: LeagueSeason): Promise<void> {

@@ -1,5 +1,6 @@
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
+import { getMergeMap, getSeasonPlayerTags } from '$lib/server/league-store';
 
 // Anonymous usage counts for the public pages. Per-day hashes hold counters; unique visitors go into
 // HyperLogLogs, so we get distinct counts without storing a list of visitor ids.
@@ -12,6 +13,7 @@ export type TrackedEvent = (typeof TRACKED_EVENTS)[number];
 const RETENTION_SECONDS = 400 * 24 * 60 * 60;
 const countsKey = (day: string) => `stats:counts:${day}`;
 const visitorsKey = (day: string, page: TrackedPage) => `stats:uv:${day}:${page}`;
+const playerViewsKey = (day: string) => `stats:players:${day}`;
 
 function getRedis(): Redis {
 	const url = env.UPSTASH_REDIS_REST_URL;
@@ -33,7 +35,7 @@ export function isTrackedEvent(v: unknown): v is TrackedEvent {
 	return typeof v === 'string' && (TRACKED_EVENTS as readonly string[]).includes(v);
 }
 
-export async function recordHit(page: TrackedPage, event: TrackedEvent, visitorId: string): Promise<void> {
+export async function recordHit(page: TrackedPage, event: TrackedEvent, visitorId: string, playerId?: string): Promise<void> {
 	const day = vancouverDay();
 	const p = getRedis().pipeline();
 	p.hincrby(countsKey(day), `${page}:${event}`, 1);
@@ -41,6 +43,10 @@ export async function recordHit(page: TrackedPage, event: TrackedEvent, visitorI
 	if (event === 'view') {
 		p.pfadd(visitorsKey(day, page), visitorId);
 		p.expire(visitorsKey(day, page), RETENTION_SECONDS);
+	}
+	if (playerId) {
+		p.hincrby(playerViewsKey(day), playerId, 1);
+		p.expire(playerViewsKey(day), RETENTION_SECONDS);
 	}
 	await p.exec();
 }
@@ -51,9 +57,17 @@ export interface PageUsage {
 	exports: number;
 }
 
+export interface PlayerPageViews {
+	id: string;
+	tag: string;
+	views: number;
+}
+
 export interface UsageSummary {
 	days: { date: string; pages: Record<TrackedPage, PageUsage> }[];
 	totals: Record<'7' | '30', Record<TrackedPage, PageUsage>>;
+	// Most-viewed first
+	players: Record<'7' | '30', PlayerPageViews[]>;
 }
 
 const emptyUsage = (): Record<TrackedPage, PageUsage> =>
@@ -66,6 +80,7 @@ export async function getUsageSummary(numDays = 30): Promise<UsageSummary> {
 
 	const p = getRedis().pipeline();
 	for (const d of dates) p.hgetall(countsKey(d));
+	for (const d of dates) p.hgetall(playerViewsKey(d));
 	for (const d of dates) for (const page of TRACKED_PAGES) p.pfcount(visitorsKey(d, page));
 	// Unique visitors across a range must come from a union, not a sum of daily uniques
 	for (const range of [7, 30]) {
@@ -77,8 +92,10 @@ export async function getUsageSummary(numDays = 30): Promise<UsageSummary> {
 	const res = (await p.exec()) as unknown[];
 
 	let i = 0;
-	const days = dates.map((date) => {
-		const counts = (res[i++] ?? {}) as Record<string, number | string>;
+	const countsByDay = dates.map(() => (res[i++] ?? {}) as Record<string, number | string>);
+	const playerViewsByDay = dates.map(() => (res[i++] ?? {}) as Record<string, number | string>);
+	const days = dates.map((date, di) => {
+		const counts = countsByDay[di];
 		const pages = emptyUsage();
 		for (const page of TRACKED_PAGES) {
 			pages[page].views = Number(counts[`${page}:view`] ?? 0);
@@ -99,5 +116,25 @@ export async function getUsageSummary(numDays = 30): Promise<UsageSummary> {
 			}
 		}
 	}
-	return { days, totals };
+	return { days, totals, players: await rankPlayerViews(playerViewsByDay) };
+}
+
+async function rankPlayerViews(byDay: Record<string, number | string>[]): Promise<UsageSummary['players']> {
+	const [merges, tags] = await Promise.all([getMergeMap(), getSeasonPlayerTags(0)]);
+	const rank = (days: Record<string, number | string>[]): PlayerPageViews[] => {
+		const views = new Map<string, number>();
+		for (const day of days) {
+			for (const [rawId, n] of Object.entries(day)) {
+				// Old links can point at an account that has since been merged away
+				const id = merges[rawId] ?? rawId;
+				views.set(id, (views.get(id) ?? 0) + Number(n));
+			}
+		}
+		return [...views]
+			// Ids that aren't real players can only come from hand-crafted requests
+			.filter(([id]) => tags.has(id))
+			.map(([id, n]) => ({ id, tag: tags.get(id)!, views: n }))
+			.sort((a, b) => b.views - a.views || a.tag.localeCompare(b.tag));
+	};
+	return { '7': rank(byDay.slice(-7)), '30': rank(byDay) };
 }
