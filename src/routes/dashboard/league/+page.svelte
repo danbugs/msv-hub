@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import UsageCard from '$lib/components/UsageCard.svelte';
 
 	interface SeasonData {
 		id: number;
@@ -458,6 +459,8 @@
 			</p>
 		</div>
 	{/if}
+
+	<UsageCard />
 
 	{#if loading}
 		<div class="rounded-lg border border-border bg-card p-8 text-center animate-pulse">
