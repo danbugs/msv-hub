@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { track } from '$lib/analytics';
 	import type { RankerPlayer } from './+page.server';
 
 	let { data } = $props();
@@ -65,6 +66,7 @@
 	const STORAGE_KEY = 'msv-ranker';
 
 	onMount(() => {
+		track('ranker');
 		try {
 			// Boards used to be saved per season (msv-ranker:<id>); pick up the newest one if that's all there is
 			const legacy = Object.keys(localStorage).filter((k) => k.startsWith(`${STORAGE_KEY}:`)).sort().pop();
@@ -500,6 +502,7 @@
 			if (!blob) throw new Error('Could not render image');
 			const filename = `${(title || 'tier-list').replace(/[^\w-]+/g, '-').toLowerCase()}.png`;
 			const file = new File([blob], filename, { type: 'image/png' });
+			track('ranker', 'export');
 			// Phones get the native share sheet so the image can go straight to Photos / Discord
 			if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] })) {
 				try {

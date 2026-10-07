@@ -1,7 +1,12 @@
 <script lang="ts">
+	import { afterNavigate } from '$app/navigation';
 	import { PLAYER_TIERS } from '$lib/types/league';
+	import { track } from '$lib/analytics';
 
 	let { data } = $props();
+
+	// The component is reused when hopping between players, so count navigations rather than mounts
+	afterNavigate(() => track('league-player'));
 	let chartCanvas = $state<HTMLCanvasElement | null>(null);
 	let bio = $state<string | null>(null);
 	let bioLoading = $state(false);

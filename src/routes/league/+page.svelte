@@ -1,5 +1,11 @@
 <script lang="ts">
+	import { afterNavigate } from '$app/navigation';
+	import { track } from '$lib/analytics';
+
 	let { data } = $props();
+
+	// Runs on first load and on each season switch, which are client-side navigations
+	afterNavigate(() => track('league'));
 
 	let searchQuery = $state('');
 	let showAllEvents = $state(false);
