@@ -55,7 +55,7 @@
 					<button
 						onclick={async () => {
 							await fetch('/api/auth/logout', { method: 'POST' });
-							window.location.href = '/';
+							window.location.href = '/login';
 						}}
 						class="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
 					>
