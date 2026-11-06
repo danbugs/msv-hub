@@ -1,6 +1,6 @@
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
-import type { LeagueSeason, LeaguePlayer, LeaguePlayerStats, LeagueMatch, SeasonAward } from '$lib/types/league';
+import type { LeagueSeason, LeagueEvent, LeaguePlayer, LeaguePlayerStats, LeagueMatch, SeasonAward } from '$lib/types/league';
 import { createRating, rate1v1, rate1v1Weighted, ratingToPoints, DEFAULT_SIGMA, SIGMA_FLOOR, POINTS_SCALE, applySigmaBoost } from '$lib/server/trueskill';
 import type { Rating } from '$lib/server/trueskill';
 
@@ -81,6 +81,14 @@ export async function getSeasonPlayerTags(id: number): Promise<Map<string, strin
 	if (!data) return new Map();
 	const season = (typeof data === 'string' ? JSON.parse(data) : data) as LeagueSeason;
 	return new Map(Object.values(season.players).map((p) => [p.id, p.gamerTag]));
+}
+
+// Events only, without the (much larger) match list
+export async function getSeasonEvents(id: number): Promise<LeagueEvent[]> {
+	const data = await getRedis().get<string>(`${LEAGUE_SEASON_PREFIX}${id}`);
+	if (!data) return [];
+	const season = (typeof data === 'string' ? JSON.parse(data) : data) as LeagueSeason;
+	return season.events ?? [];
 }
 
 const UPSTASH_MAX_SIZE = 5 * 1024 * 1024;
