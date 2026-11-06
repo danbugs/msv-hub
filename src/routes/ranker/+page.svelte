@@ -496,7 +496,7 @@
 			ctx.fillStyle = '#8a8a8a';
 			ctx.font = `500 14px ${font}`;
 			ctx.textAlign = 'right';
-			ctx.fillText(`${data.season?.name ?? ''} · msv-hub.vercel.app/ranker`, W - PAD, H - FOOTER_H / 2);
+			ctx.fillText(`${data.season?.name ?? ''} · microspacing.com/ranker`, W - PAD, H - FOOTER_H / 2);
 
 			const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'));
 			if (!blob) throw new Error('Could not render image');
