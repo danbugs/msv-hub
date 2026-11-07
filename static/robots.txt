@@ -1,3 +1,7 @@
-# allow crawling everything by default
+# Public pages are cached, but crawlers sweeping every player page still cost database bandwidth
 User-agent: *
-Disallow:
+Crawl-delay: 10
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /live/
+Disallow: /ranker
