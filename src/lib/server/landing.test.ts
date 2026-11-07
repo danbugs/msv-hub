@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeAllTimeTotals } from './landing';
+import { computeAllTimeTotals } from '$lib/league-totals';
 import type { LeagueEvent } from '$lib/types/league';
 
 function evt(slug: string, eventNumber: number, playerIds: string[]): LeagueEvent {

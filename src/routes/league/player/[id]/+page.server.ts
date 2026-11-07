@@ -1,12 +1,14 @@
 import type { PageServerLoad } from './$types';
-import { getLeagueSeason, getLeagueConfig, getPlayerStats, getRankings, getMinEventsForSeason, getRatingConfigForSeason } from '$lib/server/league-store';
+import { cachePublicPage } from '$lib/server/public-cache';
+import { getLeagueSeasonCached, getLeagueConfig, getPlayerStats, getRankings, getMinEventsForSeason, getRatingConfigForSeason } from '$lib/server/league-store';
 import { getPlayerTier } from '$lib/types/league';
 
-export const load: PageServerLoad = async ({ params, url }) => {
+export const load: PageServerLoad = async ({ params, url, setHeaders, locals }) => {
+	cachePublicPage(setHeaders, locals);
 	const config = await getLeagueConfig();
 	const seasonParam = url.searchParams.get('season') ?? String(config.defaultSeason);
 	const seasonId = seasonParam === 'all-time' ? 0 : parseInt(seasonParam, 10);
-	const season = await getLeagueSeason(seasonId);
+	const season = await getLeagueSeasonCached(seasonId);
 
 	if (!season) return { stats: null, seasonId, seasonParam, seasonName: null };
 

@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { computeAllTimeTotals } from '$lib/league-totals';
 import { env } from '$env/dynamic/private';
 import type { LeagueSeason, LeagueEvent, LeaguePlayer, LeaguePlayerStats, LeagueMatch, SeasonAward } from '$lib/types/league';
 import { createRating, rate1v1, rate1v1Weighted, ratingToPoints, DEFAULT_SIGMA, SIGMA_FLOOR, POINTS_SCALE, applySigmaBoost } from '$lib/server/trueskill';
@@ -75,6 +76,22 @@ export async function getLeagueSeason(id: number): Promise<LeagueSeason | null> 
 	return season;
 }
 
+// Public pages only. A warm serverless instance reuses the parsed season instead of pulling
+// the multi-MB blob from Redis again; Upstash bills by bandwidth. Never use this in code that
+// writes the season back, since another instance may have saved a newer copy.
+const PUBLIC_SEASON_TTL_MS = 10 * 60 * 1000;
+const publicSeasonCache = new Map<number, { at: number; season: Promise<LeagueSeason | null> }>();
+
+export function getLeagueSeasonCached(id: number): Promise<LeagueSeason | null> {
+	const hit = publicSeasonCache.get(id);
+	if (hit && Date.now() - hit.at < PUBLIC_SEASON_TTL_MS) return hit.season;
+	const season = getLeagueSeason(id);
+	publicSeasonCache.set(id, { at: Date.now(), season });
+	// Don't keep a failed read around for the whole TTL
+	season.catch(() => publicSeasonCache.delete(id));
+	return season;
+}
+
 // Players only, without the (much larger) match list
 export async function getSeasonPlayerTags(id: number): Promise<Map<string, string>> {
 	const data = await getRedis().get<string>(`${LEAGUE_SEASON_PREFIX}${id}`);
@@ -83,15 +100,10 @@ export async function getSeasonPlayerTags(id: number): Promise<Map<string, strin
 	return new Map(Object.values(season.players).map((p) => [p.id, p.gamerTag]));
 }
 
-// Events only, without the (much larger) match list
-export async function getSeasonEvents(id: number): Promise<LeagueEvent[]> {
-	const data = await getRedis().get<string>(`${LEAGUE_SEASON_PREFIX}${id}`);
-	if (!data) return [];
-	const season = (typeof data === 'string' ? JSON.parse(data) : data) as LeagueSeason;
-	return season.events ?? [];
-}
-
 const UPSTASH_MAX_SIZE = 5 * 1024 * 1024;
+
+/** Small precomputed all-time totals for the landing page; see computeAllTimeTotals. */
+export const LANDING_TOTALS_KEY = 'landing:totals';
 
 export async function saveLeagueSeason(season: LeagueSeason): Promise<void> {
 	const redis = getRedis();
@@ -106,6 +118,9 @@ export async function saveLeagueSeason(season: LeagueSeason): Promise<void> {
 	} else {
 		await redis.set(key, full);
 		await redis.del(`${key}:matches`);
+	}
+	if (season.id === 0) {
+		await redis.set(LANDING_TOTALS_KEY, JSON.stringify(computeAllTimeTotals(season.events)));
 	}
 	const index = await getSeasonIndex();
 	if (!index.find((s) => s.id === season.id)) {

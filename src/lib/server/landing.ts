@@ -1,17 +1,13 @@
 import { Redis } from '@upstash/redis';
 import { env } from '$env/dynamic/private';
-import type { LeagueEvent } from '$lib/types/league';
-import { getSeasonEvents } from '$lib/server/league-store';
+import { LANDING_TOTALS_KEY } from '$lib/server/league-store';
+import type { AllTimeTotals } from '$lib/league-totals';
 import { getEventConfig } from '$lib/server/store';
 import { gql, TOURNAMENT_QUERY } from '$lib/server/startgg';
 
 // Data for the public landing page at `/`.
 
-export interface AllTimeTotals {
-	events: number;
-	attendances: number;
-	players: number;
-}
+export type { AllTimeTotals };
 
 export interface NextEvent {
 	name: string;
@@ -21,26 +17,11 @@ export interface NextEvent {
 }
 
 /**
- * Season 0 is the all-time season. Micro and macro eventNumbers overlap, so the slug is the
- * only reliable identity for an event; an attendance is one distinct player at one event.
+ * Totals are precomputed whenever the all-time season is saved, so a landing page view reads a
+ * few bytes instead of the whole season (which once burned through the Redis bandwidth quota).
  */
-export function computeAllTimeTotals(events: LeagueEvent[]): AllTimeTotals {
-	const seen = new Set<string>();
-	const players = new Set<string>();
-	let attendances = 0;
-	for (const evt of events) {
-		if (seen.has(evt.slug)) continue;
-		seen.add(evt.slug);
-		const attendees = new Set(evt.placements.map((p) => p.playerId));
-		attendances += attendees.size;
-		for (const id of attendees) players.add(id);
-	}
-	return { events: seen.size, attendances, players: players.size };
-}
-
 export async function getAllTimeTotals(): Promise<AllTimeTotals | null> {
-	const events = await getSeasonEvents(0);
-	return events.length ? computeAllTimeTotals(events) : null;
+	return getRedis().get<AllTimeTotals>(LANDING_TOTALS_KEY);
 }
 
 const NEXT_EVENT_CACHE_PREFIX = 'landing:next-event:';

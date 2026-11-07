@@ -1,6 +1,7 @@
 import type { PageServerLoad } from './$types';
+import { cachePublicPage } from '$lib/server/public-cache';
 import type { LeagueMatch } from '$lib/types/league';
-import { getLeagueSeason, getRankings, getLeagueConfig, getRatingConfigForSeason } from '$lib/server/league-store';
+import { getLeagueSeasonCached, getRankings, getLeagueConfig, getRatingConfigForSeason } from '$lib/server/league-store';
 
 export interface RankerPlayer {
 	id: string;
@@ -41,10 +42,11 @@ function mainCharacters(matches: LeagueMatch[], wanted: Set<string>): Map<string
 	return mains;
 }
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ setHeaders, locals }) => {
+	cachePublicPage(setHeaders, locals);
 	const config = await getLeagueConfig();
 	const seasonId = config.defaultSeason;
-	const [season, allTime] = await Promise.all([getLeagueSeason(seasonId), getLeagueSeason(0)]);
+	const [season, allTime] = await Promise.all([getLeagueSeasonCached(seasonId), getLeagueSeasonCached(0)]);
 	if (!allTime) return { season: null, players: [] as RankerPlayer[] };
 
 	// Pool is the All-Time ranking, but with no attendance minimum so one-time entrants can be ranked too

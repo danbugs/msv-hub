@@ -1,15 +1,17 @@
 import type { PageServerLoad } from './$types';
-import { getLeagueSeason, getRankings, getLeagueConfig, getSeasonIndex, getMinEventsForSeason, getRatingConfigForSeason } from '$lib/server/league-store';
+import { cachePublicPage } from '$lib/server/public-cache';
+import { getLeagueSeasonCached, getRankings, getLeagueConfig, getSeasonIndex, getMinEventsForSeason, getRatingConfigForSeason } from '$lib/server/league-store';
 import { getPlayerTier, getTournamentTiers } from '$lib/types/league';
 import { getLiveTournamentSummary } from '$lib/server/store';
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, setHeaders, locals }) => {
+	cachePublicPage(setHeaders, locals);
 	// The banner is a nicety — never let it take the rankings page down.
 	const live = await getLiveTournamentSummary().catch(() => null);
 	const config = await getLeagueConfig();
 	const seasonParam = url.searchParams.get('season') ?? String(config.defaultSeason);
 	const seasonId = seasonParam === 'all-time' ? 0 : parseInt(seasonParam, 10);
-	const season = await getLeagueSeason(seasonId);
+	const season = await getLeagueSeasonCached(seasonId);
 	const seasons = await getSeasonIndex();
 
 	if (!season) return { season: null, rankings: [], seasonId, seasonParam, events: [], awards: [], seasons, live };
