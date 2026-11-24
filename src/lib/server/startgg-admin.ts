@@ -568,6 +568,195 @@ export async function addEntrantsToPhase(
 	return { ok: true };
 }
 
+// ── Split start (part of a bracket starting in losers) ──────────────────────
+
+type PhaseLink = Record<string, unknown> & {
+	id?: number;
+	isDefault: boolean;
+	destBracketSide: number;
+	entrantIds: (string | number)[];
+};
+
+/** A phase's entrant groups. Each group starts on one bracket side: 1 = winners, 2 = losers. */
+async function fetchPhaseLinks(phaseId: number): Promise<{ links: PhaseLink[] } | null> {
+	const res = await adminFetch(
+		`${PHASE_REST_URL}/${phaseId}?expand=${encodeURIComponent('["phaseLink"]')}`,
+		{ method: 'GET' }
+	);
+	if (!res.ok) return null;
+	const data = await res.json().catch(() => null);
+	const links = data?.entities?.phaseLink;
+	if (!Array.isArray(links)) return null;
+	return { links: links as PhaseLink[] };
+}
+
+/** Replace a double-elimination phase's entrant groups. The list is the full new set. */
+async function putPhaseLinks(
+	eventId: number,
+	phaseId: number,
+	links: Record<string, unknown>[]
+): Promise<{ ok: boolean; error?: string }> {
+	const res = await adminFetch(`${PHASE_REST_URL}/${phaseId}`, {
+		method: 'PUT',
+		body: JSON.stringify({ eventId, groupTypeId: 2, isDefault: false, destPhaseLinks: links })
+	});
+	if (res.ok) return { ok: true };
+	const text = await res.text().catch(() => '');
+	return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+}
+
+const sameIds = (a: (string | number)[], b: number[]) =>
+	a.length === b.length && a.map(Number).sort((x, y) => x - y).join() === [...b].sort((x, y) => x - y).join();
+
+/**
+ * Make `losersEntrantIds` start a double-elimination phase in losers and
+ * `winnersEntrantIds` start it in winners. Entrant IDs are the bracket event's own.
+ *
+ * StartGG returns a bare 500 if an entrant moves between groups in one request, so this
+ * takes three: shrink the default group to the winners it already holds (which also drops
+ * any losers group), set it to all the winners, then add the losers group.
+ *
+ * Does nothing if the phase is already laid out this way, so it is safe to re-run.
+ */
+export async function setLosersStart(
+	eventId: number,
+	phaseId: number,
+	phaseGroupId: number,
+	winnersEntrantIds: number[],
+	losersEntrantIds: number[]
+): Promise<{ ok: boolean; changed?: boolean; error?: string }> {
+	const settle = () => new Promise<void>((r) => setTimeout(r, 1200));
+	const current = await fetchPhaseLinks(phaseId);
+	if (!current) return { ok: false, error: 'Could not read the phase from StartGG' };
+
+	const def = current.links.find((l) => l.isDefault) ?? current.links.find((l) => l.destBracketSide === 1);
+	if (!def) return { ok: false, error: 'Phase has no default entrant group' };
+	const losers = current.links.find((l) => l !== def && l.destBracketSide === 2);
+	if (losers && sameIds(def.entrantIds, winnersEntrantIds) && sameIds(losers.entrantIds, losersEntrantIds)) {
+		return { ok: true, changed: false };
+	}
+	// Regrouping a bracket that has results would throw them away. (The phase's own state
+	// field can't be used for this: it stays "active" after a restart.)
+	const layout = await fetchPhaseGroupLayout(phaseGroupId);
+	if (!layout) return { ok: false, error: 'Could not read the bracket from StartGG' };
+	if (layout.started) {
+		return { ok: false, error: 'The bracket has already started on StartGG, so its sides cannot be changed' };
+	}
+
+	const everyone = [...winnersEntrantIds, ...losersEntrantIds];
+	const initialEntrants = Object.fromEntries(everyone.map((id) => [String(id), true]));
+	const winnersSet = new Set(winnersEntrantIds);
+
+	const alreadyWinners = def.entrantIds.map(Number).filter((id) => winnersSet.has(id));
+	let res = await putPhaseLinks(eventId, phaseId, [
+		{ ...def, entrantIds: alreadyWinners, numSeeds: everyone.length, initialEntrants }
+	]);
+	if (!res.ok) return { ok: false, error: `Clearing the losers side failed: ${res.error}` };
+	await settle();
+
+	let fresh = (await fetchPhaseLinks(phaseId))?.links.find((l) => l.isDefault);
+	if (!fresh) return { ok: false, error: 'Could not re-read the phase from StartGG' };
+	res = await putPhaseLinks(eventId, phaseId, [
+		{ ...fresh, entrantIds: winnersEntrantIds, numSeeds: everyone.length, initialEntrants }
+	]);
+	if (!res.ok) return { ok: false, error: `Setting the winners side failed: ${res.error}` };
+	await settle();
+
+	fresh = (await fetchPhaseLinks(phaseId))?.links.find((l) => l.isDefault);
+	if (!fresh) return { ok: false, error: 'Could not re-read the phase from StartGG' };
+	const now = Math.floor(Date.now() / 1000);
+	res = await putPhaseLinks(eventId, phaseId, [
+		fresh,
+		{
+			phaseInputId: null, name: null, endSeed: null, phaseInputIdx: null, updatedAt: now,
+			originPhaseId: null, startSeed: null, destPhaseId: phaseId, seedMode: null,
+			maintainMatchup: false, isDefault: false, originLosses: null,
+			entrantIds: losersEntrantIds, expand: [], type: 3, createdAt: now, destSeedOrder: 1,
+			outputType: 1, numSeeds: losersEntrantIds.length, destBracketSide: 2, originPlacement: null,
+			initialEntrants: Object.fromEntries(losersEntrantIds.map((id) => [String(id), true]))
+		}
+	]);
+	if (!res.ok) return { ok: false, error: `Adding the losers side failed: ${res.error}` };
+	return { ok: true, changed: true };
+}
+
+/**
+ * Undo a split start: move everyone in a losers group back to the default (winners)
+ * group. Does nothing if the phase has no losers group.
+ *
+ * Without this a phase that once ran a split start keeps half its entrants in losers
+ * for whatever is run on it next.
+ */
+export async function clearLosersStart(
+	eventId: number,
+	phaseId: number
+): Promise<{ ok: boolean; changed?: boolean; error?: string }> {
+	const current = await fetchPhaseLinks(phaseId);
+	if (!current) return { ok: false, error: 'Could not read the phase from StartGG' };
+	const def = current.links.find((l) => l.isDefault) ?? current.links.find((l) => l.destBracketSide === 1);
+	if (!def) return { ok: false, error: 'Phase has no default entrant group' };
+	const losers = current.links.filter((l) => l !== def && l.destBracketSide === 2);
+	if (!losers.length) return { ok: true, changed: false };
+
+	const stay = def.entrantIds.map(Number);
+	const everyone = [...stay, ...losers.flatMap((l) => l.entrantIds.map(Number))];
+	const initialEntrants = Object.fromEntries(everyone.map((id) => [String(id), true]));
+
+	// Same two-step move as setLosersStart: drop the losers group first, then re-add its entrants.
+	let res = await putPhaseLinks(eventId, phaseId, [
+		{ ...def, entrantIds: stay, numSeeds: everyone.length, initialEntrants }
+	]);
+	if (!res.ok) return { ok: false, error: `Removing the losers side failed: ${res.error}` };
+	await new Promise<void>((r) => setTimeout(r, 1200));
+	const fresh = (await fetchPhaseLinks(phaseId))?.links.find((l) => l.isDefault);
+	if (!fresh) return { ok: false, error: 'Could not re-read the phase from StartGG' };
+	res = await putPhaseLinks(eventId, phaseId, [
+		{ ...fresh, entrantIds: everyone, numSeeds: everyone.length, initialEntrants }
+	]);
+	if (!res.ok) return { ok: false, error: `Moving players back to winners failed: ${res.error}` };
+	return { ok: true, changed: true };
+}
+
+export interface PhaseGroupLayout {
+	/**
+	 * Seed number sitting at each first-round position of the full-size bracket, in bracket
+	 * order; null where there is a bye.
+	 */
+	positions: (number | null)[];
+	seeds: { seedId: string; entrantId: number; seedNum: number }[];
+	/** Sets with both players known and no result yet, as entrant ID pairs. */
+	openPairs: [number, number][];
+	/** True once any set between two players has a result. */
+	started: boolean;
+}
+
+/** Read how StartGG has laid a bracket out: seed positions, seeds, and the sets ready to play. */
+export async function fetchPhaseGroupLayout(phaseGroupId: number): Promise<PhaseGroupLayout | null> {
+	const res = await adminFetch(
+		`${PHASE_REST_URL.replace('/phase', '/admin/phase_group')}/${phaseGroupId}?id=${phaseGroupId}&admin=true&expand=${encodeURIComponent('["sets","seeds"]')}&reset=false`,
+		{ method: 'GET' }
+	);
+	if (!res.ok) return null;
+	const data = await res.json().catch(() => null);
+	const entities = data?.entities;
+	if (!entities) return null;
+	const group = Array.isArray(entities.groups) ? entities.groups[0] : entities.groups;
+	const seedMap = group?.seedMap as Record<string, (number | string)[]> | undefined;
+	const positions = seedMap ? Object.values(seedMap).flat().map((v) => (typeof v === 'number' ? v : null)) : [];
+	const seeds = (Array.isArray(entities.seeds) ? entities.seeds : []).map((s: Record<string, unknown>) => ({
+		seedId: String(s.id), entrantId: Number(s.entrantId), seedNum: Number(s.seedNum)
+	}));
+	const openPairs: [number, number][] = [];
+	let started = false;
+	for (const s of (Array.isArray(entities.sets) ? entities.sets : []) as Record<string, unknown>[]) {
+		const a = Number(s.entrant1Id), b = Number(s.entrant2Id);
+		if (!(a > 0 && b > 0)) continue;
+		if (s.winnerId) started = true;
+		else openPairs.push([a, b]);
+	}
+	return { positions, seeds, openPairs, started };
+}
+
 /**
  * Open (or close) tournament registration by publishing each event's registration.
  * Must be done per-event (profileType 'event', featureId 3).
