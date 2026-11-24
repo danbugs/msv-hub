@@ -872,6 +872,10 @@ export function generateBracket(
 ): BracketState {
 	const n = players.length;
 	const split = winnersCount !== undefined && winnersCount >= 2 && winnersCount < n;
+	if (split && lastRoundOpponents && lastRoundOpponents.size > 0) {
+		const ordered = orderAvoidingSplitRematches(name, players, allStandings, winnersCount, lastRoundOpponents);
+		return generateBracket(name, ordered, allStandings, settings, undefined, winnersCount);
+	}
 	// Pad to next power of 2 for bracket structure
 	const bracketSize = Math.pow(2, Math.ceil(Math.log2(n)));
 	const numFirstRoundMatches = bracketSize / 2;
@@ -1118,6 +1122,53 @@ export function generateBracket(
 	}
 
 	return settings ? assignBracketStations(state, settings, name as 'main' | 'redemption') : state;
+}
+
+/**
+ * Reorder seeds so a split-start bracket doesn't open with a set two players just played.
+ *
+ * Tries swapping one of the two with a nearby seed and keeps the closest swap that leaves
+ * fewer repeats. Swaps never cross the winners/losers line, so who starts on which side
+ * is still decided by the standings alone.
+ */
+function orderAvoidingSplitRematches(
+	name: string,
+	players: { entrantId: string; seed: number }[],
+	allStandings: FinalStanding[],
+	winnersCount: number,
+	lastRoundOpponents: Map<string, string | Set<string>>
+): { entrantId: string; seed: number }[] {
+	const justPlayed = (a: string, b: string) => {
+		const entry = lastRoundOpponents.get(a);
+		return typeof entry === 'string' ? entry === b : !!entry?.has(b);
+	};
+	const renumber = (ids: string[]) => ids.map((entrantId, i) => ({ entrantId, seed: i + 1 }));
+	const repeats = (ids: string[]) =>
+		generateBracket(name, renumber(ids), allStandings, undefined, undefined, winnersCount).matches.filter(
+			(m) => !m.winnerId && m.topPlayerId && m.bottomPlayerId && justPlayed(m.topPlayerId, m.bottomPlayerId)
+		);
+
+	let order = [...players].sort((a, b) => a.seed - b.seed).map((p) => p.entrantId);
+	let bad = repeats(order);
+	for (let pass = 0; pass < 16 && bad.length > 0; pass++) {
+		const pair = [bad[0].topPlayerId!, bad[0].bottomPlayerId!].map((id) => order.indexOf(id)).sort((a, b) => b - a);
+		let improved: string[] | undefined;
+		// Move the lower seed of the pair first, and as short a distance as possible.
+		search: for (const delta of [1, -1, 2, -2, 3, -3]) {
+			for (const idx of pair) {
+				const other = idx + delta;
+				if (other < 0 || other >= order.length || pair.includes(other)) continue;
+				if (idx < winnersCount !== other < winnersCount) continue;
+				const candidate = [...order];
+				[candidate[idx], candidate[other]] = [candidate[other], candidate[idx]];
+				if (repeats(candidate).length < bad.length) { improved = candidate; break search; }
+			}
+		}
+		if (!improved) break;
+		order = improved;
+		bad = repeats(order);
+	}
+	return renumber(order);
 }
 
 /**

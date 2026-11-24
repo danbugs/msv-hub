@@ -164,6 +164,24 @@ describe('split-start bracket', () => {
 		});
 	}
 
+	it('does not open with a set two players just played in Swiss', () => {
+		const players = Array.from({ length: 24 }, (_, i) => ({ entrantId: `p${i + 1}`, seed: i + 1 }));
+		const firstSets = (b: BracketState) =>
+			b.matches.filter((m) => !m.winnerId && m.topPlayerId && m.bottomPlayerId).map((m) => [m.topPlayerId!, m.bottomPlayerId!].sort().join(' v '));
+		// 8 v 9 opens winners and 13 v 23 opens losers in the plain layout.
+		expect(firstSets(makeBracket(24, 12))).toEqual(expect.arrayContaining(['p8 v p9', 'p13 v p23']));
+		const last = new Map([['p8', 'p9'], ['p9', 'p8'], ['p13', 'p23'], ['p23', 'p13']]);
+		const b = generateBracket('main', players, [], undefined, last, 12);
+		expect(firstSets(b)).not.toContain('p8 v p9');
+		expect(firstSets(b)).not.toContain('p13 v p23');
+		// Nobody changes side: the top twelve of the standings are still the winners-side starters.
+		const top = b.players.filter((p) => p.seed <= 12).map((p) => Number(p.entrantId.slice(1)));
+		expect(top.every((n) => n <= 12)).toBe(true);
+		expect(b.winnersCount).toBe(12);
+		// And it stays a bracket StartGG can mirror: same shape as the plain 24/12 layout.
+		expect(shapeOfBracket(b).final).toBe(shapeOfBracket(makeBracket(24, 12)).final);
+	});
+
 	it('24 players: redemption takes the 12 early exits, later exits in winners', () => {
 		let b = makeBracket(24, 12);
 		expect(b.redemptionCutoffRound).toBe(-2);
