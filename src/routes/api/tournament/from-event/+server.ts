@@ -12,7 +12,8 @@ import {
 	fetchPhaseGroups,
 	extractPlayerId
 } from '$lib/server/startgg';
-import type { TournamentState, Entrant, FinalStanding } from '$lib/types/tournament';
+import type { TournamentState, TournamentMode, Entrant, FinalStanding } from '$lib/types/tournament';
+import { isShortSwissMode } from '$lib/modes';
 
 /** POST — create a tournament from an existing StartGG event's seedings */
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -24,7 +25,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		numStations: number;
 		streamStation?: number;
 		numRounds?: number;
-		mode?: 'default' | 'gauntlet' | 'experimental1';
+		mode?: TournamentMode;
 		overrideSeeds?: { seedNum: number; gamerTag: string; playerId?: number }[];
 	};
 
@@ -203,7 +204,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json(state);
 	}
 
-	const numRounds = mode === 'experimental1' ? 3 : (numRoundsOverride ?? calculateRecommendedRounds(seeds.length, numStations));
+	const numRounds = isShortSwissMode(mode) ? 3 : (numRoundsOverride ?? calculateRecommendedRounds(seeds.length, numStations));
 	if (numRounds === null) {
 		return Response.json({ error: 'Too few stations for this number of players' }, { status: 400 });
 	}

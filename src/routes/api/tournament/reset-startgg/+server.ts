@@ -1,9 +1,10 @@
 import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament, snapshotTournament } from '$lib/server/store';
 import { gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, pushBracketSeeding, pushFinalStandingsSeeding, fetchPhaseGroups, fetchAllEntrants } from '$lib/server/startgg';
-import { restartPhase, addEntrantsToPhase, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
+import { restartPhase, addEntrantsToPhase, getTournamentParticipants, updateParticipantEvents, clearLosersStart } from '$lib/server/startgg-admin';
 import { generateBracket, assignBracketStations } from '$lib/server/swiss';
 import type { FinalStanding } from '$lib/types/tournament';
+import { isShortSwissMode, modeLabel } from '$lib/modes';
 
 // Helper: resolve a phase group ID and phaseId for an event
 async function resolveEventPhase(eventId: number): Promise<{ phaseId: number; pgId: number } | null> {
@@ -117,6 +118,18 @@ export const POST: RequestHandler = async ({ locals }) => {
 	// Brief pause to let restarts fully propagate
 	await new Promise<void>((r) => setTimeout(r, 2000));
 
+	// A split-start run leaves half the bracket's entrants grouped to start in losers.
+	// Put them back so the brackets are plain again whichever mode runs next.
+	for (const eventId of [mainEventId, redEventId]) {
+		if (!eventId || eventId === swissEventId) continue;
+		const phaseData = await gql<{ event: { phases: { id: number }[] } }>(EVENT_PHASES_QUERY, { eventId });
+		const phaseId = phaseData?.event?.phases?.[0]?.id;
+		if (!phaseId) continue;
+		const cleared = await clearLosersStart(eventId, phaseId).catch((e) => ({ ok: false, changed: false, error: String(e) }));
+		if (!cleared.ok) log(`  ✗ Could not clear losers-side start: ${cleared.error}`);
+		else if (cleared.changed) log('  Cleared losers-side start');
+	}
+
 	// When source event IS the main bracket (gauntlet launched from Main),
 	// skip the Swiss cleanup and participant shuffling — just restart and re-seed in place.
 	const sourceIsMain = tournament.mode === 'gauntlet' && mainEventId === swissEventId;
@@ -208,7 +221,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 	} else {
 		tournament.phase = 'swiss';
 		tournament.brackets = undefined;
-		log(`MSV Hub reset to Swiss Round 1${tournament.mode === 'experimental1' ? ' (Experimental #1)' : ''}`);
+		log(`MSV Hub reset to Swiss Round 1${isShortSwissMode(tournament.mode) ? ` (${modeLabel(tournament.mode)})` : ''}`);
 	}
 
 	// Step 5: Re-sync players and seeding on StartGG

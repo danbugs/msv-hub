@@ -1,7 +1,8 @@
 import type { RequestHandler } from './$types';
 import { saveTournament, getActiveTournament, deleteTournament, snapshotTournament } from '$lib/server/store';
 import { calculateRecommendedRounds, generateBracket, assignBracketStations } from '$lib/server/swiss';
-import type { TournamentState, Entrant, FinalStanding, TournamentSettings } from '$lib/types/tournament';
+import type { TournamentState, TournamentMode, Entrant, FinalStanding, TournamentSettings } from '$lib/types/tournament';
+import { isShortSwissMode } from '$lib/modes';
 
 /** GET — fetch the active tournament */
 export const GET: RequestHandler = async ({ locals }) => {
@@ -22,7 +23,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		numStations: number;
 		streamStation?: number;
 		numRounds?: number;
-		mode?: 'default' | 'gauntlet' | 'experimental1';
+		mode?: TournamentMode;
 	};
 
 	if (!name || !slug || !entrants?.length || !numStations) {
@@ -66,7 +67,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json(state);
 	}
 
-	const numRounds = mode === 'experimental1' ? 3 : (numRoundsOverride ?? calculateRecommendedRounds(entrants.length, numStations));
+	const numRounds = isShortSwissMode(mode) ? 3 : (numRoundsOverride ?? calculateRecommendedRounds(entrants.length, numStations));
 	if (numRounds === null) {
 		return Response.json({ error: 'Too few stations for this number of players' }, { status: 400 });
 	}

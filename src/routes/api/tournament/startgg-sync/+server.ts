@@ -15,6 +15,8 @@ import { getActiveTournament, saveTournament } from '$lib/server/store';
 import { flushPendingBracketMatches } from '$lib/server/startgg-reporter';
 import { pushBracketSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
 import { assignBracketSplit, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
+import { syncSplitBracket } from '$lib/server/startgg-split';
+import { isAllToMainMode } from '$lib/modes';
 import { sendMessage } from '$lib/server/discord';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -33,7 +35,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const isGauntlet = tournament.mode === 'gauntlet';
-	const allPlayersToMain = tournament.mode === 'gauntlet' || tournament.mode === 'experimental1';
+	const allPlayersToMain = isAllToMainMode(tournament.mode);
 
 	if (!allPlayersToMain && !tournament.finalStandings) {
 		return Response.json({ error: 'No final standings' }, { status: 400 });
@@ -79,7 +81,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let splitResult = { mainOk: 0, redemptionOk: 0, failed: 0, errors: [] as string[] };
 
 	if (allPlayersToMain) {
-		// All-to-main modes (gauntlet, experimental1): move ALL players to main bracket event
+		// All-to-main modes: move ALL players to main bracket event
 		if (swissEventId && mainEventId && eventSlug) {
 			const tournamentSlug = eventSlug.match(/tournament\/([^/]+)/)?.[1];
 			if (tournamentSlug) {
@@ -167,6 +169,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 	if (!swissPgId) log('WARNING: Could not resolve Swiss phase group — seeding will not be pushed');
 	const bracketEntrantMap = new Map(tournament.entrants.map((e) => [e.id, e]));
+	const splitSyncErrors: string[] = [];
 	// Build startggEntrantId → gamerTag map for fallback matching in pushBracketSeeding
 	// (needed when Swiss PG is empty, e.g. gauntlet mode)
 	const entrantGamerTags = new Map<number, string>();
@@ -179,9 +182,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		['main', mainEventId] as const,
 		['redemption', redEventId] as const
 	]) {
-		if (!bEventId || !tournament.brackets || !swissPgId) continue;
+		if (!bEventId || !tournament.brackets) continue;
 		const bracket = tournament.brackets[bName];
 		if (!bracket) continue;
+		if (bracket.winnersCount) {
+			// Split start: sides and seeding go together, and the seed numbers depend on
+			// where StartGG seats each seed once the sides are set.
+			const result = await syncSplitBracket(bEventId, bracket, tournament.entrants, log)
+				.catch((e) => ({ ok: false as const, error: String(e) }));
+			if (!result.ok) {
+				log(`${bName} bracket sync failed: ${result.error}`);
+				splitSyncErrors.push(`${bName}: ${result.error}`);
+			}
+			continue;
+		}
+		if (!swissPgId) continue;
 		try {
 			const epData = await gql<{ event: { phases: { id: number; name: string }[] } }>(
 				EVENT_PHASES_QUERY, { eventId: bEventId }
@@ -208,6 +223,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		} catch (e) {
 			log(`${bName} bracket error: ${e}`);
 		}
+	}
+
+	// A split-start bracket that StartGG hasn't laid out the way the hub has can't take
+	// reports: they are matched by player pair. Leave them queued so the TO can re-run.
+	if (splitSyncErrors.length) {
+		const latest = await getActiveTournament();
+		if (latest) {
+			latest.startggMainBracketEventId = tournament.startggMainBracketEventId;
+			latest.startggRedemptionBracketEventId = tournament.startggRedemptionBracketEventId;
+			await saveTournament(latest);
+		}
+		return Response.json({
+			ok: false,
+			error: `StartGG bracket sync failed (${splitSyncErrors.join('; ')}). Results stay queued; fix and sync again.`,
+			logs
+		}, { status: 502 });
 	}
 
 	// Step 3: Flush pending bracket reports

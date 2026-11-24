@@ -5,6 +5,7 @@ import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
 import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups, validateStartGGToken, StartGGAuthError } from '$lib/server/startgg';
 import { addEntrantsToPhase, finalizePlacements } from '$lib/server/startgg-admin';
+import { isShortSwissMode, isSplitStartMode } from '$lib/modes';
 import {
 	calculateStandings,
 	calculateSwissPairings,
@@ -67,10 +68,10 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		// Generate final standings and brackets
 		const finalStandings = calculateFinalStandings(tournament.entrants, tournament.rounds);
 
-		const isExperimental1 = tournament.mode === 'experimental1';
+		const allToMain = isShortSwissMode(tournament.mode);
 
-		// Experimental #1: all players go to main bracket (redemption auto-generated later)
-		if (isExperimental1) {
+		// Experimental modes: all players go to main bracket (redemption auto-generated later)
+		if (allToMain) {
 			for (const s of finalStandings) s.bracket = 'main';
 		}
 
@@ -91,9 +92,11 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			}
 		}
 
-		if (isExperimental1) {
-			// All players in one main bracket, no redemption yet
-			let mainBracket = generateBracket('main', mainPlayers, finalStandings, undefined, lastRoundOpponents);
+		if (allToMain) {
+			// All players in one main bracket, no redemption yet.
+			// Experimental #2: top half of the standings starts in winners, the rest in losers.
+			const winnersCount = isSplitStartMode(tournament.mode) ? Math.ceil(mainPlayers.length / 2) : undefined;
+			let mainBracket = generateBracket('main', mainPlayers, finalStandings, undefined, lastRoundOpponents, winnersCount);
 			mainBracket = assignBracketStations(mainBracket, tournament.settings, 'main', false, undefined, undefined, tournament.mode);
 			tournament.brackets = { main: mainBracket };
 		} else {
@@ -108,7 +111,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		tournament.phaseTimestamps.swissCompletedAt = phaseNow;
 		tournament.phaseTimestamps.bracketsStartedAt = phaseNow;
 
-		if (!isExperimental1) {
+		if (!allToMain) {
 			// Assign stations: split non-stream stations evenly between main and redemption.
 			const totalStations = tournament.settings.numStations;
 			const streamStn = tournament.settings.streamStation;

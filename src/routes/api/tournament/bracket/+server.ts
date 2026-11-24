@@ -1,6 +1,10 @@
 import type { RequestHandler } from './$types';
 import { getActiveTournament, saveTournament, snapshotTournament } from '$lib/server/store';
-import { reportBracketMatch, isGauntletRedemptionReady, generateGauntletRedemption, assignBracketStations } from '$lib/server/swiss';
+import {
+	reportBracketMatch, isGauntletRedemptionReady, generateGauntletRedemption,
+	isSplitRedemptionReady, generateSplitRedemption, assignBracketStations
+} from '$lib/server/swiss';
+import { isAllToMainMode } from '$lib/modes';
 import { reportBracketMatch as reportBracketMatchToStartGG } from '$lib/server/startgg-reporter';
 import { gql, EVENT_PHASES_QUERY, pushBracketSeeding, fetchPhaseGroups, StartGGAuthError } from '$lib/server/startgg';
 import { getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
@@ -80,27 +84,32 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 400 });
 	}
 
-	// Auto-generate redemption bracket when all 0-2 / 1-2 players are eliminated
-	// (applies to both gauntlet and experimental1 modes)
-	const hasAutoRedemption = tournament.mode === 'gauntlet' || tournament.mode === 'experimental1';
+	// Auto-generate the redemption bracket once main's early exits are all known:
+	// the 0-2 / 1-2 players, or for a split start everyone out by its cutoff round.
+	const hasAutoRedemption = isAllToMainMode(tournament.mode);
 	let redemptionGenerated = false;
 	if (hasAutoRedemption && bracketName === 'main' && !tournament.brackets.redemption) {
-		const mainMatches = tournament.brackets.main.matches;
-		if (isGauntletRedemptionReady(mainMatches)) {
+		const mainBracket = tournament.brackets.main;
+		const mainMatches = mainBracket.matches;
+		const isSplit = mainBracket.winnersCount !== undefined;
+		if (isSplit ? isSplitRedemptionReady(mainBracket) : isGauntletRedemptionReady(mainMatches)) {
 			const mainOccupied = new Set(
 				mainMatches
 					.filter((m) => m.station !== undefined && !m.winnerId)
 					.map((m) => m.station!)
 			);
-			tournament.brackets.redemption = generateGauntletRedemption(
-				mainMatches, tournament.entrants, tournament.settings, mainOccupied
-			);
+			tournament.brackets.redemption = isSplit
+				? generateSplitRedemption(mainBracket, tournament.settings, mainOccupied)
+				: generateGauntletRedemption(mainMatches, tournament.entrants, tournament.settings, mainOccupied);
 			redemptionGenerated = true;
 
 			// Push redemption seeding to StartGG
 			const redEventId = tournament.startggRedemptionBracketEventId;
 			const mainEventId = tournament.startggMainBracketEventId;
-			if (redEventId && mainEventId) {
+			// A split-start redemption is pushed by the StartGG sync the dashboard runs next:
+			// its seeding depends on the sides being set first, and a plain push from here
+			// could land after that and undo it.
+			if (redEventId && mainEventId && !tournament.brackets.redemption.winnersCount) {
 				(async () => {
 					try {
 						const redPhaseData = await gql<{ event: { phases: { id: number }[] } }>(

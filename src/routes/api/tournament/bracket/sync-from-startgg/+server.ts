@@ -3,6 +3,7 @@ import { getActiveTournament, saveTournament, snapshotTournament } from '$lib/se
 import { fetchAllSets, fetchAllEntrants, gql, PHASE_GROUP_SEEDS_QUERY } from '$lib/server/startgg';
 import { generateBracket, reportBracketMatch, assignBracketStations, placeInNextMatch, autoAdvanceByes } from '$lib/server/swiss';
 import type { BracketMatch, FinalStanding } from '$lib/types/tournament';
+import { isAllToMainMode } from '$lib/modes';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type GqlRecord = Record<string, any>;
@@ -20,7 +21,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	await snapshotTournament(tournament, 'Before bracket sync from StartGG', locals.user.email);
 
 	const isGauntlet = tournament.mode === 'gauntlet';
-	const allPlayersToMain = tournament.mode === 'gauntlet' || tournament.mode === 'experimental1';
+	const allPlayersToMain = isAllToMainMode(tournament.mode);
 	if (!allPlayersToMain && !tournament.finalStandings) return Response.json({ error: 'No final standings' }, { status: 400 });
 
 	const body = await request.json().catch(() => ({}));
@@ -139,7 +140,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'No brackets' }, { status: 400 });
 	}
 
-	let bracket = generateBracket(bracketName, players, standings);
+	// Keep a split start split: the regenerated bracket must have the same shape.
+	const winnersCount = tournament.brackets[bracketName]?.winnersCount;
+	let bracket = generateBracket(bracketName, players, standings, undefined, undefined, winnersCount);
 	type Slot = { entrant?: { id?: number } };
 
 	const debug: string[] = [];
@@ -204,6 +207,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		if (key === 'GF') return bracket.matches.filter((m) => m.id.includes('-GF-') && !m.id.includes('-GFR-'));
 		if (key === 'GFR') return bracket.matches.filter((m) => m.id.includes('-GFR-'));
 		const side = key[0] as 'W' | 'L';
+		if (winnersCount) {
+			// A split start has bye-only rounds on StartGG that the hub doesn't keep, so
+			// round numbers don't line up. Sets are matched by who is in them, so offer
+			// every match on that side that hasn't been claimed yet.
+			return bracket.matches.filter((m) =>
+				!m.startggSetId && !m.id.includes('-GF') && (side === 'W' ? m.round > 0 : m.round < 0)
+			);
+		}
 		const round = Number(key.slice(1));
 		const prefix = `${bracketName}-${side}${round}-`;
 		return bracket.matches.filter((m) => m.id.startsWith(prefix));
@@ -307,7 +318,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				(msvE1 && (match.topPlayerId === msvE1 || match.bottomPlayerId === msvE1)) ||
 				(msvE2 && (match.topPlayerId === msvE2 || match.bottomPlayerId === msvE2))
 			);
-			if (!m) {
+			if (!m && !winnersCount) {
 				// Fallback: find first unoccupied match in this round
 				m = msvMatches.find((match) => !match.topPlayerId && !match.bottomPlayerId && !match.startggSetId);
 				if (m) debug.push(`  ${key} set ${s.identifier}: no entrant match, using empty slot ${m.id}`);
