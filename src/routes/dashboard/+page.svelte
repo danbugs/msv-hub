@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { TournamentState } from '$lib/types/tournament';
+	import { modeLabel } from '$lib/modes';
 
 	let tournament = $state<TournamentState | null | undefined>(undefined);
 
@@ -223,7 +224,7 @@
 										{#if tournament.phase === 'swiss'}
 											Swiss R{tournament.currentRound}/{tournament.settings.numRounds}
 										{:else if tournament.phase === 'brackets'}
-											{tournament.mode === 'gauntlet' ? 'Macro Default' : tournament.mode === 'experimental1' ? 'Experimental #1' : 'Brackets'}
+											{tournament.mode && tournament.mode !== 'default' ? modeLabel(tournament.mode) : 'Brackets'}
 										{:else}
 											Completed
 										{/if}

@@ -3,6 +3,7 @@
 	import type { TournamentState, Entrant, BracketMatch, BracketState } from '$lib/types/tournament';
 	import BracketView from '$lib/components/BracketView.svelte';
 	import { myMatchStatus } from '$lib/live/my-match';
+	import { isAllToMainMode, isSplitStartMode, modeLabel } from '$lib/modes';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 
@@ -439,9 +440,13 @@
 			<!-- Bracket views — break out of max-w-3xl to use full width -->
 			{#if tournament.brackets}
 				<div class="grid grid-cols-1 xl:grid-cols-2 gap-4 w-[calc(100vw-2rem)] relative left-1/2 -translate-x-1/2 px-4 max-w-[100vw]">
-				{#if (tournament.mode === 'gauntlet' || tournament.mode === 'experimental1') && !tournament.brackets.redemption}
+				{#if isAllToMainMode(tournament.mode) && !tournament.brackets.redemption}
 					<div class="col-span-full rounded-lg border border-primary/20 bg-primary/5 px-4 py-2 text-xs text-muted-foreground">
-						{tournament.mode === 'experimental1' ? 'Experimental #1' : 'Macro Default'} Mode — Redemption bracket starts once all early eliminates (0-2, 1-2) are decided.
+						{#if isSplitStartMode(tournament.mode)}
+							{modeLabel(tournament.mode)} Mode — Top half of Swiss starts in winners, bottom half in losers. Redemption bracket starts once the early exits are decided.
+						{:else}
+							{modeLabel(tournament.mode)} Mode — Redemption bracket starts once all early eliminates (0-2, 1-2) are decided.
+						{/if}
 					</div>
 				{/if}
 				{#each (['main', 'redemption'] as const) as bracketName}

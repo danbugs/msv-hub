@@ -5,6 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { computeWaves, getWaveSummary } from '$lib/waves';
+	import { isAllToMainMode, modeLabel } from '$lib/modes';
 	import { pollTournament } from '$lib/client/tournament-poll';
 
 	let tournament = $state<TournamentState | null>(null);
@@ -426,7 +427,7 @@
 			}
 
 			// Auto-sync redemption to StartGG when generated in auto-redemption modes
-			if (data.redemptionBracket && (tournament?.mode === 'gauntlet' || tournament?.mode === 'experimental1')) {
+			if (data.redemptionBracket && isAllToMainMode(tournament?.mode)) {
 				redemptionSyncing = true;
 				redemptionSyncResult = '';
 				fetch('/api/tournament/startgg-sync', {
@@ -477,8 +478,8 @@
 		</div>
 	{/if}
 
-	<!-- StartGG split confirmation (default mode only — gauntlet/experimental1 use "all to main" sync) -->
-	{#if tournament && tournament.mode !== 'gauntlet' && tournament.mode !== 'experimental1' && !tournament.startggSync?.splitConfirmed}
+	<!-- StartGG split confirmation (default mode only — the other modes use "all to main" sync) -->
+	{#if tournament && !isAllToMainMode(tournament.mode) && !tournament.startggSync?.splitConfirmed}
 		<div class="mt-4 rounded-lg border border-warning-border bg-warning-muted px-4 py-3">
 			<p class="text-sm text-warning">
 				<span class="font-semibold">StartGG:</span> Click <strong>Run Bracket Split</strong> to automatically assign players
@@ -504,8 +505,8 @@
 		</div>
 	{/if}
 
-	<!-- Re-sync players to StartGG (fallback if initial sync missed or failed — gauntlet/experimental1) -->
-	{#if tournament && (tournament.mode === 'gauntlet' || tournament.mode === 'experimental1') && tournament.startggEventSlug && !tournament.startggSync?.splitConfirmed && !redemptionSyncing}
+	<!-- Re-sync players to StartGG (fallback if initial sync missed or failed — all-to-main modes) -->
+	{#if tournament && isAllToMainMode(tournament.mode) && tournament.startggEventSlug && !tournament.startggSync?.splitConfirmed && !redemptionSyncing}
 		<div class="mt-4 rounded-lg border border-border bg-card/50 px-4 py-3">
 			<div class="flex items-center gap-3">
 				<p class="text-sm text-muted-foreground flex-1">
@@ -664,32 +665,54 @@
 			</div>
 		{/if}
 
-		{#if (tournament?.mode === 'gauntlet' || tournament?.mode === 'experimental1') && !tournament.brackets?.redemption && tournament.brackets?.main}
+		{#if isAllToMainMode(tournament?.mode) && !tournament?.brackets?.redemption && tournament?.brackets?.main}
 			{@const mainMatches = tournament.brackets.main.matches}
-			{@const lr1 = mainMatches.filter((m) => m.round === -1)}
-			{@const lr2 = mainMatches.filter((m) => m.round === -2)}
-			{@const lr1Done = lr1.filter((m) => m.winnerId).length}
-			{@const lr2Done = lr2.filter((m) => m.winnerId).length}
-			{@const totalNeeded = lr1.length + lr2.length}
-			{@const totalDone = lr1Done + lr2Done}
-			<div class="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
-				<div class="flex items-center justify-between">
-					<p class="font-medium">{tournament.mode === 'experimental1' ? 'Experimental #1' : 'Macro Default'} — Redemption Progress</p>
-					{#if totalNeeded > 0}
-						<span class="text-xs text-muted-foreground">{totalDone}/{totalNeeded} eliminations decided</span>
+			{@const cutoff = tournament.brackets.main.redemptionCutoffRound}
+			{#if cutoff !== undefined}
+				<!-- Split start: redemption waits for every losers round up to the cutoff. Byes don't count. -->
+				{@const early = mainMatches.filter((m) => m.round < 0 && m.round >= cutoff && !(m.winnerId && !(m.topPlayerId && m.bottomPlayerId)))}
+				{@const earlyDone = early.filter((m) => m.winnerId).length}
+				<div class="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
+					<div class="flex items-center justify-between">
+						<p class="font-medium">{modeLabel(tournament.mode)} — Redemption Progress</p>
+						<span class="text-xs text-muted-foreground">{earlyDone}/{early.length} early losers sets decided</span>
+					</div>
+					{#if early.length > 0}
+						<div class="mt-2 h-2 rounded-full bg-muted overflow-hidden">
+							<div class="h-full rounded-full bg-primary transition-all" style="width: {Math.round((earlyDone / early.length) * 100)}%"></div>
+						</div>
 					{/if}
+					<p class="mt-2 text-muted-foreground">
+						Redemption bracket generates automatically once Losers Round {-cutoff} is complete. Everyone out by then with one win or fewer plays in it:
+						Losers Round {-cutoff} exits start in winners, earlier exits start in losers.
+					</p>
 				</div>
-				{#if totalNeeded > 0}
-					<div class="mt-2 h-2 rounded-full bg-muted overflow-hidden">
-						<div class="h-full rounded-full bg-primary transition-all" style="width: {Math.round((totalDone / totalNeeded) * 100)}%"></div>
+			{:else}
+				{@const lr1 = mainMatches.filter((m) => m.round === -1)}
+				{@const lr2 = mainMatches.filter((m) => m.round === -2)}
+				{@const lr1Done = lr1.filter((m) => m.winnerId).length}
+				{@const lr2Done = lr2.filter((m) => m.winnerId).length}
+				{@const totalNeeded = lr1.length + lr2.length}
+				{@const totalDone = lr1Done + lr2Done}
+				<div class="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
+					<div class="flex items-center justify-between">
+						<p class="font-medium">{modeLabel(tournament.mode)} — Redemption Progress</p>
+						{#if totalNeeded > 0}
+							<span class="text-xs text-muted-foreground">{totalDone}/{totalNeeded} eliminations decided</span>
+						{/if}
 					</div>
-					<div class="mt-2 flex gap-4 text-xs text-muted-foreground">
-						<span>0-2 players (LR1): {lr1Done}/{lr1.length}</span>
-						<span>1-2 players (LR2): {lr2Done}/{lr2.length}</span>
-					</div>
-				{/if}
-				<p class="mt-2 text-muted-foreground">Redemption bracket generates automatically once all 0-2 and 1-2 eliminations are complete.</p>
-			</div>
+					{#if totalNeeded > 0}
+						<div class="mt-2 h-2 rounded-full bg-muted overflow-hidden">
+							<div class="h-full rounded-full bg-primary transition-all" style="width: {Math.round((totalDone / totalNeeded) * 100)}%"></div>
+						</div>
+						<div class="mt-2 flex gap-4 text-xs text-muted-foreground">
+							<span>0-2 players (LR1): {lr1Done}/{lr1.length}</span>
+							<span>1-2 players (LR2): {lr2Done}/{lr2.length}</span>
+						</div>
+					{/if}
+					<p class="mt-2 text-muted-foreground">Redemption bracket generates automatically once all 0-2 and 1-2 eliminations are complete.</p>
+				</div>
+			{/if}
 		{/if}
 
 		{@const bracket = getBracket()}{#if bracket}

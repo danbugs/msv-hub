@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
+	import type { TournamentMode } from '$lib/types/tournament';
+	import { isAllToMainMode, isShortSwissMode, modeLabel } from '$lib/modes';
 
 	// ── Config ──
 	let mode = $state<'micro' | 'macro'>('micro');
@@ -24,7 +26,7 @@
 	let swissRounds = $state('');  // empty = auto (calculated from player count + stations)
 	let eventUrl = $state('');
 	let loadingEvent = $state(false);
-	let tournamentMode = $state<'default' | 'gauntlet' | 'experimental1'>('default');
+	let tournamentMode = $state<TournamentMode>('default');
 	let showModeInfo = $state(false);
 	let quickPreview = $state<{ seedNum: number; gamerTag: string; playerId?: number; elo: number; jitteredElo: number; isNewcomer: boolean }[] | null>(null);
 	let loadingPreview = $state(false);
@@ -324,7 +326,7 @@
 	function computePairings(entrants: NonNullable<typeof result>['entrants']) {
 		const n = entrants.length;
 		const pairings = [];
-		const useBracketPairing = tournamentMode === 'gauntlet' || tournamentMode === 'experimental1';
+		const useBracketPairing = isAllToMainMode(tournamentMode);
 
 		if (useBracketPairing) {
 			// DE bracket pairing: seed 1 vs N, seed 2 vs N-1, etc.
@@ -737,7 +739,7 @@
 
 				<!-- R1 Pairings -->
 				<div>
-					<h3 class="text-sm font-medium text-foreground mb-2">{tournamentMode === 'gauntlet' || tournamentMode === 'experimental1' ? 'R1 Bracket Matchups' : 'R1 Pairings'}</h3>
+					<h3 class="text-sm font-medium text-foreground mb-2">{isAllToMainMode(tournamentMode) ? 'R1 Bracket Matchups' : 'R1 Pairings'}</h3>
 					<div class="space-y-1 max-h-[28rem] overflow-y-auto">
 						{#each displayPairings as { top, bottom }}
 							{@const r1Collision = findCollision(top.gamerTag, bottom.gamerTag)}
@@ -882,6 +884,11 @@
 						class="rounded-lg px-4 py-1.5 text-sm font-medium transition-colors {tournamentMode === 'experimental1' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 						Experimental #1
 					</button>
+					<button type="button" onclick={() => tournamentMode = 'experimental2'}
+						title="3 Swiss rounds, then one main bracket: top half starts in winners, bottom half in losers"
+						class="rounded-lg px-4 py-1.5 text-sm font-medium transition-colors {tournamentMode === 'experimental2' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
+						Experimental #2
+					</button>
 				</div>
 			</div>
 
@@ -898,12 +905,12 @@
 							placeholder="auto"
 							class="mt-1 w-24 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 					</div>
-				{:else if tournamentMode === 'experimental1'}
+				{:else if isShortSwissMode(tournamentMode)}
 					<span class="self-end pb-2 text-xs text-muted-foreground">3 Swiss rounds (fixed)</span>
 				{/if}
 				<button onclick={startSwiss} disabled={startingSwiss || !numStations}
 					class="rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-					{startingSwiss ? (syncStatus || 'Creating...') : tournamentMode === 'gauntlet' ? 'Apply & Start Macro Default →' : tournamentMode === 'experimental1' ? 'Apply & Start Experimental #1 →' : 'Apply & Start Swiss →'}
+					{startingSwiss ? (syncStatus || 'Creating...') : tournamentMode === 'default' ? 'Apply & Start Swiss →' : `Apply & Start ${modeLabel(tournamentMode)} →`}
 				</button>
 			</div>
 		</div>
@@ -949,6 +956,11 @@
 							class="rounded-lg px-3 py-1 text-xs font-medium transition-colors {tournamentMode === 'experimental1' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
 							Experimental #1
 						</button>
+						<button type="button" onclick={() => tournamentMode = 'experimental2'}
+							title="3 Swiss rounds, then one main bracket: top half starts in winners, bottom half in losers"
+							class="rounded-lg px-3 py-1 text-xs font-medium transition-colors {tournamentMode === 'experimental2' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}">
+							Experimental #2
+						</button>
 					</div>
 				</div>
 
@@ -970,7 +982,7 @@
 								placeholder="auto"
 								class="mt-1 w-20 rounded-lg border border-input bg-secondary px-3 py-2 text-foreground placeholder-muted-foreground focus:border-ring focus:outline-none" />
 						</div>
-					{:else if tournamentMode === 'experimental1'}
+					{:else if isShortSwissMode(tournamentMode)}
 						<span class="self-end pb-2 text-xs text-muted-foreground">3 rounds</span>
 					{/if}
 					{#if !quickPreview}
@@ -981,7 +993,7 @@
 					{/if}
 					<button onclick={startFromEvent} disabled={loadingEvent || !eventUrl.trim()}
 						class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-						{loadingEvent ? (syncStatus || 'Loading...') : tournamentMode === 'gauntlet' ? 'Start Macro Default →' : tournamentMode === 'experimental1' ? 'Start Experimental #1 →' : 'Start Swiss →'}
+						{loadingEvent ? (syncStatus || 'Loading...') : tournamentMode === 'default' ? 'Start Swiss →' : `Start ${modeLabel(tournamentMode)} →`}
 					</button>
 				</div>
 
@@ -1022,7 +1034,7 @@
 						</div>
 
 						<div>
-							<h3 class="text-sm font-medium text-foreground mb-2">{tournamentMode === 'gauntlet' || tournamentMode === 'experimental1' ? 'R1 Bracket Matchups' : 'R1 Pairings'}</h3>
+							<h3 class="text-sm font-medium text-foreground mb-2">{isAllToMainMode(tournamentMode) ? 'R1 Bracket Matchups' : 'R1 Pairings'}</h3>
 							<div class="space-y-1 max-h-[28rem] overflow-y-auto">
 								{#each quickPairings as { top, bottom }}
 									{@const qCollision = findCollision(top.gamerTag, bottom.gamerTag)}
