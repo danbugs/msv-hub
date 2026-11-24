@@ -1102,6 +1102,24 @@ export function generateBracket(
 	return settings ? assignBracketStations(state, settings, name as 'main' | 'redemption') : state;
 }
 
+/**
+ * How many players a not-yet-decided match can still end up with: the ones already
+ * seated plus every feeder that will still deliver one. A feeder delivers its winner
+ * if it will have at least one player, and its loser only if it will have two.
+ */
+function liveInputs(allMatches: BracketMatch[], match: BracketMatch, memo: Map<string, number>): number {
+	const cached = memo.get(match.id);
+	if (cached !== undefined) return cached;
+	let count = (match.topPlayerId ? 1 : 0) + (match.bottomPlayerId ? 1 : 0);
+	for (const f of allMatches) {
+		if (f.winnerId) continue; // already delivered whatever it had
+		if (f.winnerNextMatchId === match.id && liveInputs(allMatches, f, memo) >= 1) count++;
+		if (f.loserNextMatchId === match.id && liveInputs(allMatches, f, memo) === 2) count++;
+	}
+	memo.set(match.id, count);
+	return count;
+}
+
 export function placeInNextMatch(next: BracketMatch, playerId: string, preferredSlot: 'top' | 'bottom') {
 	if (next.topPlayerId === playerId || next.bottomPlayerId === playerId) return;
 	if (!next.topPlayerId && !next.bottomPlayerId) {
@@ -1152,17 +1170,14 @@ export function autoAdvanceByes(allMatches: BracketMatch[]) {
 			const hasTop = !!m.topPlayerId;
 			const hasBot = !!m.bottomPlayerId;
 			if (hasTop === hasBot) continue; // both filled (real match) or both empty (waiting)
-			const emptySlot: 'top' | 'bottom' = hasTop ? 'bottom' : 'top';
-			const unresolvedFeeder = allMatches.find((f) =>
-				!f.winnerId &&
-				(f.winnerNextMatchId === m.id || f.loserNextMatchId === m.id)
-			);
-			if (!unresolvedFeeder) {
-				m.winnerId = m.topPlayerId ?? m.bottomPlayerId;
-				if (m.winnerId) {
-					advancePlayer(allMatches, m);
-					changed = true;
-				}
+			// A feeder with no winner only blocks this match if it can still send someone.
+			// One that will never have players (both of its own feeders were byes) never
+			// gets a winner, and waiting on it would strand this player.
+			if (liveInputs(allMatches, m, new Map()) > 1) continue;
+			m.winnerId = m.topPlayerId ?? m.bottomPlayerId;
+			if (m.winnerId) {
+				advancePlayer(allMatches, m);
+				changed = true;
 			}
 		}
 	}
