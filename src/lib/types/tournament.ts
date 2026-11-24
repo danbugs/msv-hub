@@ -18,12 +18,21 @@ export interface StartggSyncState {
 	pendingPhaseReset?: { roundNumber: number; phaseGroupId: number; phaseId: number };
 }
 
+/**
+ * - default: Swiss, then top half to main and bottom half to redemption
+ * - gauntlet: no Swiss, everyone in main, early exits feed redemption
+ * - experimental1: 3 Swiss rounds, everyone starts main in winners, early exits feed redemption
+ * - experimental2: 3 Swiss rounds, top half starts main in winners and bottom half in losers,
+ *   early exits feed redemption
+ */
+export type TournamentMode = 'default' | 'gauntlet' | 'experimental1' | 'experimental2';
+
 /** Core tournament state persisted in Redis */
 export interface TournamentState {
 	slug: string;
 	name: string;
 	phase: 'swiss' | 'brackets' | 'completed';
-	mode?: 'default' | 'gauntlet' | 'experimental1';
+	mode?: TournamentMode;
 	entrants: Entrant[];
 	settings: TournamentSettings;
 	rounds: SwissRound[];
@@ -175,6 +184,17 @@ export interface BracketState {
 	players: { entrantId: string; seed: number }[];
 	matches: BracketMatch[];
 	currentRound: number;
+	/**
+	 * Split start: seeds 1..winnersCount start in winners, the rest start in losers.
+	 * Absent means everyone starts in winners.
+	 */
+	winnersCount?: number;
+	/**
+	 * Losers round (negative) after which the redemption bracket is built: everyone
+	 * knocked out up to and including this round with at most one win goes to redemption.
+	 * Only set on a split-start main bracket.
+	 */
+	redemptionCutoffRound?: number;
 }
 
 /** Standings used during Swiss pairing */

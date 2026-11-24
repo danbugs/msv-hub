@@ -12,9 +12,11 @@ import type {
 	PlayerStanding,
 	FinalStanding,
 	StreamRecommendation,
-	TournamentSettings
+	TournamentSettings,
+	TournamentMode
 } from '$lib/types/tournament';
-import { microRoundOrder, macroRoundOrder } from '$lib/waves';
+import { microRoundOrder, macroRoundOrder, dependencyRoundOrder } from '$lib/waves';
+import { isAllToMainMode } from '$lib/modes';
 
 // ── Standings ────────────────────────────────────────────────────────────
 
@@ -450,7 +452,7 @@ export function assignBracketStations(
 	streamCountByPlayer?: Map<string, number>,
 	/** Stations occupied by the other bracket (gauntlet mode cross-bracket awareness) */
 	externalOccupiedStations?: Set<number>,
-	mode?: 'default' | 'gauntlet' | 'experimental1'
+	mode?: TournamentMode
 ): BracketState {
 	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
 
@@ -461,8 +463,9 @@ export function assignBracketStations(
 	if (ready.length === 0) return updated;
 
 	// Build wave-order priority: earlier waves get stations first
-	const usesMacroOrder = bracketName === 'main' && (mode === 'gauntlet' || mode === 'experimental1');
-	const groups = usesMacroOrder ? macroRoundOrder(updated.matches) : microRoundOrder(updated.matches);
+	const usesMacroOrder = bracketName === 'main' && isAllToMainMode(mode);
+	const groups = bracket.winnersCount ? dependencyRoundOrder(updated.matches)
+		: usesMacroOrder ? macroRoundOrder(updated.matches) : microRoundOrder(updated.matches);
 	const waveOrder = new Map<string, number>();
 	for (let g = 0; g < groups.length; g++) {
 		for (const m of groups[g]) waveOrder.set(m.id, g);
@@ -836,7 +839,7 @@ import type { BracketMatch, BracketState } from '$lib/types/tournament';
  *
  * This ensures seeds 1 and 2 are in opposite halves and only meet in the final.
  */
-function getStandardBracketOrder(bracketSize: number): number[] {
+export function getStandardBracketOrder(bracketSize: number): number[] {
 	// Start with seed 0 (the #1 seed)
 	let positions = [0];
 
@@ -860,9 +863,15 @@ export function generateBracket(
 	allStandings: FinalStanding[],
 	settings?: TournamentSettings,
 	/** Map of entrantId → set of opponent entrantIds (for rematch avoidance) */
-	lastRoundOpponents?: Map<string, string | Set<string>>
+	lastRoundOpponents?: Map<string, string | Set<string>>,
+	/**
+	 * Split start: the top `winnersCount` seeds start in winners and the rest start in losers.
+	 * Ignored unless it leaves at least two players in winners and one in losers.
+	 */
+	winnersCount?: number
 ): BracketState {
 	const n = players.length;
+	const split = winnersCount !== undefined && winnersCount >= 2 && winnersCount < n;
 	// Pad to next power of 2 for bracket structure
 	const bracketSize = Math.pow(2, Math.ceil(Math.log2(n)));
 	const numFirstRoundMatches = bracketSize / 2;
@@ -872,7 +881,9 @@ export function generateBracket(
 	let sortedPlayers = [...players].sort((a, b) => a.seed - b.seed);
 
 	// Avoid rematches in bracket R1 by swapping bottom-seed players between matches.
-	if (lastRoundOpponents && lastRoundOpponents.size > 0) {
+	// Not for a split start: there the full bracket's first round is never played, so
+	// swapping within it would only shuffle who starts where.
+	if (!split && lastRoundOpponents && lastRoundOpponents.size > 0) {
 		const order = standardOrder;
 		const isOpponent = (playerId: string, opponentId: string): boolean => {
 			const entry = lastRoundOpponents.get(playerId);
@@ -1099,6 +1110,13 @@ export function generateBracket(
 		currentRound: 1
 	};
 
+	if (split) {
+		const seedOf = new Map(bracketPlayers.map((p) => [p.entrantId, p.seed]));
+		state.matches = applyLosersStart(name, matches, seedOf, winnersCount);
+		state.winnersCount = winnersCount;
+		state.redemptionCutoffRound = computeRedemptionCutoffRound(state.matches, seedOf, winnersCount);
+	}
+
 	return settings ? assignBracketStations(state, settings, name as 'main' | 'redemption') : state;
 }
 
@@ -1118,6 +1136,100 @@ function liveInputs(allMatches: BracketMatch[], match: BracketMatch, memo: Map<s
 	}
 	memo.set(match.id, count);
 	return count;
+}
+
+/**
+ * Turn a full seeded bracket into a split start, mirroring how StartGG lays one out.
+ *
+ * StartGG treats a losers-side starter as someone who already lost the winners match
+ * their seed would be expected to lose, so they sit in the losers slot that match feeds.
+ * We get the same layout by playing the winners side out by seed until no match involves
+ * a losers-side starter, then erasing those matches: they were never played, so they must
+ * not show as results or count toward anyone's record.
+ */
+function applyLosersStart(
+	name: string,
+	matches: BracketMatch[],
+	seedOf: Map<string, number>,
+	winnersCount: number
+): BracketMatch[] {
+	const seed = (id?: string) => (id ? seedOf.get(id) ?? Infinity : Infinity);
+	const gfRound = Math.max(...matches.map((m) => m.round));
+
+	autoAdvanceByes(matches);
+	for (;;) {
+		const m = matches.find((x) =>
+			x.round > 0 && x.round < gfRound && !x.winnerId && x.topPlayerId && x.bottomPlayerId &&
+			(seed(x.topPlayerId) > winnersCount || seed(x.bottomPlayerId) > winnersCount)
+		);
+		if (!m) break;
+		const winner = seed(m.topPlayerId) <= seed(m.bottomPlayerId) ? m.topPlayerId! : m.bottomPlayerId!;
+		m.winnerId = winner;
+		advancePlayer(matches, m);
+		// Leave it looking like a bye for the player who stays in winners.
+		m.topPlayerId = winner;
+		m.bottomPlayerId = undefined;
+		m.loserId = undefined;
+		autoAdvanceByes(matches);
+	}
+
+	// Drop leading rounds on each side that hold no playable match, so round 1 is the
+	// first round anyone actually plays.
+	const memo = new Map<string, number>();
+	const settled = (m: BracketMatch) => !!m.winnerId || liveInputs(matches, m, memo) === 0;
+	let winnersDropped = 0;
+	while (winnersDropped + 1 < gfRound - 1 && matches.filter((m) => m.round === winnersDropped + 1).every(settled)) {
+		winnersDropped++;
+	}
+	const maxLosersRound = Math.max(0, ...matches.filter((m) => m.round < 0).map((m) => -m.round));
+	let losersDropped = 0;
+	while (losersDropped + 1 < maxLosersRound && matches.filter((m) => m.round === -(losersDropped + 1)).every(settled)) {
+		losersDropped++;
+	}
+
+	const kept = matches.filter((m) => (m.round > 0 ? m.round > winnersDropped : -m.round > losersDropped));
+	const idMap = new Map<string, string>();
+	for (const m of kept) {
+		const counter = m.id.slice(m.id.lastIndexOf('-') + 1);
+		const round = m.round > 0 ? m.round - winnersDropped : m.round + losersDropped;
+		const label = m.round === gfRound ? 'GF' : round > 0 ? `W${round}` : `L${-round}`;
+		idMap.set(m.id, `${name}-${label}-${counter}`);
+		m.round = round;
+	}
+	for (const m of kept) {
+		m.id = idMap.get(m.id)!;
+		if (m.winnerNextMatchId) m.winnerNextMatchId = idMap.get(m.winnerNextMatchId);
+		if (m.loserNextMatchId) m.loserNextMatchId = idMap.get(m.loserNextMatchId);
+	}
+	return kept;
+}
+
+/**
+ * The losers round by which every losers-side starter who wins at most one set is out.
+ * Each of them is followed to their first playable match and, if they win it, the next
+ * one; the cutoff is the latest round any of those second matches falls in.
+ */
+function computeRedemptionCutoffRound(
+	matches: BracketMatch[],
+	seedOf: Map<string, number>,
+	winnersCount: number
+): number | undefined {
+	const memo = new Map<string, number>();
+	const byId = new Map(matches.map((m) => [m.id, m]));
+	let cutoff = 0;
+	for (const m of matches) {
+		if (m.winnerId || m.round > 0) continue;
+		const startsHere = [m.topPlayerId, m.bottomPlayerId].some((id) => id && (seedOf.get(id) ?? 0) > winnersCount);
+		if (!startsHere) continue;
+		let last = m;
+		let next = m.winnerNextMatchId ? byId.get(m.winnerNextMatchId) : undefined;
+		while (next && next.round < 0 && liveInputs(matches, next, memo) < 2) {
+			next = next.winnerNextMatchId ? byId.get(next.winnerNextMatchId) : undefined;
+		}
+		if (next && next.round < 0) last = next;
+		cutoff = Math.max(cutoff, -last.round);
+	}
+	return cutoff > 0 ? -cutoff : undefined;
 }
 
 export function placeInNextMatch(next: BracketMatch, playerId: string, preferredSlot: 'top' | 'bottom') {
@@ -1197,7 +1309,7 @@ export function reportBracketMatch(
 	gameWinners?: ('top' | 'bottom')[],
 	isDQ?: boolean,
 	streamCountByPlayer?: Map<string, number>,
-	mode?: 'default' | 'gauntlet' | 'experimental1'
+	mode?: TournamentMode
 ): BracketState {
 	const updated = { ...bracket, matches: bracket.matches.map((m) => ({ ...m })) };
 	const match = updated.matches.find((m) => m.id === matchId);
@@ -1378,6 +1490,53 @@ export function getEliminatedPlayers(matches: BracketMatch[]): string[] {
 		}
 	}
 	return eliminated;
+}
+
+/**
+ * Split-start main bracket: redemption can be built once every losers match up to the
+ * cutoff round is decided.
+ */
+export function isSplitRedemptionReady(main: BracketState): boolean {
+	const cutoff = main.redemptionCutoffRound;
+	if (cutoff === undefined) return false;
+	const memo = new Map<string, number>();
+	return main.matches
+		.filter((m) => m.round < 0 && m.round >= cutoff)
+		.every((m) => !!m.winnerId || liveInputs(main.matches, m, memo) === 0);
+}
+
+/**
+ * Build the redemption bracket for a split-start main bracket.
+ *
+ * Everyone knocked out by the cutoff round with at most one win plays in it. Those who
+ * lasted until the cutoff round start in winners; the earlier exits start in losers, which
+ * keeps redemption short enough to finish alongside main.
+ */
+export function generateSplitRedemption(
+	main: BracketState,
+	settings?: TournamentSettings,
+	mainOccupiedStations?: Set<number>
+): BracketState {
+	const cutoff = main.redemptionCutoffRound ?? -1;
+	const records = computeBracketRecords(main.matches);
+	const seedOf = new Map(main.players.map((p) => [p.entrantId, p.seed]));
+
+	const exits: { entrantId: string; exitRound: number; wins: number; seed: number }[] = [];
+	for (const m of main.matches) {
+		if (m.round >= 0 || m.round < cutoff) continue;
+		if (!m.winnerId || !m.topPlayerId || !m.bottomPlayerId) continue;
+		const loserId = m.topPlayerId === m.winnerId ? m.bottomPlayerId : m.topPlayerId;
+		const wins = records.get(loserId)?.wins ?? 0;
+		if (wins > 1) continue;
+		exits.push({ entrantId: loserId, exitRound: -m.round, wins, seed: seedOf.get(loserId) ?? 999 });
+	}
+	exits.sort((a, b) => b.exitRound - a.exitRound || b.wins - a.wins || a.seed - b.seed);
+
+	const players = exits.map((e, i) => ({ entrantId: e.entrantId, seed: i + 1 }));
+	const lastedToCutoff = exits.filter((e) => e.exitRound === -cutoff).length;
+	const bracket = generateBracket('redemption', players, [], undefined, undefined, lastedToCutoff);
+	if (!settings) return bracket;
+	return assignBracketStations(bracket, settings, 'redemption', false, undefined, mainOccupiedStations);
 }
 
 /**

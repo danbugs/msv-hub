@@ -1,4 +1,5 @@
-import type { BracketMatch, BracketState } from '$lib/types/tournament';
+import type { BracketMatch, BracketState, TournamentMode } from '$lib/types/tournament';
+import { isAllToMainMode } from '$lib/modes';
 
 export interface WaveAssignment {
 	wave: number;
@@ -148,24 +149,79 @@ export function macroRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
 	return groups;
 }
 
+// Split start: group by how many sets have to finish before a match can be played.
+// The round pairings above assume everyone starts in winners; with part of the field
+// starting in losers, losers round 1 can run alongside winners round 1.
+export function dependencyRoundOrder(matches: BracketMatch[]): BracketMatch[][] {
+	const feeders = new Map<string, BracketMatch[]>();
+	for (const m of matches) {
+		for (const next of [m.winnerNextMatchId, m.loserNextMatchId]) {
+			if (!next) continue;
+			if (!feeders.has(next)) feeders.set(next, []);
+			feeders.get(next)!.push(m);
+		}
+	}
+	const isBye = (m: BracketMatch) => !!m.winnerId && !(m.topPlayerId && m.bottomPlayerId);
+	// A match nobody will ever reach: empty, and everything feeding it was a bye or is itself empty.
+	const deadMemo = new Map<string, boolean>();
+	const isDead = (m: BracketMatch): boolean => {
+		const hit = deadMemo.get(m.id);
+		if (hit !== undefined) return hit;
+		const dead = !m.winnerId && !m.topPlayerId && !m.bottomPlayerId &&
+			(feeders.get(m.id) ?? []).every((f) => isBye(f) || isDead(f)) && (feeders.get(m.id) ?? []).length > 0;
+		deadMemo.set(m.id, dead);
+		return dead;
+	};
+	const depthMemo = new Map<string, number>();
+	const depth = (m: BracketMatch): number => {
+		const hit = depthMemo.get(m.id);
+		if (hit !== undefined) return hit;
+		const before = Math.max(0, ...(feeders.get(m.id) ?? []).map(depth));
+		const d = isBye(m) || isDead(m) ? before : before + 1;
+		depthMemo.set(m.id, d);
+		return d;
+	};
+
+	const groups: BracketMatch[][] = [];
+	for (const m of matches) {
+		if (m.id.includes('-GFR-') || isBye(m) || isDead(m)) continue;
+		const d = depth(m);
+		(groups[d - 1] ??= []).push(m);
+	}
+	const sideOrder = (m: BracketMatch) => (m.round > 0 ? 0 : 1);
+	return groups.filter(Boolean).map((g) =>
+		g.sort((a, b) => sideOrder(a) - sideOrder(b) || Math.abs(a.round) - Math.abs(b.round) || a.matchIndex - b.matchIndex)
+	);
+}
+
+/** How many dependency groups of a split-start main bracket run before redemption can begin. */
+function groupsBeforeRedemption(main: BracketState, mainGroups: BracketMatch[][]): number {
+	const cutoff = main.redemptionCutoffRound;
+	if (cutoff === undefined) return Math.min(3, mainGroups.length);
+	let last = 0;
+	mainGroups.forEach((g, i) => { if (g.some((m) => m.round < 0 && m.round >= cutoff)) last = i + 1; });
+	return last;
+}
+
 export function computeWaves(
 	main: BracketState,
 	redemption: BracketState | undefined,
-	mode: 'default' | 'gauntlet' | 'experimental1' = 'default',
+	mode: TournamentMode = 'default',
 	stationCount = 16
 ): WaveMap {
 	const map: WaveMap = new Map();
 	const mainMatches = main.matches;
 	const redMatches = redemption?.matches ?? [];
 
-	if (mode === 'gauntlet' || mode === 'experimental1') {
+	if (isAllToMainMode(mode)) {
 		// Macro Default: Main plays early rounds solo, then Redemption interleaves.
 		// Main groups before Redemption: WR1, WR2+LR1, LR2 (indices 0-2).
-		const mainGroups = macroRoundOrder(mainMatches);
-		const redGroups = redMatches.length > 0 ? microRoundOrder(redMatches) : [];
+		const mainGroups = main.winnersCount ? dependencyRoundOrder(mainMatches) : macroRoundOrder(mainMatches);
+		const redGroups = redMatches.length === 0 ? []
+			: redemption?.winnersCount ? dependencyRoundOrder(redMatches) : microRoundOrder(redMatches);
 
-		// Main-only early rounds (up through LR2 = index 2)
-		const breakpoint = Math.min(3, mainGroups.length);
+		// Main-only early rounds (up through LR2 = index 2, or a split start's cutoff round)
+		const breakpoint = main.winnersCount ? groupsBeforeRedemption(main, mainGroups) : Math.min(3, mainGroups.length);
 		let waveNum = 1;
 
 		for (let i = 0; i < breakpoint; i++) {
