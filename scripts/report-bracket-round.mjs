@@ -101,8 +101,11 @@ for (const m of ready) {
 	const side = pickWinner(m);
 	const winnerId = side === 'top' ? m.topPlayerId : m.bottomPlayerId;
 	const loserId = side === 'top' ? m.bottomPlayerId : m.topPlayerId;
-	// Loser's games first, so the set reads like it was played out
-	const gameWinners = [...Array(loseScore).fill(side === 'top' ? 'bottom' : 'top'), ...Array(winScore).fill(side)];
+	// Per-game winners only for best-of-5, as the dashboard does: sending them sends the
+	// StartGG report down the slow per-game GQL path instead of the fast REST one.
+	const gameWinners = winScore === 3
+		? [...Array(loseScore).fill(side === 'top' ? 'bottom' : 'top'), ...Array(winScore).fill(side)]
+		: undefined;
 	const line = `  ${m.id}: ${label(winnerId)} beats ${label(loserId)} ${winScore}-${loseScore}`;
 	if (dryRun) {
 		console.log(`${line} [dry run]`);
