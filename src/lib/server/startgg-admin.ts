@@ -460,6 +460,49 @@ export async function completeSetViaAdminRest(
 }
 
 /**
+ * The Swiss round phases past `roundsPlayed` that never got any players. Only phases
+ * named "Swiss Round N" count, so Final Standings and anything custom are never picked.
+ */
+export function unplayedSwissRoundPhases<P extends { id: number; name: string; numSeeds?: number | null }>(
+	phases: P[],
+	roundsPlayed: number
+): P[] {
+	return phases.filter((p) => {
+		const round = Number(p.name.match(/^Swiss Round (\d+)$/i)?.[1]);
+		return round > roundsPlayed && !p.numSeeds;
+	});
+}
+
+/**
+ * Delete the Swiss round phases a short-Swiss night never plays. Each week's tournament is
+ * cloned from one with five Swiss rounds, and StartGG keeps an event in progress while any
+ * of its phases is unstarted, so the empty rounds stop the Swiss event ever completing.
+ *
+ * Tournaments are cloned from the previous week's, so the next one inherits the shorter
+ * Swiss. A five-round night after this needs the rounds added back on StartGG.
+ */
+export async function deleteUnplayedSwissRounds(
+	eventId: number,
+	roundsPlayed: number
+): Promise<{ deleted: string[]; errors: string[] }> {
+	const data = await gql<{ event: { phases: { id: number; name: string; numSeeds: number | null }[] } }>(
+		EVENT_PHASES_QUERY, { eventId }
+	);
+	const deleted: string[] = [];
+	const errors: string[] = [];
+	for (const phase of unplayedSwissRoundPhases(data?.event?.phases ?? [], roundsPlayed)) {
+		const res = await adminFetch(`${PHASE_REST_URL}/${phase.id}`, { method: 'DELETE' });
+		if (res.ok) {
+			deleted.push(phase.name);
+		} else {
+			const text = await res.text().catch(() => '');
+			errors.push(`${phase.name}: HTTP ${res.status} ${text.slice(0, 200)}`);
+		}
+	}
+	return { deleted, errors };
+}
+
+/**
  * Restart a phase on StartGG — resets all sets and un-starts the pool.
  * This replaces the manual "go to StartGG and reset the phase" step.
  */

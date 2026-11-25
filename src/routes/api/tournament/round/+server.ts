@@ -4,7 +4,7 @@ import { getActiveTournament, saveTournament, snapshotTournament } from '$lib/se
 import { sendMessage } from '$lib/server/discord';
 import { reportSwissMatch, triggerConversionAndCache } from '$lib/server/startgg-reporter';
 import { pushPairingsToPhaseGroup, pushFinalStandingsSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups, validateStartGGToken, StartGGAuthError } from '$lib/server/startgg';
-import { addEntrantsToPhase, finalizePlacements } from '$lib/server/startgg-admin';
+import { addEntrantsToPhase, finalizePlacements, deleteUnplayedSwissRounds } from '$lib/server/startgg-admin';
 import { isShortSwissMode, isSplitStartMode } from '$lib/modes';
 import {
 	calculateStandings,
@@ -230,6 +230,16 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 					console.log(`[StartGG] Finalized ${standings.length} placements`);
 				}
 			}
+		}
+
+		// Short-Swiss nights leave the template's later rounds empty, which keeps the Swiss
+		// event in progress on StartGG forever; drop them so it shows as completed.
+		if (isShortSwissMode(tournament.mode) && tournament.startggEventId) {
+			const { deleted, errors } = await deleteUnplayedSwissRounds(
+				tournament.startggEventId, tournament.settings.numRounds
+			).catch((e) => ({ deleted: [] as string[], errors: [String(e)] }));
+			if (deleted.length) console.log(`[StartGG] Deleted unplayed Swiss phases: ${deleted.join(', ')}`);
+			for (const err of errors) console.error(`[StartGG] Could not delete unplayed Swiss phase: ${err}`);
 		}
 
 		await saveTournament(tournament);
