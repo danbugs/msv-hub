@@ -52,6 +52,7 @@ const BRACKET_TIMEOUT = 600_000;
 
 // ── Imports (lazy — only resolved when tests run) ────────────────────────────
 
+import { DEFAULT_EVENT_VENUE } from './store';
 import {
 	gql,
 	fetchPhaseSeeds,
@@ -550,7 +551,7 @@ suite('E2E Phase 3b: Event management operations', () => {
 		const changeResult = await updateTournamentBasicDetails(TOURNAMENT_ID, {
 			name: ORIGINAL_TOURNAMENT_NAME,
 			shortSlug: slug1,
-			startAt, endAt, discordLink,
+			startAt, endAt, discordLink, venue: DEFAULT_EVENT_VENUE,
 		});
 		expect(changeResult.ok, `change shortSlug: ${changeResult.error}`).toBe(true);
 
@@ -569,7 +570,7 @@ suite('E2E Phase 3b: Event management operations', () => {
 		const revertResult = await updateTournamentBasicDetails(TOURNAMENT_ID, {
 			name: ORIGINAL_TOURNAMENT_NAME,
 			shortSlug: slug2,
-			startAt, endAt, discordLink,
+			startAt, endAt, discordLink, venue: DEFAULT_EVENT_VENUE,
 		});
 		expect(revertResult.ok, `change shortSlug again: ${revertResult.error}`).toBe(true);
 		log(`  ✓ shortSlug changed to "${slug2}"`);

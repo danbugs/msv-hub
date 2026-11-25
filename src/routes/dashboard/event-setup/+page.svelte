@@ -20,6 +20,12 @@
 		lastCreatedTournamentId?: number;
 		lastCreatedTournamentSlug?: string;
 		paused: boolean;
+		venue: {
+			name: string; fullAddress: string; city: string; state: string;
+			postalCode: string; countryCode: string; lat: number; lng: number;
+		};
+		details: string;
+		gettingThere: string;
 		updatedAt: number;
 	}
 
@@ -113,14 +119,18 @@
 				nextEventNumber: config.nextEventNumber,
 				srcTournamentId: config.srcTournamentId,
 				shortSlug: config.shortSlug,
-				discordLink: config.discordLink
+				discordLink: config.discordLink,
+				venue: config.venue,
+				details: config.details,
+				gettingThere: config.gettingThere
 			})
 		});
 		if (res.ok) {
 			config = await res.json();
 			message = 'Saved';
 		} else {
-			message = 'Save failed';
+			const err = await res.json().catch(() => ({}));
+			message = (err as { error?: string }).error ?? 'Save failed';
 		}
 		saving = false;
 	}
@@ -304,6 +314,60 @@
 					<label class="block text-xs font-medium text-muted-foreground mb-1">Discord Link</label>
 					<input type="text" bind:value={config.discordLink}
 						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
+				</div>
+			</div>
+
+			<h3 class="mt-6 text-sm font-semibold text-foreground">Venue and event page</h3>
+			<p class="mt-1 text-xs text-muted-foreground">Set on every event the hub creates. Leave the two text boxes empty to keep whatever the cloned event already says.</p>
+			<div class="mt-3 grid gap-4 sm:grid-cols-2">
+				<div>
+					<label for="venue-name" class="block text-xs font-medium text-muted-foreground mb-1">Venue name</label>
+					<input id="venue-name" type="text" bind:value={config.venue.name}
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
+				</div>
+				<div>
+					<label for="venue-address" class="block text-xs font-medium text-muted-foreground mb-1">Full address</label>
+					<input id="venue-address" type="text" bind:value={config.venue.fullAddress}
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
+				</div>
+				<div class="grid grid-cols-3 gap-3">
+					<div>
+						<label for="venue-city" class="block text-xs font-medium text-muted-foreground mb-1">City</label>
+						<input id="venue-city" type="text" bind:value={config.venue.city}
+							class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
+					</div>
+					<div>
+						<label for="venue-state" class="block text-xs font-medium text-muted-foreground mb-1">Province</label>
+						<input id="venue-state" type="text" bind:value={config.venue.state}
+							class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
+					</div>
+					<div>
+						<label for="venue-postal" class="block text-xs font-medium text-muted-foreground mb-1">Postal code</label>
+						<input id="venue-postal" type="text" bind:value={config.venue.postalCode}
+							class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
+					</div>
+				</div>
+				<div class="grid grid-cols-2 gap-3">
+					<div>
+						<label for="venue-lat" class="block text-xs font-medium text-muted-foreground mb-1">Latitude</label>
+						<input id="venue-lat" type="number" step="any" bind:value={config.venue.lat}
+							class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
+					</div>
+					<div>
+						<label for="venue-lng" class="block text-xs font-medium text-muted-foreground mb-1">Longitude</label>
+						<input id="venue-lng" type="number" step="any" bind:value={config.venue.lng}
+							class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground" />
+					</div>
+				</div>
+				<div class="sm:col-span-2">
+					<label for="event-details" class="block text-xs font-medium text-muted-foreground mb-1">Description (Markdown)</label>
+					<textarea id="event-details" rows="8" bind:value={config.details}
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground font-mono"></textarea>
+				</div>
+				<div class="sm:col-span-2">
+					<label for="event-getting-there" class="block text-xs font-medium text-muted-foreground mb-1">Getting there (Markdown)</label>
+					<textarea id="event-getting-there" rows="4" bind:value={config.gettingThere}
+						class="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm text-foreground font-mono"></textarea>
 				</div>
 			</div>
 

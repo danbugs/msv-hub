@@ -190,10 +190,13 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 			shortSlug: slugToUse,
 			startAt,
 			endAt,
-			discordLink: config.discordLink
+			discordLink: config.discordLink,
+			venue: config.venue,
+			details: config.details,
+			gettingThere: config.gettingThere
 		});
 		if (!result.ok) throw new Error(result.error ?? 'Failed');
-		return `Set short slug to "${slugToUse}"`;
+		return `Set short slug to "${slugToUse}", venue to ${config.venue.name}`;
 	});
 
 	// Step 3: Publish homepage

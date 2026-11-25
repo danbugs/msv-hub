@@ -460,6 +460,20 @@ export interface TOConfig {
 	autoRegister: boolean;
 }
 
+/** Where an event is held, as StartGG wants it. */
+export interface EventVenue {
+	name: string;
+	fullAddress: string;
+	city: string;
+	state: string;
+	postalCode: string;
+	countryCode: string;
+	lat: number;
+	lng: number;
+	/** Google place ID. Optional: StartGG maps the venue from lat/lng without it. */
+	placeId?: string;
+}
+
 export interface EventConfig {
 	nextEventNumber: number;
 	srcTournamentId: number;
@@ -471,10 +485,27 @@ export interface EventConfig {
 	lastCreatedTournamentSlug?: string;
 	/** When true, the Tuesday cron skips event creation. */
 	paused: boolean;
+	/** Venue set on every created event. */
+	venue: EventVenue;
+	/** Markdown for the event page's description. Empty leaves whatever the clone carried over. */
+	details: string;
+	/** Markdown for the event page's "getting there" section. Empty leaves the clone's. */
+	gettingThere: string;
 	updatedAt: number;
 }
 
 const EVENT_CONFIG_KEY = 'event:config';
+
+export const DEFAULT_EVENT_VENUE: EventVenue = {
+	name: 'Fable Diner & Bar',
+	fullAddress: '755 Richards St, Vancouver, BC V6B 3A6, Canada',
+	city: 'Vancouver',
+	state: 'BC',
+	postalCode: 'V6B 3A6',
+	countryCode: 'CA',
+	lat: 49.2807525,
+	lng: -123.1171855
+};
 
 const DEFAULT_EVENT_CONFIG: EventConfig = {
 	nextEventNumber: 139,
@@ -490,6 +521,9 @@ const DEFAULT_EVENT_CONFIG: EventConfig = {
 		{ name: 'Little Cheese', discriminator: 'acdd13db', prefix: '', autoRegister: false }
 	],
 	paused: false,
+	venue: { ...DEFAULT_EVENT_VENUE },
+	details: '',
+	gettingThere: '',
 	updatedAt: 0
 };
 

@@ -1145,8 +1145,17 @@ export async function updateTournamentBasicDetails(
 		startAt: number;
 		endAt: number;
 		discordLink: string;
+		venue: {
+			name: string; fullAddress: string; city: string; state: string;
+			postalCode: string; countryCode: string; lat: number; lng: number; placeId?: string;
+		};
+		/** Markdown for the description; omitted or empty keeps the cloned text. */
+		details?: string;
+		/** Markdown for "getting there"; omitted or empty keeps the cloned text. */
+		gettingThere?: string;
 	}
 ): Promise<{ ok: boolean; error?: string }> {
+	const { venue } = fields;
 	const data = await adminGql(
 		`mutation UpdateBasicDetailsTournament($tournamentId: ID!, $fields: UpdateBasicFieldsTournament!) {
 			updateBasicFieldsTournament(tournamentId: $tournamentId, fields: $fields) {
@@ -1161,15 +1170,18 @@ export async function updateTournamentBasicDetails(
 				startAt: fields.startAt,
 				endAt: fields.endAt,
 				address: {
-					fullAddress: '725 Granville St Suite 700, Vancouver, BC V7Y 1G5, Canada',
-					placeId: 'ChIJMwJi79BxhlQR0iVeqmzGrY8',
-					city: 'Vancouver',
-					state: 'BC',
-					postalCode: 'V7Y 1G5',
-					countryCode: 'CA',
-					lat: 49.2820597,
-					lng: -123.1196942
+					fullAddress: venue.fullAddress,
+					...(venue.placeId ? { placeId: venue.placeId } : {}),
+					city: venue.city,
+					state: venue.state,
+					postalCode: venue.postalCode,
+					countryCode: venue.countryCode,
+					lat: venue.lat,
+					lng: venue.lng
 				},
+				venueName: venue.name,
+				...(fields.details?.trim() ? { details: fields.details } : {}),
+				...(fields.gettingThere?.trim() ? { gettingThere: fields.gettingThere } : {}),
 				primaryContactType: 'discord',
 				primaryContact: fields.discordLink
 			},
