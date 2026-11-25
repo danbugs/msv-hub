@@ -50,6 +50,11 @@ interface CreateEventOverrides {
 	attendeeCap?: 32 | 64;
 }
 
+/** Length of the weekly event on StartGG: a 6 PM start ends at 10 PM. */
+const WEEKLY_EVENT_HOURS = 4;
+/** One-off events (Macro and the like) run longer. */
+const ONE_OFF_EVENT_HOURS = 5;
+
 function getTimestampsForDate(dateStr: string, hour: number): { startAt: number; endAt: number } {
 	const timeStr = `${dateStr}T${String(hour).padStart(2, '0')}:00:00`;
 
@@ -63,7 +68,7 @@ function getTimestampsForDate(dateStr: string, hour: number): { startAt: number;
 	const offsetHours = offsetMatch ? parseInt(offsetMatch[1]) : -8;
 
 	const startAt = Math.floor(new Date(`${timeStr}Z`).getTime() / 1000) - offsetHours * 3600;
-	const endAt = startAt + 5 * 3600;
+	const endAt = startAt + ONE_OFF_EVENT_HOURS * 3600;
 
 	return { startAt, endAt };
 }
@@ -104,8 +109,7 @@ function getNextMondayTimestamps(): { startAt: number; endAt: number } {
 
 	// startAt = 6 PM Pacific in UTC
 	const startAt = Math.floor(new Date(`${dateStr}Z`).getTime() / 1000) - offsetHours * 3600;
-	// endAt = 11 PM Pacific in UTC (5 hours later)
-	const endAt = startAt + 5 * 3600;
+	const endAt = startAt + WEEKLY_EVENT_HOURS * 3600;
 
 	return { startAt, endAt };
 }
