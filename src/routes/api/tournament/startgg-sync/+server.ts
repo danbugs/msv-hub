@@ -11,7 +11,7 @@
 
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { getActiveTournament, saveTournament } from '$lib/server/store';
+import { getActiveTournament, saveTournament, acquireLock, releaseLock } from '$lib/server/store';
 import { flushPendingBracketMatches } from '$lib/server/startgg-reporter';
 import { pushBracketSeeding, gql, EVENT_PHASES_QUERY, TOURNAMENT_QUERY, fetchPhaseGroups } from '$lib/server/startgg';
 import { assignBracketSplit, getTournamentParticipants, updateParticipantEvents } from '$lib/server/startgg-admin';
@@ -19,9 +19,24 @@ import { syncSplitBracket } from '$lib/server/startgg-split';
 import { isAllToMainMode } from '$lib/modes';
 import { sendMessage } from '$lib/server/discord';
 
-export const POST: RequestHandler = async ({ request, locals }) => {
-	if (!locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+const SYNC_LOCK = 'lock:startgg-sync';
 
+// One sync at a time. Any open brackets page may start one (see the dashboard), and two
+// running together would both be moving players and reseeding the same StartGG brackets.
+export const POST: RequestHandler = async (event) => {
+	if (!event.locals.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+	// The TTL only matters if the function dies mid-sync; a normal run releases the lock.
+	if (!(await acquireLock(SYNC_LOCK, 180))) {
+		return Response.json({ error: 'A StartGG sync is already running', inProgress: true }, { status: 409 });
+	}
+	try {
+		return await runSync(event);
+	} finally {
+		await releaseLock(SYNC_LOCK);
+	}
+};
+
+const runSync = async ({ request }: Parameters<RequestHandler>[0]): Promise<Response> => {
 	const body = await request.json().catch(() => ({}));
 	const announceChannel = ((body as { announceChannel?: string }).announceChannel ?? '').trim();
 
