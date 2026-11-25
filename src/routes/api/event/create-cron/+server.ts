@@ -228,7 +228,9 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 		return 'Bracket and seeding set to public';
 	});
 
-	// Step 6: Open registration
+	// Step 6: Open registration. For the weekly event this is only so the TOs can be
+	// registered below; it is closed again right after, and the Discord cron opens it
+	// for everyone at the configured registration time.
 	await step('Open registration', async () => {
 		const result = await setRegistrationPublished(tournamentId, true);
 		if (!result.ok) throw new Error(result.error ?? 'Failed');
@@ -264,6 +266,17 @@ async function handleCreateEvent(request: Request, user?: { email: string }) {
 			// Save updated player IDs
 			await saveEventConfig({ tos: updatedTOs });
 		}
+	}
+
+	// Close registration again on the weekly event. Nobody registers ahead of the public
+	// opening any more, so it stays shut until the Discord cron opens it at the configured
+	// registration time. One-off events keep the registration they were created with.
+	if (!overrides.name) {
+		await step('Close registration until it opens publicly', async () => {
+			const result = await setRegistrationPublished(tournamentId, false);
+			if (!result.ok) throw new Error(result.error ?? 'Failed');
+			return 'Registration closed';
+		});
 	}
 
 	// Step 7: Increment counter and save last created tournament
