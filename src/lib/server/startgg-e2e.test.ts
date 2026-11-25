@@ -38,11 +38,11 @@ const SWISS_PHASES = [
 	{ id: 2243224, pgId: 3251998, name: 'Round 1' },
 	{ id: 2243225, pgId: 3251999, name: 'Round 2' },
 	{ id: 2243226, pgId: 3252000, name: 'Round 3' },
-	{ id: 2243227, pgId: 3252001, name: 'Round 4' },
-	{ id: 2243228, pgId: 3252002, name: 'Round 5' },
+	{ id: 2466148, pgId: 3543593, name: 'Round 4' },
+	{ id: 2466152, pgId: 3543597, name: 'Round 5' },
 ];
 const FINAL_STANDINGS_PHASE = { id: 2243229, pgId: 3252003, name: 'Final Standings' };
-const MAIN_BRACKET_PHASE = 2243230;
+const MAIN_BRACKET_PHASE = 2313187;
 const REDEMPTION_BRACKET_PHASE = 2243231;
 
 const TIMEOUT = 30_000;

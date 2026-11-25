@@ -243,8 +243,8 @@ suite('Compat: Admin REST endpoints', () => {
 	}, TIMEOUT);
 
 	it('PUT /phase/{id}/restart returns 200 with phase entity', async () => {
-		// Use Round 4 phase (2243227) to avoid interfering with integration tests on Round 1
-		const RESTART_TEST_PHASE = 2243227;
+		// Use Round 4 phase (2466148) to avoid interfering with integration tests on Round 1
+		const RESTART_TEST_PHASE = 2466148;
 		const res = await fetch(`${ADMIN_REST}/phase/${RESTART_TEST_PHASE}/restart`, {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json', 'Cookie': sessionCookie, 'Client-Version': '20' },

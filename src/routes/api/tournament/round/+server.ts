@@ -234,7 +234,10 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 		// Short-Swiss nights leave the template's later rounds empty, which keeps the Swiss
 		// event in progress on StartGG forever; drop them so it shows as completed.
-		if (isShortSwissMode(tournament.mode) && tournament.startggEventId) {
+		// Not on the test tournament: the daily StartGG tests address its five Swiss rounds
+		// by ID, so a deleted round breaks them until it is recreated and the IDs updated.
+		const isTestTournament = tournament.startggEventSlug?.includes('tournament/microspacing-vancouver-test/') ?? false;
+		if (isShortSwissMode(tournament.mode) && tournament.startggEventId && !isTestTournament) {
 			const { deleted, errors } = await deleteUnplayedSwissRounds(
 				tournament.startggEventId, tournament.settings.numRounds
 			).catch((e) => ({ deleted: [] as string[], errors: [String(e)] }));
